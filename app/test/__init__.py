@@ -1,0 +1,1 @@
+# Módulo test: contiene las pruebas automáticas de la aplicación 

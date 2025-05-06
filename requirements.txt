@@ -1,0 +1,7 @@
+fastapi==0.115.12
+uvicorn==0.34.1
+pydantic==2.11.3
+email-validator==2.2.0
+sqlmodel==0.0.24
+sqlalchemy==2.0.40
+pytest 

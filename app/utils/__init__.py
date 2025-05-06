@@ -1,0 +1,1 @@
+# Módulo utils: utilidades y funciones auxiliares reutilizables 

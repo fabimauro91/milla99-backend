@@ -1,0 +1,1 @@
+# Módulo core: configuración principal y gestión de la base de datos 
