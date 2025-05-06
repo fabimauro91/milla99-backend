@@ -10,10 +10,11 @@ sqlite_name = "db.test.sqlite3"
 sqlite_url = f"sqlite:///{sqlite_name}"
 
 engine = create_engine(
-    sqlite_url, 
-    connect_args={"check_same_thread": False}, 
-    poolclass= StaticPool
+    sqlite_url,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
 )
+
 
 @pytest.fixture(name="session")
 def session_fixture():
@@ -22,6 +23,7 @@ def session_fixture():
         yield session
     SQLModel.metadata.drop_all(engine)
 
+
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
     def get_session_override():
@@ -29,4 +31,4 @@ def client_fixture(session: Session):
     app.dependency_overrides[get_session] = get_session_override
     client = TestClient(app)
     yield client
-    app.dependency_overrides.clear() 
+    app.dependency_overrides.clear()
