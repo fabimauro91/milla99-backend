@@ -54,3 +54,16 @@ class UserService:
         self.session.delete(user)
         self.session.commit()
         return {"message": "User deleted successfully"}
+
+    def verify_user(self, user_id: int) -> User:
+        user = self.get_user(user_id)
+        if user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is already verified."
+            )
+        user.is_verified = True
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
