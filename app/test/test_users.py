@@ -1,5 +1,7 @@
 from fastapi import status
 
+# test for create user
+
 
 def test_create_user(client):
     response = client.post(
@@ -20,11 +22,15 @@ def test_create_user(client):
     assert data["is_active"] is False
     assert data["is_verified"] is False
 
+# test for get all users
+
 
 def test_get_users(client):
     response = client.get("/users/")
     assert response.status_code == status.HTTP_200_OK
     assert isinstance(response.json(), list)
+
+# test for get user by id
 
 
 def test_get_user_by_id(client):
@@ -101,3 +107,19 @@ def test_cannot_create_duplicate_user(client):
     assert response_2.status_code == status.HTTP_409_CONFLICT
     assert response_2.json()[
         "detail"] == "User with this phone number already exists."
+
+
+def test_invalid_colombian_mobile(client):
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Invalido",
+            "country_code": "+57",
+            "phone_number": "333333333",  # ❌ inválido
+            "role": "user",
+            "user_type": "driver"
+        }
+    )
+    print("\nResponse JSON:", response.json())
+    assert response.status_code == 422
+    assert "Colombian mobile numbers must start with 3." in response.text

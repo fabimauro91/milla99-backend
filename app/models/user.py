@@ -1,7 +1,8 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional, Annotated
-from pydantic import constr
+from pydantic import constr, field_validator, ValidationInfo
 from enum import Enum
+import phonenumbers
 
 
 # Custom validated types
@@ -21,12 +22,33 @@ class UserType(str, Enum):
 
 class UserBase(SQLModel):
     full_name: str
-    country_code: CountryCode  # e.g. "+57"
+    country_code: CountryCode  # "+57"
     phone_number: PhoneNumber
     user_type: UserType = Field(default=UserType.driver)
     role: UserRole = Field(default=UserRole.user)
     is_verified: bool = False
     is_active: bool = False
+
+    # Validation for phone number
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, value: str, info: ValidationInfo) -> str:
+        country_code = info.data.get("country_code", "")
+        full_number = f"{country_code}{value}"
+
+        try:
+            parsed = phonenumbers.parse(full_number, None)
+
+            if phonenumbers.region_code_for_number(parsed) != "CO":
+                raise ValueError("Phone number must be Colombian.")
+            if not str(parsed.national_number).startswith("3"):
+                raise ValueError("Colombian mobile numbers must start with 3.")
+            if not phonenumbers.is_valid_number(parsed):
+                raise ValueError("Invalid phone number.")
+        except phonenumbers.NumberParseException as e:
+            raise ValueError("Invalid phone number format.") from e
+
+        return value
 
 
 class User(UserBase, table=True):

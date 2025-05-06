@@ -50,7 +50,7 @@ def delete_user(user_id: int, session: SessionDep):
 # Verify user endpoint
 
 
-@router.patch("/users/{user_id}/verify", response_model=User, tags=["users"])
+@router.patch("/{user_id}/verify", response_model=User, tags=["users"])
 async def verify_user(user_id: int, session: SessionDep):
     service = UserService(session)
     return service.verify_user(user_id)
