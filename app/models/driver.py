@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional
 from datetime import date
 
@@ -50,6 +50,7 @@ class DriverBase(SQLModel):
 class Driver(DriverBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
+    user:  Optional["User"] = Relationship(back_populates="driver")
 
 
 class DriverCreate(DriverBase):

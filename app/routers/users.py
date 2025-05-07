@@ -18,7 +18,7 @@ def create_user(user_data: UserCreate, session: SessionDep):
 # List users endpoint
 
 
-@router.get("/", response_model=List[User])
+@router.get("/", response_model=List[UserRead])
 def list_users(session: SessionDep):
     service = UserService(session)
     return service.get_users()
@@ -26,7 +26,7 @@ def list_users(session: SessionDep):
 # Get user by ID endpoint
 
 
-@router.get("/{user_id}", response_model=User)
+@router.get("/{user_id}", response_model=UserRead)
 def get_user(user_id: int, session: SessionDep):
     service = UserService(session)
     return service.get_user(user_id)
@@ -34,7 +34,7 @@ def get_user(user_id: int, session: SessionDep):
 # Update user endpoint
 
 
-@router.patch("/{user_id}", response_model=User)
+@router.patch("/{user_id}", response_model=UserRead)
 def update_user(user_id: int, user_data: UserUpdate, session: SessionDep):
     service = UserService(session)
     return service.update_user(user_id, user_data)
@@ -50,7 +50,7 @@ def delete_user(user_id: int, session: SessionDep):
 # Verify user endpoint
 
 
-@router.patch("/{user_id}/verify", response_model=User, tags=["users"])
+@router.patch("/{user_id}/verify", response_model=UserRead, tags=["users"])
 async def verify_user(user_id: int, session: SessionDep):
     service = UserService(session)
     return service.verify_user(user_id)

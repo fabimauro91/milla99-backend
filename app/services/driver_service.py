@@ -1,6 +1,8 @@
 from sqlmodel import Session, select
 from fastapi import HTTPException, status
 from app.models.driver import Driver, DriverCreate, DriverUpdate
+from app.models.user import User
+from app.models.role import Role
 
 
 class DriverService:
@@ -10,6 +12,21 @@ class DriverService:
     def create_driver(self, driver_data: DriverCreate) -> Driver:
         driver = Driver.model_validate(driver_data)
         self.session.add(driver)
+        self.session.flush()  # Para obtener driver.id antes de commit
+
+        # Obtener el usuario asociado
+        user = self.session.get(User, driver.user_id)
+
+        # Asignar el rol DRIVER si no lo tiene aún
+        driver_role = self.session.exec(
+            select(Role).where(Role.id == "DRIVER")).first()
+        if not driver_role:
+            raise HTTPException(status_code=500, detail="Rol DRIVER no existe")
+
+        if driver_role not in user.roles:
+            user.roles.append(driver_role)
+            self.session.add(user)
+
         self.session.commit()
         self.session.refresh(driver)
         return driver
