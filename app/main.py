@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.db import create_all_tables
-from .routers import customers, transactions, users
+from .routers import customers, transactions, users, whatsapp 
 from .core.config import settings
 from .core.init_data import init_data
 
@@ -11,6 +11,8 @@ from .core.init_data import init_data
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Código que se ejecuta al iniciar la aplicación
+    import secrets
+    print(secrets.token_hex(32))
     print("Iniciando la aplicación...")
     # Crear las tablas
     for _ in create_all_tables(app):
@@ -39,3 +41,4 @@ app.add_middleware(
 app.include_router(customers.router)
 app.include_router(transactions.router)
 app.include_router(users.router)
+app.include_router(whatsapp.router) 
