@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    TWILIO_ACCOUNT_SID: str  # Reemplaza con tu SID
+    TWILIO_AUTH_TOKEN :str    # Reemplaza con tu Token
+    TWILIO_PHONE_NUMBER :str # Número de Twilio
+
     model_config = ConfigDict(
         env_file=".env",
         case_sensitive=True

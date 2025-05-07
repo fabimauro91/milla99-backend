@@ -14,6 +14,10 @@ class VerificationResponse(BaseModel):  # Endpoint para enviar el código de ver
      access_token: str | None = None
      token_type: str | None = None
 
+class SMSMessage(BaseModel):
+    phone_number: str
+    message: str
+
 @router.post(                                       # Decorador que indica que es una ruta POST
     "/verify/{user_id}/send",                       # Ruta con parámetro user_id
     response_model=VerificationResponse,            # Modelo de respuesta

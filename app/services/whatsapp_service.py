@@ -7,6 +7,7 @@ from ..models.w_verification import Verification, VerificationCreate
 from ..models.user import User
 from ..core.config import settings
 from jose import jwt
+from twilio.rest import Client
 
 
 class WhatsAppService:
@@ -86,12 +87,21 @@ class WhatsAppService:
         self.session.commit()
         self.session.refresh(verification)
 
-        # Enviar mensaje WhatsApp
-        full_phone = f"{user.country_code}{user.phone_number}"
-        message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
-        await self.send_whatsapp_message(full_phone, message)
+        try:
+            # Enviar mensaje WhatsApp
+            full_phone = f"{user.country_code}{user.phone_number}"
+            message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
+           
+            whatsapp_result = await self.send_whatsapp_message(full_phone, message)
+            #sms_result = await self.generate_mns_verification(full_phone, message)
 
-        return verification, verification_code
+            return verification, verification_code
+        except Exception as e:
+            self.session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error in verification process: {str(e)}"
+        )
 
     def verify_code(self, user_id: int, code: str) -> tuple[bool, str]:
         verification = self.session.exec(
@@ -145,3 +155,36 @@ class WhatsAppService:
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
+
+    async def generate_mns_verification(self, to_phone: str, message: str) -> dict:
+        try:
+            # Asegurarse de que el número tenga el formato correcto
+            if not to_phone.startswith('+'):
+                to_phone = f'+{to_phone}'
+
+            # Crear el cliente de Twilio
+            client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+
+            # Enviar el mensaje
+            message_response = client.messages.create(
+                body=message,
+                from_=settings.TWILIO_PHONE_NUMBER,
+                to=to_phone
+            )
+
+            # Logging para debugging
+            print(f"Message sent successfully to {to_phone}. SID: {message_response.sid}")
+
+            return {
+                "status": "success",
+                "message_sid": message_response.sid,
+                "detail": "Message sent successfully",
+                "to": to_phone
+            }
+
+        except Exception as e:
+            print(f"Error sending SMS: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to send SMS: {str(e)}"
+            )
