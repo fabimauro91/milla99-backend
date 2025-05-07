@@ -156,7 +156,11 @@ class AuthService:
         self.session.commit()
 
         # Actualizar estado de verificación del usuario
-        user.is_verified = True
+        if not user.is_verified:
+            user.is_verified = True
+        if not user.is_active:
+            user.is_active = True
+            
         self.session.commit()
 
         # Generar token JWT
