@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from typing import List
 
-from app.models.user import User, UserCreate, UserUpdate
+from app.models.user import User, UserCreate, UserUpdate, UserRead
 from app.core.db import SessionDep
 from app.services.user_service import UserService
 
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 # Create user endpoint
 
 
-@router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def create_user(user_data: UserCreate, session: SessionDep):
     service = UserService(session)
     return service.create_user(user_data)

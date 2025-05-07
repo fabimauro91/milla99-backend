@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from .core.db import create_all_tables
 from .routers import customers, transactions, users
 from .core.config import settings
+from .core.init_data import init_data
 
 
 @asynccontextmanager
@@ -14,6 +15,7 @@ async def lifespan(app: FastAPI):
     # Crear las tablas
     for _ in create_all_tables(app):
         pass
+    init_data()  # Inicializar todos los datos por defecto
     yield
     # Código que se ejecuta al cerrar la aplicación
     print("Cerrando la aplicación...")

@@ -1,9 +1,10 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional, Annotated
-from pydantic import constr, field_validator, ValidationInfo
+from sqlmodel import SQLModel, Field, Relationship
+from typing import Optional, Annotated, List
+from pydantic import constr, field_validator, ValidationInfo, BaseModel
 from enum import Enum
 import phonenumbers
 import re
+from app.models.user_has_roles import UserHasRole
 
 
 # Custom validated types
@@ -22,11 +23,9 @@ class UserType(str, Enum):
 
 
 class UserBase(SQLModel):
-    full_name: Optional[str] = None
-    country_code: CountryCode  # "+57"
-    phone_number: PhoneNumber
-    user_type: UserType = Field(default=UserType.driver)
-    role: UserRole = Field(default=UserRole.user)
+    full_name: Optional[str] = Field(default=None)
+    country_code: CountryCode = Field(description="Código de país, ejemplo: +57")
+    phone_number: PhoneNumber = Field(description="Número de teléfono móvil, ejemplo: 3001234567")
     is_verified: bool = False
     is_active: bool = False
 
@@ -54,18 +53,18 @@ class UserBase(SQLModel):
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    roles: List["Role"] = Relationship(back_populates="users", link_model=UserHasRole)
 
 
-class UserCreate(UserBase):
-    pass
+class UserCreate(SQLModel):
+    country_code: CountryCode = Field(description="Código de país, ejemplo: +57")
+    phone_number: PhoneNumber = Field(description="Número de teléfono móvil, ejemplo: 3001234567")
 
 
 class UserUpdate(SQLModel):
     full_name: Optional[str] = None
     country_code: Optional[CountryCode] = None
     phone_number: Optional[PhoneNumber] = None
-    role: Optional[UserRole] = None
-    user_type: Optional[UserType] = None
     is_verified: Optional[bool] = None
     is_active: Optional[bool] = None
 
@@ -82,3 +81,23 @@ class UserUpdate(SQLModel):
         if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$", value):
             raise ValueError("Full name can only contain letters and spaces.")
         return value
+
+
+class RoleRead(BaseModel):
+    id: str
+    name: str
+    route: str
+    class Config:
+        orm_mode = True
+
+
+class UserRead(BaseModel):
+    id: int
+    country_code: str
+    phone_number: str
+    is_verified: bool
+    is_active: bool
+    full_name: Optional[str]
+    roles: List[RoleRead]
+    class Config:
+        orm_mode = True
