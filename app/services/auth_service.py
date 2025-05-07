@@ -2,7 +2,7 @@ import random
 import httpx
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select , and_
 from ..models.w_verification import Verification, VerificationCreate
 from ..models.user import User
 from ..core.config import settings
@@ -47,18 +47,29 @@ class authService:
                 detail=f"Failed to send WhatsApp message: {str(e)}"
             )
 
-    async def create_verification(self, phone_number: str) -> tuple[Verification, str]:
+  
+    async def create_verification(self, country_code: str, phone_number: str) -> tuple[Verification, str]:
         try:
-            # Verificar usuario existente por número de teléfono
+            # Limpiar los números de teléfono y códigos de país
+            clean_country_code = country_code.strip()
+            if not clean_country_code.startswith('+'):
+                clean_country_code = f'+{clean_country_code}'
+
+            clean_phone_number = phone_number.strip().lstrip('+')
+
+            # Verificar usuario existente por código de país y número de teléfono
             user_query = select(User).where(
-                User.phone_number == phone_number.lstrip('+')  # Removemos el '+' si existe
+                and_(
+                    User.country_code == clean_country_code,
+                    User.phone_number == clean_phone_number
+                )
             )
             user = self.session.exec(user_query).first()
 
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"User not found with phone number: {phone_number}"
+                    detail=f"User not found with country code: {clean_country_code} and phone number: {clean_phone_number}"
                 )
 
             # Verificar si existe una verificación activa
@@ -72,17 +83,16 @@ class authService:
             ).first()
 
             if active_verification:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Active verification already exists"
-                )
+                # Si existe una verificación activa, la invalidamos
+                active_verification.is_verified = True
+                self.session.commit()
 
             # Generar nueva verificación
             verification_code = self.generate_verification_code()
             expires_at = datetime.utcnow() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
 
             verification_data = VerificationCreate(
-                user_id=user.id,  # Usamos el ID del usuario encontrado
+                user_id=user.id,
                 verification_code=verification_code,
                 expires_at=expires_at
             )
@@ -97,10 +107,10 @@ class authService:
                 full_phone = f"{user.country_code}{user.phone_number}"
                 message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
 
-                # Intentar enviar por ambos canales
+                # Intentar enviar por WhatsApp
                 whatsapp_result = await self.send_whatsapp_message(full_phone, message)
-                #ms_result = await self.generate_mns_verification(full_phone, message)
 
+                print(f"Verification code sent to {full_phone}")
                 return verification, verification_code
 
             except Exception as send_error:
@@ -112,7 +122,6 @@ class authService:
                 )
 
         except HTTPException as http_error:
-            # Re-lanzar excepciones HTTP
             raise http_error
         except Exception as e:
             print(f"Unexpected error in create_verification: {str(e)}")
@@ -120,20 +129,31 @@ class authService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error in verification process: {str(e)}"
-        )
-    
-    def verify_code(self, phone_number: str, code: str) -> tuple[bool, str]:
+            )
+
+    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str]:
 
         # Verificar usuario existente por número de teléfono
+       # Limpiar los números de teléfono y códigos de país
+        clean_country_code = country_code.strip()
+        if not clean_country_code.startswith('+'):
+            clean_country_code = f'+{clean_country_code}'
+
+        clean_phone_number = phone_number.strip().lstrip('+')
+
+        # Verificar usuario existente por código de país y número de teléfono
         user_query = select(User).where(
-            User.phone_number == phone_number.lstrip('+')  # Removemos el '+' si existe
+            and_(
+                User.country_code == clean_country_code,
+                User.phone_number == clean_phone_number
+            )
         )
         user = self.session.exec(user_query).first()
 
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User not found with phone number: {phone_number}"
+                detail=f"User not found with country code: {clean_country_code} and phone number: {clean_phone_number}"
             )
 
         verification = self.session.exec(
