@@ -115,7 +115,7 @@ def test_invalid_colombian_mobile(client):
         json={
             "full_name": "Invalido",
             "country_code": "+57",
-            "phone_number": "333333333",  # ❌ inválido
+            "phone_number": "4333333333",  # ❌ inválido
             "role": "user",
             "user_type": "driver"
         }
@@ -123,3 +123,19 @@ def test_invalid_colombian_mobile(client):
     print("\nResponse JSON:", response.json())
     assert response.status_code == 422
     assert "Colombian mobile numbers must start with 3." in response.text
+
+
+def test_invalid_full_name(client):
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Da",  # ❌ inválido
+            "country_code": "+57",
+            "phone_number": "3008888888",
+            "role": "user",
+            "user_type": "driver"
+        }
+    )
+    print("\nResponse JSON:", response.json())
+    assert response.status_code == 422
+    assert "Full name can only contain letters and spaces." in response.text

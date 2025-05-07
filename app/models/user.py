@@ -3,6 +3,7 @@ from typing import Optional, Annotated
 from pydantic import constr, field_validator, ValidationInfo
 from enum import Enum
 import phonenumbers
+import re
 
 
 # Custom validated types
@@ -48,6 +49,15 @@ class UserBase(SQLModel):
         except phonenumbers.NumberParseException as e:
             raise ValueError("Invalid phone number format.") from e
 
+        return value
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        if len(value) < 3:
+            raise ValueError("Full name must be at least 3 characters long.")
+        if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$", value):
+            raise ValueError("Full name can only contain letters and spaces.")
         return value
 
 
