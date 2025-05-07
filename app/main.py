@@ -38,7 +38,6 @@ app.add_middleware(
     allow_headers=settings.CORS_HEADERS,
 )
 
-app.include_router(customers.router)
-app.include_router(transactions.router)
+
 app.include_router(users.router)
 app.include_router(whatsapp.router) 

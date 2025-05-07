@@ -26,7 +26,7 @@ def list_users(session: SessionDep):
 # Get user by ID endpoint
 
 
-@router.get("/{user_id}", response_model=User)
+@router.get("/{user_id}", response_model=UserRead)
 def get_user(user_id: int, session: SessionDep):
     service = UserService(session)
     return service.get_user(user_id)

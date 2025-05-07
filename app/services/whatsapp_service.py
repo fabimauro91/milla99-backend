@@ -56,34 +56,32 @@ class WhatsAppService:
                 detail="User not found"
             )
 
-        # Verificar si existe una verificación activa
-        active_verification = self.session.exec(
+        # Buscar verificación existente para el usuario
+        verification = self.session.exec(
             select(Verification)
-            .where(
-                Verification.user_id == user_id,
-                Verification.expires_at > datetime.utcnow(),
-                Verification.is_verified == False
-            )
+            .where(Verification.user_id == user_id)
         ).first()
 
-        if active_verification:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Active verification already exists"
-            )
-
-        # Generar nueva verificación
         verification_code = self.generate_verification_code()
         expires_at = datetime.utcnow() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
 
-        verification_data = VerificationCreate(
-            user_id=user_id,
-            verification_code=verification_code,
-            expires_at=expires_at
-        )
+        if verification:
+            # Actualizar el registro existente
+            verification.verification_code = verification_code
+            verification.expires_at = expires_at
+            verification.is_verified = False
+            verification.attempts = 0
+            self.session.add(verification)
+        else:
+            # Crear nuevo registro
+            verification_data = VerificationCreate(
+                user_id=user_id,
+                verification_code=verification_code,
+                expires_at=expires_at
+            )
+            verification = Verification.model_validate(verification_data.model_dump())
+            self.session.add(verification)
 
-        verification = Verification.model_validate(verification_data.model_dump())
-        self.session.add(verification)
         self.session.commit()
         self.session.refresh(verification)
 
@@ -139,7 +137,10 @@ class WhatsAppService:
 
         # Actualizar estado de verificación del usuario
         user = self.session.get(User, user_id)
-        user.is_verified = True
+        if not user.is_verified:
+            user.is_verified = True
+        if not user.is_active:
+            user.is_active = True
         self.session.commit()
 
         # Generar token JWT
