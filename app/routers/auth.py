@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from ..core.db import SessionDep
-from ..services.auth_service import authService
+from ..services.auth_service import AuthService
 from pydantic import BaseModel
 
 
@@ -26,7 +26,7 @@ class SMSMessage(BaseModel):
 
 async def send_verification(country_code: str, phone_number: str, session: SessionDep): # ID del usuario que se va a verificar, Sesión de base de datos (inyectada automáticamente)
     """Send verification code via WhatsApp"""
-    service = authService(session)                                          # Crear una instancia del servicio
+    service = AuthService(session)                                          # Crear una instancia del servicio
     verification, codigo = await service.create_verification(country_code,phone_number)                   # Llamar al método para crear y enviar la verificación
     return VerificationResponse(message=f"Verification code sent successfully {codigo}")  # Retornar mensaje de éxito
 
@@ -42,7 +42,7 @@ async def verify_code(
     session: SessionDep                             # Sesión de base de datos
 ):
     """Verify the code sent via WhatsApp"""
-    service = authService(session)                                  # Crear instancia del servicio
+    service = AuthService(session)                                  # Crear instancia del servicio
     result, access_token = service.verify_code(country_code,phone_number, verification.code)            # Verificar el código
     print(access_token)
     return VerificationResponse(message="Code verified successfully",

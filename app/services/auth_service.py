@@ -10,7 +10,7 @@ from jose import jwt
 from twilio.rest import Client
 
 
-class WhatsAppService:
+class AuthService:
     def __init__(self, session: Session):
         self.session = session
 
@@ -47,67 +47,85 @@ class WhatsAppService:
                 detail=f"Failed to send WhatsApp message: {str(e)}"
             )
 
-    async def create_verification(self, user_id: int) -> Verification:
+    async def create_verification(self, country_code: str, phone_number: str) -> tuple[Verification, str]:
         # Verificar usuario existente
-        user = self.session.get(User, user_id)
+        user = self.session.exec(
+            select(User).where(
+                User.country_code == country_code,
+                User.phone_number == phone_number
+            )
+        ).first()
+        
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
 
-        # Verificar si existe una verificación activa
-        active_verification = self.session.exec(
-            select(Verification)
-            .where(
-                Verification.user_id == user_id,
-                Verification.expires_at > datetime.utcnow(),
-                Verification.is_verified == False
-            )
-        ).first()
-
-        if active_verification:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Active verification already exists"
-            )
-
-        # Generar nueva verificación
+        # Generar código y fecha de expiración
         verification_code = self.generate_verification_code()
         expires_at = datetime.utcnow() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
 
-        verification_data = VerificationCreate(
-            user_id=user_id,
-            verification_code=verification_code,
-            expires_at=expires_at
-        )
+        # Buscar si ya existe una verificación para este usuario
+        existing_verification = self.session.exec(
+            select(Verification).where(Verification.user_id == user.id)
+        ).first()
 
-        verification = Verification.model_validate(verification_data.model_dump())
-        self.session.add(verification)
-        self.session.commit()
-        self.session.refresh(verification)
+        if existing_verification:
+            # Actualizar el registro existente
+            existing_verification.is_verified = False
+            existing_verification.verification_code = verification_code
+            existing_verification.expires_at = expires_at
+            existing_verification.attempts = 0
+            self.session.add(existing_verification)
+            self.session.commit()
+            self.session.refresh(existing_verification)
+            verif = existing_verification
+        else:
+            # Crear la nueva verificación
+            verif = Verification(
+                user_id=user.id,
+                verification_code=verification_code,
+                expires_at=expires_at,
+                is_verified=False
+            )
+            self.session.add(verif)
+            self.session.commit()
+            self.session.refresh(verif)
 
         try:
             # Enviar mensaje WhatsApp
-            full_phone = f"{user.country_code}{user.phone_number}"
+            full_phone = f"{country_code}{phone_number}"
             message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
-           
-            whatsapp_result = await self.send_whatsapp_message(full_phone, message)
-            #sms_result = await self.generate_mns_verification(full_phone, message)
-
-            return verification, verification_code
+            
+            await self.send_whatsapp_message(full_phone, message)
+            return verif, verification_code
         except Exception as e:
             self.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error in verification process: {str(e)}"
-        )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error in verification process: {str(e)}"
+            )
 
-    def verify_code(self, user_id: int, code: str) -> tuple[bool, str]:
+    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str]:
+        # Buscar el usuario primero
+        user = self.session.exec(
+            select(User).where(
+                User.country_code == country_code,
+                User.phone_number == phone_number
+            )
+        ).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
         verification = self.session.exec(
             select(Verification)
             .where(
-                Verification.user_id == user_id,
+                Verification.user_id == user.id,
                 Verification.expires_at > datetime.utcnow(),
                 Verification.is_verified == False
             )
@@ -138,12 +156,11 @@ class WhatsAppService:
         self.session.commit()
 
         # Actualizar estado de verificación del usuario
-        user = self.session.get(User, user_id)
         user.is_verified = True
         self.session.commit()
 
         # Generar token JWT
-        access_token = self.create_access_token(user_id)
+        access_token = self.create_access_token(user.id)
 
         return True, access_token
     
