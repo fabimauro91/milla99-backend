@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.db import create_all_tables
-from .routers import customers, transactions, users
+from .routers import customers, transactions, users, drivers
 from .core.config import settings
 
 
@@ -37,3 +37,4 @@ app.add_middleware(
 app.include_router(customers.router)
 app.include_router(transactions.router)
 app.include_router(users.router)
+app.include_router(drivers.router)
