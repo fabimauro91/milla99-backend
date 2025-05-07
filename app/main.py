@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from .core.db import create_all_tables
 from .routers import customers, transactions, users, drivers
+from .routers import auth, customers, transactions, users 
 from .core.config import settings
 from .core.init_data import init_data
 
@@ -14,6 +15,8 @@ from app.routers import uploads
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Código que se ejecuta al iniciar la aplicación
+    import secrets
+    print(secrets.token_hex(32))
     print("Iniciando la aplicación...")
     # Crear las tablas
     for _ in create_all_tables(app):
@@ -47,3 +50,6 @@ app.include_router(transactions.router)
 app.include_router(users.router)
 app.include_router(drivers.router)
 app.include_router(uploads.router)
+
+app.include_router(users.router)
+app.include_router(auth.router) 

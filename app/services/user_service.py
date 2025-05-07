@@ -80,6 +80,7 @@ class UserService:
                 detail="User is already verified."
             )
         user.is_verified = True
+        user.is_active = True
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)
