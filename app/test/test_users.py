@@ -178,3 +178,26 @@ def test_soft_delete_user(client):
     print("[GET USER] Response:", get_response.json())
     assert get_response.status_code == 200
     assert get_response.json()["is_active"] is False
+
+
+def test_invalid_full_name_on_update(client):
+    # 1. Create user withouth full_name
+    response = client.post(
+        "/users/",
+        json={
+            "country_code": "+57",
+            "phone_number": "3001212121",
+            "role": "user",
+            "user_type": "driver"
+        }
+    )
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+    assert response.json()["full_name"] is None
+
+    # 2. Update user with invalid full_name
+    patch_response = client.patch(f"/users/{user_id}", json={"full_name": "Juan123"})
+    print("\n[PATCH INVALID NAME] Response:", patch_response.json())
+
+    assert patch_response.status_code == 422
+    assert "Full name can only contain letters and spaces." in patch_response.text

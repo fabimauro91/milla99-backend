@@ -22,7 +22,7 @@ class UserType(str, Enum):
 
 
 class UserBase(SQLModel):
-    full_name: str
+    full_name: Optional[str] = None
     country_code: CountryCode  # "+57"
     phone_number: PhoneNumber
     user_type: UserType = Field(default=UserType.driver)
@@ -51,15 +51,6 @@ class UserBase(SQLModel):
 
         return value
 
-    @field_validator("full_name")
-    @classmethod
-    def validate_full_name(cls, value: str) -> str:
-        if len(value) < 3:
-            raise ValueError("Full name must be at least 3 characters long.")
-        if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$", value):
-            raise ValueError("Full name can only contain letters and spaces.")
-        return value
-
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -77,3 +68,17 @@ class UserUpdate(SQLModel):
     user_type: Optional[UserType] = None
     is_verified: Optional[bool] = None
     is_active: Optional[bool] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+
+        value = value.strip()
+
+        if len(value) < 3:
+            raise ValueError("Full name must be at least 3 characters long.")
+        if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$", value):
+            raise ValueError("Full name can only contain letters and spaces.")
+        return value
