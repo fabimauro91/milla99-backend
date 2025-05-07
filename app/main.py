@@ -6,6 +6,9 @@ from .core.db import create_all_tables
 from .routers import customers, transactions, users, drivers
 from .core.config import settings
 
+from fastapi.staticfiles import StaticFiles
+from app.routers import uploads
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -34,7 +37,11 @@ app.add_middleware(
     allow_headers=settings.CORS_HEADERS,
 )
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
 app.include_router(customers.router)
 app.include_router(transactions.router)
 app.include_router(users.router)
 app.include_router(drivers.router)
+app.include_router(uploads.router)
