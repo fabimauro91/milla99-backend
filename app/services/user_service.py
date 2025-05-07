@@ -51,9 +51,15 @@ class UserService:
 
     def delete_user(self, user_id: int) -> dict:
         user = self.get_user(user_id)
-        self.session.delete(user)
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is already inactive."
+            )
+        user.is_active = False
+        self.session.add(user)
         self.session.commit()
-        return {"message": "User deleted successfully"}
+        return {"message": "User deactivated (soft deleted) successfully"}
 
     def verify_user(self, user_id: int) -> User:
         user = self.get_user(user_id)

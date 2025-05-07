@@ -139,3 +139,42 @@ def test_invalid_full_name(client):
     print("\nResponse JSON:", response.json())
     assert response.status_code == 422
     assert "Full name can only contain letters and spaces." in response.text
+
+
+def test_soft_delete_user(client):
+    # 1. Crear usuario (viene con is_active=False)
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Usuario Activo",
+            "country_code": "+57",
+            "phone_number": "3007777777",
+            "role": "user",
+            "user_type": "driver"
+        }
+    )
+    print("\n[CREATE USER] Response:", response.json())
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+    # Confirmamos el valor por defecto
+    assert response.json()["is_active"] is False
+
+    # 2. Activamos el usuario (simula que está activo antes del "borrado")
+    patch_response = client.patch(
+        f"/users/{user_id}", json={"is_active": True})
+    print("[PATCH USER] Response:", patch_response.json())
+    assert patch_response.status_code == 200
+    assert patch_response.json()["is_active"] is True
+
+    # 3. Llamamos DELETE (soft delete)
+    delete_response = client.delete(f"/users/{user_id}")
+    print("[DELETE USER] Response:", delete_response.json())
+    assert delete_response.status_code == 200
+    assert delete_response.json(
+    )["message"] == "User deactivated (soft deleted) successfully"
+
+    # 4. Obtenemos el usuario y verificamos que is_active=False
+    get_response = client.get(f"/users/{user_id}")
+    print("[GET USER] Response:", get_response.json())
+    assert get_response.status_code == 200
+    assert get_response.json()["is_active"] is False
