@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.db import create_all_tables
-from .routers import customers, transactions, users, whatsapp 
+from .routers import auth, customers, transactions, users 
 from .core.config import settings
 
 
@@ -39,4 +39,4 @@ app.add_middleware(
 app.include_router(customers.router)
 app.include_router(transactions.router)
 app.include_router(users.router)
-app.include_router(whatsapp.router) 
+app.include_router(auth.router) 
