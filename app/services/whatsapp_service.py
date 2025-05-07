@@ -6,6 +6,8 @@ from sqlmodel import Session, select
 from ..models.w_verification import Verification, VerificationCreate
 from ..models.user import User
 from ..core.config import settings
+from jose import jwt
+
 
 class WhatsAppService:
     def __init__(self, session: Session):
@@ -21,15 +23,10 @@ class WhatsAppService:
         }
 
         payload = {
-            "messaging_product": "whatsapp",
+           "messaging_product": "whatsapp",
             "to": to_phone,
-            "type": "template",
-            "template": {
-                "name": "hello_world",
-                "language": {
-                    "code": "en_US"
-                }
-            }
+            "type": "text",
+            "text": {"body": message}
         }
 
         try:
@@ -94,9 +91,9 @@ class WhatsAppService:
         message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
         await self.send_whatsapp_message(full_phone, message)
 
-        return verification
+        return verification, verification_code
 
-    def verify_code(self, user_id: int, code: str) -> bool:
+    def verify_code(self, user_id: int, code: str) -> tuple[bool, str]:
         verification = self.session.exec(
             select(Verification)
             .where(
@@ -135,4 +132,16 @@ class WhatsAppService:
         user.is_verified = True
         self.session.commit()
 
-        return True
+        # Generar token JWT
+        access_token = self.create_access_token(user_id)
+
+        return True, access_token
+    
+    def create_access_token(self, user_id: int):
+        to_encode = {"sub": str(user_id)}
+        # Convertir minutos a timedelta
+        expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + expires_delta
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        return encoded_jwt

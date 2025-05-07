@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     VERIFICATION_CODE_EXPIRY_MINUTES: int = 10
     MAX_VERIFICATION_ATTEMPTS: int = 3
 
+    SECRET_KEY: str = "efdfd804e424be4cd3d4c94f7769da129c45ff2a4a7a1c365e8641715f621000"  # Deberías cambiar esto
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
     model_config = ConfigDict(
         env_file=".env",
         case_sensitive=True

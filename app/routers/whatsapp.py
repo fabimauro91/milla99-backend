@@ -3,13 +3,16 @@ from ..core.db import SessionDep
 from ..services.whatsapp_service import WhatsAppService
 from pydantic import BaseModel
 
+
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])   # Crear un router con prefijo '/whatsapp' y etiqueta para la documentación
 
 class VerificationRequest(BaseModel):   # Modelo para la solicitud de verificación (cuando el usuario envía el código)
     code: str
 
 class VerificationResponse(BaseModel):  # Endpoint para enviar el código de verificación
-    message: str
+     message: str
+     access_token: str | None = None
+     token_type: str | None = None
 
 @router.post(                                       # Decorador que indica que es una ruta POST
     "/verify/{user_id}/send",                       # Ruta con parámetro user_id
@@ -20,8 +23,8 @@ class VerificationResponse(BaseModel):  # Endpoint para enviar el código de ver
 async def send_verification(user_id: int, session: SessionDep): # ID del usuario que se va a verificar, Sesión de base de datos (inyectada automáticamente)
     """Send verification code via WhatsApp"""
     service = WhatsAppService(session)                                          # Crear una instancia del servicio
-    verification = await service.create_verification(user_id)                   # Llamar al método para crear y enviar la verificación
-    return VerificationResponse(message="Verification code sent successfully")  # Retornar mensaje de éxito
+    verification, codigo = await service.create_verification(user_id)                   # Llamar al método para crear y enviar la verificación
+    return VerificationResponse(message=f"Verification code sent successfully {codigo}")  # Retornar mensaje de éxito
 
 @router.post(                                       # Endpoint para verificar el código recibido
     "/verify/{user_id}/code",                       # Ruta para verificar el código
@@ -35,5 +38,8 @@ async def verify_code(
 ):
     """Verify the code sent via WhatsApp"""
     service = WhatsAppService(session)                                  # Crear instancia del servicio
-    result = service.verify_code(user_id, verification.code)            # Verificar el código
-    return VerificationResponse(message="Code verified successfully")   # Retornar mensaje de éxito
+    result, access_token = service.verify_code(user_id, verification.code)            # Verificar el código
+    print(access_token)
+    return VerificationResponse(message="Code verified successfully",
+        access_token=access_token,
+        token_type="bearer")   # Retornar mensaje de éxito
