@@ -9,16 +9,12 @@ def test_create_user(client):
         json={
             "full_name": "Daniel Vargas",
             "country_code": "+57",
-            "phone_number": "3100000000",
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "3100000000"
         }
     )
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
     assert data["full_name"] == "Daniel Vargas"
-    assert data["role"] == "user"
-    assert data["user_type"] == "driver"
     assert data["is_active"] is False
     assert data["is_verified"] is False
 
@@ -39,9 +35,7 @@ def test_get_user_by_id(client):
         json={
             "full_name": "Laura Milla",
             "country_code": "+57",
-            "phone_number": "3200000000",
-            "role": "user",
-            "user_type": "delivery"
+            "phone_number": "3200000000"
         }
     )
     user_id = response.json()["id"]
@@ -49,7 +43,6 @@ def test_get_user_by_id(client):
     get_response = client.get(f"/users/{user_id}")
     assert get_response.status_code == status.HTTP_200_OK
     assert get_response.json()["full_name"] == "Laura Milla"
-    assert get_response.json()["user_type"] == "delivery"
 
 
 def test_update_user(client):
@@ -58,9 +51,7 @@ def test_update_user(client):
         json={
             "full_name": "Carlos",
             "country_code": "+57",
-            "phone_number": "3001111111",
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "3001111111"
         }
     )
     user_id = response.json()["id"]
@@ -79,9 +70,7 @@ def test_delete_user(client):
         json={
             "full_name": "Para Borrar",
             "country_code": "+57",
-            "phone_number": "3009999999",
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "3009999999"
         }
     )
     user_id = response.json()["id"]
@@ -95,9 +84,7 @@ def test_cannot_create_duplicate_user(client):
     user_data = {
         "full_name": "Daniel Vargas",
         "country_code": "+57",
-        "phone_number": "3100000000",
-        "role": "user",
-        "user_type": "driver"
+        "phone_number": "3100000000"
     }
 
     response_1 = client.post("/users/", json=user_data)
@@ -115,9 +102,7 @@ def test_invalid_colombian_mobile(client):
         json={
             "full_name": "Invalido",
             "country_code": "+57",
-            "phone_number": "4333333333",  # ❌ inválido
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "4333333333"  # ❌ inválido
         }
     )
     print("\nResponse JSON:", response.json())
@@ -131,9 +116,7 @@ def test_invalid_full_name(client):
         json={
             "full_name": "Da",  # ❌ inválido
             "country_code": "+57",
-            "phone_number": "3008888888",
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "3008888888"
         }
     )
     print("\nResponse JSON:", response.json())
@@ -148,9 +131,7 @@ def test_soft_delete_user(client):
         json={
             "full_name": "Usuario Activo",
             "country_code": "+57",
-            "phone_number": "3007777777",
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "3007777777"
         }
     )
     print("\n[CREATE USER] Response:", response.json())
@@ -186,9 +167,7 @@ def test_invalid_full_name_on_update(client):
         "/users/",
         json={
             "country_code": "+57",
-            "phone_number": "3001212121",
-            "role": "user",
-            "user_type": "driver"
+            "phone_number": "3001212121"
         }
     )
     assert response.status_code == 201

@@ -1,6 +1,8 @@
 from sqlmodel import Session, select
 from app.models.user import User, UserCreate, UserUpdate
+from app.models.role import Role
 from fastapi import HTTPException, status
+from sqlalchemy.orm import selectinload
 
 
 class UserService:
@@ -8,24 +10,33 @@ class UserService:
         self.session = session
 
     def create_user(self, user_data: UserCreate) -> User:
-        # Check for existing phone (country_code + phone_number)
-        existing_user = self.session.exec(
-            select(User).where(
-                User.country_code == user_data.country_code,
-                User.phone_number == user_data.phone_number
-            )
-        ).first()
+        with self.session.begin():
+            # Check for existing phone (country_code + phone_number)
+            existing_user = self.session.exec(
+                select(User).where(
+                    User.country_code == user_data.country_code,
+                    User.phone_number == user_data.phone_number
+                )
+            ).first()
 
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User with this phone number already exists."
-            )
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User with this phone number already exists."
+                )
 
-        user = User.model_validate(user_data.model_dump())
-        self.session.add(user)
-        self.session.commit()
-        self.session.refresh(user)
+            user = User.model_validate(user_data.model_dump())
+            self.session.add(user)
+            self.session.flush()  # Para obtener el id antes del commit
+
+            # Asignar el rol CLIENT automáticamente
+            client_role = self.session.exec(select(Role).where(Role.id == "CLIENT")).first()
+            if not client_role:
+                raise HTTPException(status_code=500, detail="Rol CLIENT no existe")
+            user.roles.append(client_role)
+            self.session.add(user)
+            # El commit se hace automáticamente al salir del with
+
         return user
 
     def get_users(self) -> list[User]:

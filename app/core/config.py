@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     CORS_METHODS: List[str]
     CORS_HEADERS: List[str]
 
+    # Teléfono de prueba para usuario de prueba
+    TEST_CLIENT_PHONE: str
+
     model_config = ConfigDict(
         env_file=".env",
         case_sensitive=True
