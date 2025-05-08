@@ -107,7 +107,7 @@ class AuthService:
                 detail=f"Error in verification process: {str(e)}"
             )
 
-    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str]:
+    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str, User]:
         # Buscar el usuario primero
         user = self.session.exec(
             select(User).where(
@@ -166,7 +166,7 @@ class AuthService:
         # Generar token JWT
         access_token = self.create_access_token(user.id)
 
-        return True, access_token
+        return True, access_token, user
     
     def create_access_token(self, user_id: int):
         to_encode = {"sub": str(user_id)}
