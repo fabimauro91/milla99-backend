@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from ..core.db import SessionDep
 from ..services.auth_service import AuthService
 from pydantic import BaseModel
-from typing import Optional, List
+from app.models.user import UserRead
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,9 +32,7 @@ class VerificationResponseCode(BaseModel):  # Endpoint para enviar el código de
      message: str
      access_token: str | None = None
      token_type: str | None = None
-     user: Optional[UserResponse] = None
-
-
+     user: UserRead | None = None
 
 class SMSMessage(BaseModel):
     phone_number: str
@@ -65,9 +63,11 @@ async def verify_code(
 ):
     """Verify the code sent via WhatsApp"""
     service = AuthService(session)                                  # Crear instancia del servicio
-    result, access_token,user_data = service.verify_code(country_code,phone_number, verification.code)            # Verificar el código
+    result, access_token, user = service.verify_code(country_code, phone_number, verification.code)            # Verificar el código
     print(access_token)
-    return VerificationResponseCode(message="Code verified successfully",
+    return VerificationResponse(
+        message="Code verified successfully",
         access_token=access_token,
         token_type="bearer",
-        user= user_data)   # Retornar mensaje de éxito
+        user=UserRead.model_validate(user, from_attributes=True)
+    )

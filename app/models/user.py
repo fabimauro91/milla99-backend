@@ -24,8 +24,10 @@ class UserType(str, Enum):
 
 class UserBase(SQLModel):
     full_name: Optional[str] = Field(default=None)
-    country_code: CountryCode = Field(description="Código de país, ejemplo: +57")
-    phone_number: PhoneNumber = Field(description="Número de teléfono móvil, ejemplo: 3001234567")
+    country_code: CountryCode = Field(
+        description="Código de país, ejemplo: +57")
+    phone_number: PhoneNumber = Field(
+        description="Número de teléfono móvil, ejemplo: 3001234567")
     is_verified: bool = False
     is_active: bool = False
 
@@ -53,12 +55,17 @@ class UserBase(SQLModel):
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    roles: List["Role"] = Relationship(back_populates="users", link_model=UserHasRole)
+    roles: List["Role"] = Relationship(
+        back_populates="users", link_model=UserHasRole)
+    driver: Optional["Driver"] = Relationship(back_populates="user")
 
 
 class UserCreate(SQLModel):
-    country_code: CountryCode = Field(description="Código de país, ejemplo: +57")
-    phone_number: PhoneNumber = Field(description="Número de teléfono móvil, ejemplo: 3001234567")
+    country_code: CountryCode = Field(
+        description="Código de país, ejemplo: +57")
+    phone_number: PhoneNumber = Field(
+        description="Número de teléfono móvil, ejemplo: 3001234567")
+    roles: Optional[List[str]] = None
 
 
 class UserUpdate(SQLModel):
@@ -87,6 +94,7 @@ class RoleRead(BaseModel):
     id: str
     name: str
     route: str
+
     class Config:
         orm_mode = True
 
@@ -99,5 +107,6 @@ class UserRead(BaseModel):
     is_active: bool
     full_name: Optional[str]
     roles: List[RoleRead]
+
     class Config:
         orm_mode = True
