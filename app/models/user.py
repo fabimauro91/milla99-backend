@@ -70,10 +70,6 @@ class UserCreate(SQLModel):
 
 class UserUpdate(SQLModel):
     full_name: Optional[str] = None
-    country_code: Optional[CountryCode] = None
-    phone_number: Optional[PhoneNumber] = None
-    is_verified: Optional[bool] = None
-    is_active: Optional[bool] = None
 
     @field_validator("full_name")
     @classmethod
