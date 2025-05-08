@@ -8,6 +8,7 @@ from ..models.user import User
 from ..core.config import settings
 from jose import jwt
 from twilio.rest import Client
+from sqlalchemy.orm import selectinload
 
 
 class AuthService:
@@ -114,6 +115,7 @@ class AuthService:
                 User.country_code == country_code,
                 User.phone_number == phone_number
             )
+            .options(selectinload(User.roles))  # Cargar los roles
         ).first()
 
         if not user:
@@ -162,11 +164,29 @@ class AuthService:
             user.is_active = True
             
         self.session.commit()
+        self.session.refresh(user)  # Recargar el usuario para asegurar datos actualizados
 
         # Generar token JWT
         access_token = self.create_access_token(user.id)
 
-        return True, access_token
+        # Crear diccionario con la información del usuario
+        user_data = {
+            "id": user.id,
+            "full_name": user.full_name,
+            "country_code": user.country_code,
+            "phone_number": user.phone_number,
+            "is_verified": user.is_verified,
+            "is_active": user.is_active,
+            "roles": [
+                {
+                    "id": role.id,
+                    "name": role.name,
+                    "route": role.route
+                } for role in user.roles
+            ]
+        }
+
+        return True, access_token, user_data
     
     def create_access_token(self, user_id: int):
         to_encode = {"sub": str(user_id)}
