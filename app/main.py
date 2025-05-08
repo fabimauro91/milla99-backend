@@ -6,6 +6,7 @@ from .core.db import create_all_tables
 from .routers import auth, customers, transactions, users 
 from .core.config import settings
 from .core.init_data import init_data
+from .core.middleware.auth import JWTAuthMiddleware
 
 
 @asynccontextmanager
@@ -38,6 +39,8 @@ app.add_middleware(
     allow_headers=settings.CORS_HEADERS,
 )
 
+# Agregar middleware de autenticación
+app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(users.router)
 app.include_router(auth.router) 
