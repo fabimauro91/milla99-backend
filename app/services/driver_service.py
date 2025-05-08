@@ -3,6 +3,7 @@ from fastapi import HTTPException, status
 from app.models.driver import Driver, DriverCreate, DriverUpdate
 from app.models.user import User
 from app.models.role import Role
+import os
 
 
 class DriverService:
@@ -65,3 +66,26 @@ class DriverService:
         self.session.add(driver)
         self.session.commit()
         return {"message": "Driver deactivated (soft delete) successfully"}
+
+    def update_driver_document(self, driver_id: int, field: str, url: str) -> Driver:
+        driver = self.get_driver_by_id(driver_id)
+        if not driver:
+            raise HTTPException(status_code=404, detail="Driver not found")
+        if not hasattr(driver, field):
+            raise HTTPException(
+                status_code=400, detail=f"El campo '{field}' no existe en Driver")
+
+        # Eliminar archivo anterior si existe
+        old_url = getattr(driver, field)
+        if old_url:
+            # Convierte la URL relativa a ruta absoluta
+            old_path = old_url.lstrip("/")
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+        # Actualizar con la nueva URL
+        setattr(driver, field, url)
+        self.session.add(driver)
+        self.session.commit()
+        self.session.refresh(driver)
+        return driver

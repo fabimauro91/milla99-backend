@@ -1,47 +1,43 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException, status, Form, Depends
-from app.services.upload_service import save_uploaded_file, UploadCategory
+from fastapi import APIRouter, File, UploadFile, HTTPException, status, Form, Request, Depends
+from app.services.upload_service import save_uploaded_file, FIELD_TO_CATEGORY
+from app.services.driver_service import DriverService
+from app.core.db import get_session
+from sqlmodel import Session, select
 from typing import Optional
-from app.core.auth import get_current_user
-from app.models.user import User
+from app.models.driver import Driver
 
 router = APIRouter(prefix="/upload", tags=["uploads"])
 
 
-@router.post("/")
-async def upload_file(
+@router.post("/driver-doc")
+async def upload_driver_document(
+    request: Request,
     file: UploadFile = File(...),
-    category: UploadCategory = Form(...),
+    field: str = Form(...),
     description: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user)
+    session: Session = Depends(get_session)
 ):
     """
-    Sube un archivo a la categoría especificada.
-    Requiere autenticación.
-
-    Args:
-        file: El archivo a subir
-        category: La categoría del archivo (determina la carpeta)
-        description: Descripción opcional del archivo
-        current_user: Usuario autenticado (inyectado automáticamente)
-
-    Returns:
-        dict: Información sobre el archivo subido
+    Sube un archivo y actualiza el campo correspondiente en el modelo Driver.
     """
-    try:
-        url = save_uploaded_file(file, category)
-        return {
-            "message": "Upload successful",
-            "url": url,
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "category": category,
-            "description": description,
-            "user_id": current_user.id
-        }
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al procesar el archivo: {str(e)}"
-        )
+    user_id = request.state.user_id
+    # Obtener el driver asociado al usuario autenticado
+    driver = session.exec(select(Driver).where(
+        Driver.user_id == user_id)).first()
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    # Aquí usas el mapeo que ya tienes
+    category = FIELD_TO_CATEGORY.get(field, "drivers")
+    # Subir el archivo
+    url = save_uploaded_file(file, category)
+    # Actualizar el campo correspondiente
+    driver_service = DriverService(session)
+    driver_service.update_driver_document(driver.id, field, url)
+    return {
+        "message": f"{field} actualizado exitosamente",
+        "url": url,
+        "user_id": user_id,
+        "driver_id": driver.id,
+        "field": field,
+        "description": description
+    }

@@ -23,11 +23,26 @@ CATEGORY_SUBFOLDERS = {
     "vehicles": "drivers",
     "property_cards": "drivers",
     "soats": "drivers",
-    "id_cards": "drivers"
+    "id_cards": "drivers",
+
 }
 
 # Extensiones permitidas
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
+
+FIELD_TO_CATEGORY = {
+    "photo_url": "profile_photos",
+    "license_selfie_url": "licenses",
+    "license_front_url": "licenses",
+    "license_back_url": "licenses",
+    "criminal_record_url": "criminal_records",
+    "vehicle_photo_url": "vehicles",
+    "property_card_front_url": "property_cards",
+    "property_card_back_url": "property_cards",
+    "soat_photo": "soats",
+    "id_card_front_url": "id_cards",
+    "id_card_back_url": "id_cards"
+}
 
 
 def validate_file(file: UploadFile) -> None:
@@ -48,7 +63,7 @@ def validate_file(file: UploadFile) -> None:
         )
 
 
-def save_uploaded_file(file: UploadFile, category: UploadCategory) -> str:
+def save_uploaded_file(file: UploadFile, category: str) -> str:
     """
     Guarda un archivo subido en la carpeta correspondiente.
 
