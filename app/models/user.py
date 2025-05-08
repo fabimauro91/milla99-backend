@@ -65,6 +65,7 @@ class UserCreate(SQLModel):
         description="Código de país, ejemplo: +57")
     phone_number: PhoneNumber = Field(
         description="Número de teléfono móvil, ejemplo: 3001234567")
+    roles: Optional[List[str]] = None
 
 
 class UserUpdate(SQLModel):

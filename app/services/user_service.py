@@ -29,11 +29,19 @@ class UserService:
             self.session.add(user)
             self.session.flush()  # Para obtener el id antes del commit
 
-            # Asignar el rol CLIENT automáticamente
-            client_role = self.session.exec(select(Role).where(Role.id == "CLIENT")).first()
-            if not client_role:
-                raise HTTPException(status_code=500, detail="Rol CLIENT no existe")
-            user.roles.append(client_role)
+            # Asignar los roles que vengan en el request
+            if user_data.roles:
+                for role_id in user_data.roles:
+                    role = self.session.exec(
+                        select(Role).where(Role.id == role_id)).first()
+                    if not role:
+                        raise HTTPException(
+                            status_code=400, detail=f"Rol {role_id} no existe")
+                    user.roles.append(role)
+            else:
+                raise HTTPException(
+                    status_code=400, detail="Debes enviar al menos un rol")
+
             self.session.add(user)
             # El commit se hace automáticamente al salir del with
 
