@@ -4,7 +4,9 @@ from ..services.auth_service import AuthService
 from pydantic import BaseModel
 
 
-router = APIRouter(prefix="/auth", tags=["auth"])   # Crear un router con prefijo '/whatsapp' y etiqueta para la documentación
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+   # Crear un router con prefijo '/whatsapp' y etiqueta para la documentación
 
 class VerificationRequest(BaseModel):   # Modelo para la solicitud de verificación (cuando el usuario envía el código)
     code: str
