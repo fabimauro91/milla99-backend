@@ -58,6 +58,7 @@ class User(UserBase, table=True):
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
     driver: Optional["Driver"] = Relationship(back_populates="user")
+    driver_data: Optional["DriverData"] = Relationship(back_populates="user")
 
 
 class UserCreate(SQLModel):
