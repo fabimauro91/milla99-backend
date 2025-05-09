@@ -4,6 +4,8 @@ from app.models.role import Role
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
+from app.models.user import User, UserCreate
+from app.models.vehicle_type import VehicleType
 from app.core.db import engine
 from app.core.config import settings
 
@@ -79,7 +81,27 @@ def init_test_user():
                 session.commit()
 
 
+def init_vehicle_types():
+    with Session(engine) as session:
+        # Verificar si ya existen tipos de vehículos
+        existing_types = session.exec(select(VehicleType)).all()
+        if existing_types:
+            return
+
+        # Crear tipos de vehículos
+        vehicle_types = [
+            VehicleType(name="car", capacity=4),
+            VehicleType(name="moto", capacity=1)
+        ]
+        
+        for vehicle_type in vehicle_types:
+            session.add(vehicle_type)
+        
+        session.commit()
+
+
 def init_data():
     init_roles()
     init_document_types()
     init_test_user()
+    init_vehicle_types()

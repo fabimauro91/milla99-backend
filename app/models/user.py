@@ -62,6 +62,7 @@ class User(UserBase, table=True):
         back_populates="users", link_model=UserHasRole)
     driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
     driver: Optional["Driver"] = Relationship(back_populates="user")
+    driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
 
 
 

@@ -1,100 +1,33 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from datetime import date
+from app.models.user import UserCreate
+from app.models.driver_info import DriverInfoCreate
+from app.models.vehicle_info import VehicleInfoCreate
+
+if TYPE_CHECKING:
+    from .user import User
+    from .driver_info import DriverInfo
 
 
 class DriverBase(SQLModel):
-    is_active: bool = False
-
-    # Basic info
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    birth_date: Optional[date] = None
-    email: Optional[str] = None
-    photo_url: Optional[str] = None
-
-    # License
-    license_number: Optional[str] = None
-    license_expiration_date: Optional[date] = None
-    license_selfie_url: Optional[str] = None
-    license_front_url: Optional[str] = None
-    license_back_url: Optional[str] = None
-
-    # Criminal record
-    criminal_record_url: Optional[str] = None
-
-    # Vehicle info
-    vehicle_type: Optional[str] = None  # "car" o "motorcycle"
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    color: Optional[str] = None
-    license_plate: Optional[str] = None
-    vehicle_photo_url: Optional[str] = None
-    property_card_front_url: Optional[str] = None
-    property_card_back_url: Optional[str] = None
-    manufacture_year: Optional[int] = None
-
-    # reference code
-    reference_code: Optional[str] = None
-
-    # soat info
-    soat_photo: Optional[str] = None
-
-    # Only for motorcycles
-    # identification user
-    id_card_number: Optional[str] = None
-    id_card_front_url: Optional[str] = None
-    id_card_back_url: Optional[str] = None
+    driver_info_id: Optional[int] = Field(
+        default=None, foreign_key="driverinfo.id")
 
 
 class Driver(DriverBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    user:  Optional["User"] = Relationship(back_populates="driver")
+    user: Optional["User"] = Relationship(back_populates="driver")
+    driver_info: Optional["DriverInfo"] = Relationship(back_populates="driver")
 
 
 class DriverCreate(DriverBase):
-    user_id: int  # necesary to create
+    user_id: int  # necesario para crear
 
 
-class DriverUpdate(SQLModel):
-    is_active: Optional[bool] = None
 
-    # Basic info
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    birth_date: Optional[date] = None
-    email: Optional[str] = None
-    photo_url: Optional[str] = None
-
-    # License
-    license_number: Optional[str] = None
-    license_expiration_date: Optional[date] = None
-    license_selfie_url: Optional[str] = None
-    license_front_url: Optional[str] = None
-    license_back_url: Optional[str] = None
-
-    # Criminal record
-    criminal_record_url: Optional[str] = None
-
-    # Vehicle info
-    vehicle_type: Optional[str] = None
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    color: Optional[str] = None
-    license_plate: Optional[str] = None
-    vehicle_photo_url: Optional[str] = None
-    property_card_front_url: Optional[str] = None
-    property_card_back_url: Optional[str] = None
-    manufacture_year: Optional[int] = None
-
-    # reference code
-    reference_code: Optional[str] = None
-
-    # soat info
-    soat_photo: Optional[str] = None
-
-    # Only for motorcycles
-    id_card_number: Optional[str] = None
-    id_card_front_url: Optional[str] = None
-    id_card_back_url: Optional[str] = None
+class DriverFullCreate(SQLModel):
+    user: UserCreate
+    driver_info: DriverInfoCreate
+    vehicle_info: VehicleInfoCreate
