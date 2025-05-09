@@ -1,24 +1,25 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import List
+from functools import lru_cache
 
 class Settings(BaseSettings):
     # Configuración de la aplicación
-    APP_NAME: str
-    APP_VERSION: str
-    DEBUG: bool
+    APP_NAME: str = "Milla99 API"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = True
     
     # Configuración de la base de datos
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite:///./milla99.db"
     
     # Configuración CORS
-    CORS_ORIGINS: List[str]
-    CORS_CREDENTIALS: bool
-    CORS_METHODS: List[str]
-    CORS_HEADERS: List[str]
+    CORS_ORIGINS: List[str] = ["*"]
+    CORS_CREDENTIALS: bool = True
+    CORS_METHODS: List[str] = ["*"]
+    CORS_HEADERS: List[str] = ["*"]
 
     # Teléfono de prueba para usuario de prueba
-    TEST_CLIENT_PHONE: str
+    TEST_CLIENT_PHONE: str = "+573148780278"
 
     model_config = ConfigDict(
         env_file=".env",
@@ -45,4 +46,13 @@ class Settings(BaseSettings):
         case_sensitive=True
     )
 
-settings = Settings() 
+    # Configuración de ClickSend
+    CLICK_SEND_USERNAME: str
+    CLICK_SEND_PASSWORD: str
+    CLICK_SEND_PHONE: str
+
+@lru_cache()
+def get_settings():
+    return Settings()
+
+settings = get_settings() 

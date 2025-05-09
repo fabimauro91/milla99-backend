@@ -1,42 +1,37 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, TYPE_CHECKING
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
-
-
-class VehicleType(str, Enum):
-    CAR = "car"
-    MOTORCYCLE = "motorcycle"
+from .vehicle_type import VehicleType
 
 
 class VehicleInfoBase(SQLModel):
-    vehicle_type: VehicleType
-    brand: str
-    model: str
-    model_year: int
-    color: str
-    number_plate: str
-    vehicle_photo_url: str
-    vehicle_subtype: str  # FK table vehicle_subtype
+    brand: str = Field(nullable=False)
+    model: str = Field(nullable=False)
+    model_year: int = Field(nullable=False)
+    color: str = Field(nullable=False)
+    plate: str = Field(unique=True, nullable=False)
+    vehicle_type_id: int = Field(foreign_key="vehicletype.id", nullable=False)
 
 
 class VehicleInfo(VehicleInfoBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
     driver_info_id: int = Field(foreign_key="driverinfo.id")
     driver_info: Optional["DriverInfo"] = Relationship(
         back_populates="vehicle_info")
+    vehicle_type: VehicleType = Relationship(back_populates="vehicles")
 
 
 class VehicleInfoCreate(VehicleInfoBase):
-    driver_info_id: int
+    pass
 
 
 class VehicleInfoUpdate(SQLModel):
-    vehicle_type: Optional[VehicleType] = None
     brand: Optional[str] = None
     model: Optional[str] = None
     model_year: Optional[int] = None
     color: Optional[str] = None
-    number_plate: Optional[str] = None
-    vehicle_photo_url: Optional[str] = None
-    vehicle_subtype: Optional[str] = None
+    plate: Optional[str] = None
+    vehicle_type_id: Optional[int] = None

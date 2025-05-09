@@ -26,3 +26,15 @@ class DriverInfo(DriverInfoBase, table=True):
         back_populates="driver_info")
     documents: List["DriverDocuments"] = Relationship(
         back_populates="driver_info")
+
+
+class DriverInfoCreate(DriverInfoBase):
+    pass
+
+
+class DriverInfoUpdate(SQLModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    birth_date: Optional[date] = None
+    email: Optional[str] = None
+    selfie_url: Optional[str] = None

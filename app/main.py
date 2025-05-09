@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.db import create_all_tables
-from .routers import customers, transactions, users, drivers, auth, driver_info
+from .routers import users, drivers, auth
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
@@ -45,15 +45,9 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-app.include_router(customers.router)
-app.include_router(transactions.router)
-app.include_router(users.router)
-app.include_router(drivers.router)
-app.include_router(uploads.router)
-app.include_router(driver_info.router)
-
 # Agregar middleware de autenticación
 app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(drivers.router)
