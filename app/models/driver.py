@@ -8,20 +8,8 @@ if TYPE_CHECKING:
 
 
 class DriverBase(SQLModel):
-
     driver_info_id: Optional[int] = Field(
         default=None, foreign_key="driverinfo.id")
-
-    # Vehicle info/ table vehicle_info id_driver_info FK (2)
-    # "car" o "motorcycle" fk table vehicle_type = id, name, capacity, no optional
-    vehicle_type: Optional[str] = None
-    brand: Optional[str] = None  # no optional
-    model: Optional[str] = None  # no optional
-    model_year: Optional[int] = None  # no optional
-    color: Optional[str] = None  # no optional
-    number_plate: Optional[str] = None  # no optional
-    vehicle_photo_url: Optional[str] = None  # no optional
-    vehicle_subtype: str = None  # FK table vehicle_subtype
 
     # License/ table driver_documents id_driver_info (3)
     property_card_front_url: Optional[str] = None  # no optional
