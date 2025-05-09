@@ -5,6 +5,8 @@ from enum import Enum
 import phonenumbers
 import re
 from app.models.user_has_roles import UserHasRole
+from app.models.driver_documents import DriverDocuments
+from app.models.driver import Driver
 from datetime import datetime
 
 
@@ -58,8 +60,9 @@ class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
+    driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
     driver: Optional["Driver"] = Relationship(back_populates="user")
-    driver_data: Optional["DriverData"] = Relationship(back_populates="user")
+
 
 
 class UserCreate(SQLModel):

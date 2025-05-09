@@ -2,7 +2,8 @@ from sqlmodel import Session, select
 from datetime import datetime
 from app.models.role import Role
 from app.models.user import User
-from app.models.user_has_roles import UserHasRole
+from app.models.user_has_roles import UserHasRole, RoleStatus
+from app.models.document_type import DocumentType
 from app.core.db import engine
 from app.core.config import settings
 
@@ -18,6 +19,22 @@ def init_roles():
                 select(Role).where(Role.id == role.id)).first()
             if not exists:
                 session.add(role)
+        session.commit()
+
+
+def init_document_types():
+    document_types = [
+        DocumentType(name="property_card"),
+        DocumentType(name="license"),
+        DocumentType(name="soat"),
+        DocumentType(name="technical_inspections")
+    ]
+    with Session(engine) as session:
+        for doc_type in document_types:
+            exists = session.exec(
+                select(DocumentType).where(DocumentType.name == doc_type.name)).first()
+            if not exists:
+                session.add(doc_type)
         session.commit()
 
 
@@ -45,8 +62,24 @@ def init_test_user():
             user.roles.append(client_role)
             session.add(user)
             session.commit()
+            
+            # Actualizar el estado del rol a verificado
+            user_has_role = session.exec(
+                select(UserHasRole).where(
+                    UserHasRole.id_user == user.id,
+                    UserHasRole.id_rol == client_role.id
+                )
+            ).first()
+            
+            if user_has_role:
+                user_has_role.is_verified = True
+                user_has_role.status = RoleStatus.APPROVED
+                user_has_role.verified_at = datetime.utcnow()
+                session.add(user_has_role)
+                session.commit()
 
 
 def init_data():
     init_roles()
+    init_document_types()
     init_test_user()
