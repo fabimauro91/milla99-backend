@@ -41,12 +41,6 @@ app.add_middleware(
 )
 
 
-
-app.include_router(customers.router)
-app.include_router(transactions.router)
-app.include_router(users.router)
-app.include_router(drivers.router)
-
 # Agregar middleware de autenticación
 app.add_middleware(JWTAuthMiddleware)
 

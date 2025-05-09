@@ -5,6 +5,7 @@ from enum import Enum
 import phonenumbers
 import re
 from app.models.user_has_roles import UserHasRole
+from datetime import datetime
 
 
 # Custom validated types
@@ -28,7 +29,7 @@ class UserBase(SQLModel):
         description="Código de país, ejemplo: +57")
     phone_number: PhoneNumber = Field(
         description="Número de teléfono móvil, ejemplo: 3001234567")
-    is_verified: bool = False
+    is_verified_phone: bool = False
     is_active: bool = False
 
     # Validation for phone number
@@ -61,18 +62,34 @@ class User(UserBase, table=True):
 
 
 class UserCreate(SQLModel):
+    full_name: str = Field(
+        description="Nombre completo del usuario",
+        min_length=3
+    )
     country_code: CountryCode = Field(
         description="Código de país, ejemplo: +57")
     phone_number: PhoneNumber = Field(
-        description="Número de teléfono móvil, ejemplo: 3001234567")
-    roles: Optional[List[str]] = None
+        description="Número de teléfono móvil, ejemplo: 3001234567",
+        min_length=10,
+        max_length=10
+    )
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("El nombre completo debe tener al menos 3 caracteres.")
+        if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$", value):
+            raise ValueError("El nombre completo solo puede contener letras y espacios.")
+        return value
 
 
 class UserUpdate(SQLModel):
     full_name: Optional[str] = None
     country_code: Optional[CountryCode] = None
     phone_number: Optional[PhoneNumber] = None
-    is_verified: Optional[bool] = None
+    is_verified_phone: Optional[bool] = None
     is_active: Optional[bool] = None
 
     @field_validator("full_name")
@@ -96,17 +113,39 @@ class RoleRead(BaseModel):
     route: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserRead(BaseModel):
     id: int
     country_code: str
     phone_number: str
-    is_verified: bool
+    is_verified_phone: bool
     is_active: bool
     full_name: Optional[str]
     roles: List[RoleRead]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+class UserInDB(UserBase):
+    id: int
+    is_active: bool
+    is_verified_phone: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserResponse(UserBase):
+    id: int
+    is_active: bool
+    is_verified_phone: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
