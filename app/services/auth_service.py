@@ -7,8 +7,6 @@ from ..models.w_verification import Verification, VerificationCreate
 from ..models.user import User
 from ..core.config import settings
 from jose import jwt
-from twilio.rest import Client
-import vonage
 import clicksend_client
 from clicksend_client import SmsMessage
 from clicksend_client.rest import ApiException
