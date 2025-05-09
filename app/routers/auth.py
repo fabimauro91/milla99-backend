@@ -12,11 +12,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class VerificationRequest(BaseModel):   # Modelo para la solicitud de verificación (cuando el usuario envía el código)
     code: str
 
-class VerificationResponse(BaseModel):  # Endpoint para enviar el código de verificación
+class VerifResponseCode(BaseModel):  # Endpoint para enviar el código de verificación
      message: str
      access_token: str | None = None
      token_type: str | None = None
      user: UserRead | None = None
+
+class VerificationResponse(BaseModel):  # Endpoint para enviar el código de verificación
+     message: str
 
 class SMSMessage(BaseModel):
     phone_number: str
@@ -36,7 +39,7 @@ async def send_verification(country_code: str, phone_number: str, session: Sessi
 
 @router.post(                                       # Endpoint para verificar el código recibido
     "/verify/{country_code}/{phone_number}/code",                       # Ruta para verificar el código
-    response_model=VerificationResponse             # Modelo de respuesta
+    response_model=VerifResponseCode             # Modelo de respuesta
 )
 
 async def verify_code(
@@ -49,7 +52,7 @@ async def verify_code(
     service = AuthService(session)                                  # Crear instancia del servicio
     result, access_token, user = service.verify_code(country_code, phone_number, verification.code)            # Verificar el código
     print(access_token)
-    return VerificationResponse(
+    return VerifResponseCode(
         message="Code verified successfully",
         access_token=access_token,
         token_type="bearer",
