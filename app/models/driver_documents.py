@@ -25,7 +25,6 @@ class DriverDocumentsBase(SQLModel):
 
 class DriverDocuments(DriverDocumentsBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-<<<<<<< HEAD
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
 
@@ -62,24 +61,3 @@ class DriverDocumentsUpdate(SQLModel):
     document_front_url: Optional[str] = None
     document_back_url: Optional[str] = None
     status: Optional[DriverStatus] = None
-=======
-    driver_info_id: int = Field(foreign_key="driverinfo.id")
-    driver_info: Optional["DriverInfo"] = Relationship(
-        back_populates="documents")
-
-
-class DriverDocumentsCreate(DriverDocumentsBase):
-    driver_info_id: int
-
-
-class DriverDocumentsUpdate(SQLModel):
-    property_card_front_url: Optional[str] = None
-    property_card_back_url: Optional[str] = None
-    license_front_url: Optional[str] = None
-    license_back_url: Optional[str] = None
-    license_expiration_date: Optional[date] = None
-    soat_url: Optional[str] = None
-    soat_expiration_date: Optional[date] = None
-    vehicle_technical_inspection_url: Optional[str] = None
-    vehicle_technical_inspection_expiration_date: Optional[date] = None
->>>>>>> feature/user-crud
