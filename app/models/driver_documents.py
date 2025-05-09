@@ -61,3 +61,12 @@ class DriverDocumentsUpdate(SQLModel):
     document_front_url: Optional[str] = None
     document_back_url: Optional[str] = None
     status: Optional[DriverStatus] = None
+
+
+class DriverDocumentsCreateRequest(SQLModel):
+    user_id: int
+    document_type_id: int
+    document_front_url: str
+    document_back_url: Optional[str] = None
+    expiration_date: Optional[datetime] = None 
+    # vehicle_info_id: Optional[int] = None

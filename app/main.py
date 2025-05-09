@@ -1,9 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-
 from .core.db import create_all_tables
-from .routers import  users, drivers, auth
+from .routers import  users, drivers, auth, verify_docs
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
@@ -46,3 +45,4 @@ app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(verify_docs.router)
