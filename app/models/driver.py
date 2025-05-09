@@ -50,7 +50,6 @@ class DriverCreate(DriverBase):
 
 
 class DriverUpdate(SQLModel):
-    is_active: Optional[bool] = None
     driver_info_id: Optional[int] = None
 
     # Basic info

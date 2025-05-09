@@ -6,3 +6,4 @@ from .role import Role
 from .user_has_roles import UserHasRole
 from .driver import Driver, DriverCreate, DriverUpdate
 from .driver_info import DriverInfo, DriverInfoBase
+from .vehicle_info import VehicleInfo, VehicleInfoCreate, VehicleInfoUpdate, VehicleType
