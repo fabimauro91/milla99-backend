@@ -16,7 +16,18 @@ def test_create_user(client):
     data = response.json()
     assert data["full_name"] == "Daniel Vargas"
     assert data["is_active"] is False
-    assert data["is_verified"] is False
+    assert data["is_verified_phone"] is False
+    # Verificar que se asignó el rol CLIENT y está verificado
+    assert len(data["roles"]) == 1
+    assert data["roles"][0]["id"] == "CLIENT"
+    assert data["roles"][0]["name"] == "pasajero"
+    
+    # Verificar que el rol está verificado en user_has_roles
+    user_id = data["id"]
+    response = client.get(f"/users/{user_id}")
+    user_data = response.json()
+    assert user_data["roles"][0]["is_verified"] is True
+    assert user_data["roles"][0]["status"] == "approved"
 
 # test for get all users
 
@@ -180,3 +191,98 @@ def test_invalid_full_name_on_update(client):
 
     assert patch_response.status_code == 422
     assert "Full name can only contain letters and spaces." in patch_response.text
+
+
+def test_create_user_without_full_name(client):
+    response = client.post(
+        "/users/",
+        json={
+            "country_code": "+57",
+            "phone_number": "3100000000"
+        }
+    )
+    assert response.status_code == 422
+    assert "field required" in response.text.lower()
+
+
+def test_create_user_with_empty_full_name(client):
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "",
+            "country_code": "+57",
+            "phone_number": "3100000000"
+        }
+    )
+    assert response.status_code == 422
+    assert "El nombre completo debe tener al menos 3 caracteres" in response.text
+
+
+def test_create_user_with_invalid_full_name(client):
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Juan123",
+            "country_code": "+57",
+            "phone_number": "3100000000"
+        }
+    )
+    assert response.status_code == 422
+    assert "El nombre completo solo puede contener letras y espacios" in response.text
+
+
+def test_create_user_with_valid_full_name(client):
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Juan Pérez",
+            "country_code": "+57",
+            "phone_number": "3100000000"
+        }
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["full_name"] == "Juan Pérez"
+    assert data["is_active"] is False
+    assert data["is_verified_phone"] is False
+    # Verificar que se asignó el rol CLIENT y está verificado
+    assert len(data["roles"]) == 1
+    assert data["roles"][0]["id"] == "CLIENT"
+    assert data["roles"][0]["name"] == "pasajero"
+
+
+def test_phone_number_length(client):
+    # Test con número más corto
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Juan Pérez",
+            "country_code": "+57",
+            "phone_number": "300123456"  # 9 dígitos
+        }
+    )
+    assert response.status_code == 422
+    assert "ensure this value has at least 10 characters" in response.text.lower()
+
+    # Test con número más largo
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Juan Pérez",
+            "country_code": "+57",
+            "phone_number": "30012345678"  # 11 dígitos
+        }
+    )
+    assert response.status_code == 422
+    assert "ensure this value has at most 10 characters" in response.text.lower()
+
+    # Test con número exacto
+    response = client.post(
+        "/users/",
+        json={
+            "full_name": "Juan Pérez",
+            "country_code": "+57",
+            "phone_number": "3001234567"  # 10 dígitos
+        }
+    )
+    assert response.status_code == 201

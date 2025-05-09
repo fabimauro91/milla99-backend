@@ -16,6 +16,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/openapi.json", "GET")  # Esquema OpenAPI
         ]
         
+
         # Verificar si la ruta y método actual están en la lista de públicas
         is_public = any(
             request.url.path.startswith(path) and request.method == method
