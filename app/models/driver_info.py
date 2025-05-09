@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from .user import User
     from .driver import Driver
     from .vehicle_info import VehicleInfo
+    from .driver_documents import DriverDocuments
 
 
 class DriverInfoBase(SQLModel):
@@ -22,4 +23,6 @@ class DriverInfo(DriverInfoBase, table=True):
     user: Optional["User"] = Relationship(back_populates="driver_info")
     driver: Optional["Driver"] = Relationship(back_populates="driver_info")
     vehicle_info: Optional["VehicleInfo"] = Relationship(
+        back_populates="driver_info")
+    documents: List["DriverDocuments"] = Relationship(
         back_populates="driver_info")

@@ -11,20 +11,6 @@ class DriverBase(SQLModel):
     driver_info_id: Optional[int] = Field(
         default=None, foreign_key="driverinfo.id")
 
-    # License/ table driver_documents id_driver_info (3)
-    property_card_front_url: Optional[str] = None  # no optional
-    property_card_back_url: Optional[str] = None  # no optional
-
-    license_front_url: Optional[str] = None
-    license_back_url: Optional[str] = None
-    license_expiration_date: Optional[date] = None
-
-    soat_url: Optional[str] = None
-    soat_expiration_date: Optional[date] = None
-
-    vehicle_technical_inspection_url: Optional[str] = None
-    vehicle_technical_inspection_expiration_date: Optional[date] = None
-
 
 class Driver(DriverBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
