@@ -17,10 +17,9 @@ class DriverStatus(str, Enum):
 class DriverDocumentsBase(SQLModel):
     document_type_id: int = Field(
         foreign_key="documenttype.id", nullable=False)
-    document_front_url: Optional[str] = Field(default=None, nullable=False)
+    document_front_url: Optional[str] = Field(default=None, nullable=True)
     document_back_url: Optional[str] = Field(default=None, nullable=True)
     expiration_date: Optional[datetime] = Field(default=None, nullable=True)
-    soat_url: Optional[str] = Field(default=None, nullable=True)
 
 
 class DriverDocuments(DriverDocumentsBase, table=True):

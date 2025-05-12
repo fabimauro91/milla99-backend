@@ -84,7 +84,29 @@ async def upload_driver_document(
         description=description
     )
 
-    # Actualizar el campo correspondiente en el modelo
+    # Lógica especial para documentos únicos (SOAT, técnico-mecánica, antecedentes)
+    if document_type in ("soat", "technical_inspections", "criminal_record"):
+        driver_documents.document_front_url = document_info["url"]
+        session.add(driver_documents)
+        session.commit()
+        session.refresh(driver_documents)
+        return {"message": f"{document_type.replace('_', ' ').title()} subido correctamente", "document": document_info}
+
+    # Lógica especial para licencia (front/back)
+    if document_type == "license":
+        if side not in ("front", "back"):
+            raise HTTPException(
+                status_code=400, detail="Debes especificar si es 'front' o 'back' para la licencia")
+        if side == "front":
+            driver_documents.document_front_url = document_info["url"]
+        else:
+            driver_documents.document_back_url = document_info["url"]
+        session.add(driver_documents)
+        session.commit()
+        session.refresh(driver_documents)
+        return {"message": f"{document_type.replace('_', ' ').title()} subido correctamente", "document": document_info}
+
+    # Actualizar el campo correspondiente en el modelo para otros documentos
     field_name = f"{doc_type_obj.name}_url"
     if hasattr(driver_documents, field_name):
         setattr(driver_documents, field_name, document_info["url"])

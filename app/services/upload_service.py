@@ -6,8 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from enum import Enum
 
-# Definir tipos de documentos y sus categorías
-
+# Definir tipos de documentos y sus categorí
 
 class DocumentType(str, Enum):
     # Documentos del conductor
