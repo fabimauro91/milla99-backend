@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Form, Request, Depends
-from app.utils.uploads import uploader
+from app.services.upload_service import upload_service, DocumentType
 from app.core.db import get_session
 from sqlmodel import Session, select
 from typing import Optional
@@ -10,20 +10,35 @@ from app.models.driver_documents import DriverDocuments
 router = APIRouter(prefix="/upload", tags=["uploads"])
 
 
-@router.post("/driver-doc")
+@router.post("/driver-document")
 async def upload_driver_document(
     request: Request,
     file: UploadFile = File(...),
-    field: str = Form(...),
+    document_type: str = Form(...),
     description: Optional[str] = Form(None),
     session: Session = Depends(get_session)
 ):
     """
-    Sube un archivo y actualiza el campo correspondiente en el modelo DriverDocuments.
+    Sube un documento del conductor y actualiza el campo correspondiente en la base de datos.
+
+    Args:
+        file: Archivo a subir
+        document_type: Tipo de documento (debe ser uno de los DocumentType definidos)
+        description: Descripción opcional del documento
     """
+    try:
+        # Convertir el string a DocumentType
+        doc_type = DocumentType(document_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de documento inválido. Debe ser uno de: {', '.join(DocumentType.__members__.keys())}"
+        )
+
+    # Obtener el ID del usuario autenticado
     user_id = request.state.user_id
 
-    # Obtener el driver asociado al usuario autenticado
+    # Obtener el driver asociado al usuario
     driver = session.exec(select(Driver).where(
         Driver.user_id == user_id)).first()
     if not driver:
@@ -42,70 +57,160 @@ async def upload_driver_document(
         session.commit()
         session.refresh(driver_documents)
 
-    # Mapeo de campos a tipos de documento y subcarpetas
-    FIELD_MAPPING = {
-        "property_card_front": ("property_card", "front"),
-        "property_card_back": ("property_card", "back"),
-        "license_front": ("license", "front"),
-        "license_back": ("license", "back"),
-        "soat": ("soat", None),
-        "vehicle_technical_inspection": ("technical_inspection", None)
-    }
-
-    if field not in FIELD_MAPPING:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid field. Must be one of: {', '.join(FIELD_MAPPING.keys())}"
-        )
-
-    document_type, subfolder = FIELD_MAPPING[field]
-
-    # Subir el archivo
-    relative_path = await uploader.save_driver_document(
+    # Guardar el documento
+    document_info = await upload_service.save_document(
         file=file,
-        driver_id=driver.id,
-        document_type=document_type,
-        subfolder=subfolder
+        user_id=user_id,
+        document_type=doc_type,
+        description=description
     )
 
-    # Actualizar el campo correspondiente en DriverDocuments
-    setattr(driver_documents, f"{field}_url", relative_path)
-    session.add(driver_documents)
-    session.commit()
-    session.refresh(driver_documents)
+    # Actualizar el campo correspondiente en el modelo
+    field_name = f"{doc_type.value}_url"
+    if hasattr(driver_documents, field_name):
+        setattr(driver_documents, field_name, document_info["url"])
+        session.add(driver_documents)
+        session.commit()
+        session.refresh(driver_documents)
+    else:
+        # Si el campo no existe en DriverDocuments, intentar en DriverInfo
+        driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.id == driver.driver_info_id)
+        ).first()
+        if driver_info and hasattr(driver_info, field_name):
+            setattr(driver_info, field_name, document_info["url"])
+            session.add(driver_info)
+            session.commit()
+            session.refresh(driver_info)
+        else:
+            # Si no se encontró el campo en ningún modelo, eliminar el archivo
+            upload_service.delete_document(document_info["url"])
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se encontró un campo correspondiente para el tipo de documento {doc_type}"
+            )
 
     return {
-        "message": f"{field} actualizado exitosamente",
-        "url": uploader.get_file_url(relative_path),
-        "user_id": user_id,
-        "driver_id": driver.id,
-        "field": field,
-        "description": description
+        "message": f"Documento {doc_type} actualizado exitosamente",
+        "document": document_info
     }
+
+
+@router.delete("/driver-document/{document_type}")
+async def delete_driver_document(
+    request: Request,
+    document_type: str,
+    session: Session = Depends(get_session)
+):
+    """
+    Elimina un documento del conductor y actualiza la base de datos.
+
+    Args:
+        document_type: Tipo de documento a eliminar
+    """
+    try:
+        doc_type = DocumentType(document_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de documento inválido. Debe ser uno de: {', '.join(DocumentType.__members__.keys())}"
+        )
+
+    # Obtener el ID del usuario autenticado
+    user_id = request.state.user_id
+
+    # Obtener el driver asociado al usuario
+    driver = session.exec(select(Driver).where(
+        Driver.user_id == user_id)).first()
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+
+    # Buscar el documento en DriverDocuments
+    driver_documents = session.exec(
+        select(DriverDocuments).where(
+            DriverDocuments.driver_info_id == driver.driver_info_id)
+    ).first()
+
+    field_name = f"{doc_type.value}_url"
+    url_to_delete = None
+
+    if driver_documents and hasattr(driver_documents, field_name):
+        url_to_delete = getattr(driver_documents, field_name)
+        setattr(driver_documents, field_name, None)
+        session.add(driver_documents)
+    else:
+        # Si no está en DriverDocuments, buscar en DriverInfo
+        driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.id == driver.driver_info_id)
+        ).first()
+        if driver_info and hasattr(driver_info, field_name):
+            url_to_delete = getattr(driver_info, field_name)
+            setattr(driver_info, field_name, None)
+            session.add(driver_info)
+
+    if url_to_delete:
+        # Eliminar el archivo físico
+        upload_service.delete_document(url_to_delete)
+        session.commit()
+        return {"message": f"Documento {doc_type} eliminado exitosamente"}
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró el documento {doc_type} para eliminar"
+        )
 
 
 @router.post("/driver-info-selfie")
 async def upload_driver_info_selfie(
+    request: Request,
     file: UploadFile = File(...),
-    user_id: int = Form(...)
+    session: Session = Depends(get_session)
 ):
     """
-    Sube la selfie de DriverInfo antes de crear el Driver.
-    Guarda la selfie en static/uploads/driver_info/{user_id}/selfie/
+    Sube o actualiza la selfie del conductor.
+    Si el usuario ya tiene un conductor, actualiza la selfie existente.
+    Si no tiene conductor, guarda la selfie para su posterior uso.
     """
-    # Guardar la selfie en una carpeta específica para driver_info
-    document_type = "selfie"
-    driver_info_path = f"driver_info/{user_id}/{document_type}"
-    # Generar nombre único para el archivo
-    filename = uploader._generate_unique_filename(file.filename)
-    # Crear la ruta completa
-    from pathlib import Path
-    Path(
-        f"static/uploads/{driver_info_path}").mkdir(parents=True, exist_ok=True)
-    file_path = f"static/uploads/{driver_info_path}/{filename}"
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-    # Retornar la URL relativa
-    relative_url = f"/{driver_info_path}/{filename}"
-    return {"url": relative_url}
+    # Obtener el ID del usuario autenticado
+    user_id = request.state.user_id
+
+    # Verificar si el usuario tiene un conductor
+    existing_driver = session.exec(
+        select(Driver).where(Driver.user_id == user_id)
+    ).first()
+
+    # Guardar la selfie usando el servicio de uploads
+    document_info = await upload_service.save_document(
+        file=file,
+        user_id=user_id,
+        document_type=DocumentType.DRIVER_SELFIE,
+        description="Selfie del conductor"
+    )
+
+    # Si el usuario ya tiene un conductor, actualizar la selfie en DriverInfo
+    if existing_driver:
+        driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.id ==
+                                     existing_driver.driver_info_id)
+        ).first()
+
+        if driver_info:
+            # Si hay una selfie anterior, eliminarla
+            if driver_info.selfie_url:
+                upload_service.delete_document(driver_info.selfie_url)
+
+            # Actualizar con la nueva selfie
+            driver_info.selfie_url = document_info["url"]
+            session.add(driver_info)
+            session.commit()
+            session.refresh(driver_info)
+
+            return {
+                "message": "Selfie actualizada exitosamente",
+                "document": document_info
+            }
+
+    return {
+        "message": "Selfie guardada exitosamente",
+        "document": document_info
+    }
