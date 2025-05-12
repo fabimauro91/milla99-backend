@@ -1,11 +1,13 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Form, Request, Depends
-from app.services.upload_service import upload_service, DocumentType
+from app.services.upload_service import parse_document_type, upload_service, DocumentType
 from app.core.db import get_session
 from sqlmodel import Session, select
 from typing import Optional
 from app.models.driver import Driver
 from app.models.driver_info import DriverInfo
 from app.models.driver_documents import DriverDocuments
+from app.models.document_type import DocumentType as DocumentTypeDB
+from datetime import datetime
 
 router = APIRouter(prefix="/upload", tags=["uploads"])
 
@@ -15,6 +17,7 @@ async def upload_driver_document(
     request: Request,
     file: UploadFile = File(...),
     document_type: str = Form(...),
+    side: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     session: Session = Depends(get_session)
 ):
@@ -24,16 +27,27 @@ async def upload_driver_document(
     Args:
         file: Archivo a subir
         document_type: Tipo de documento (debe ser uno de los DocumentType definidos)
+        side: Variante del documento (opcional)
         description: Descripción opcional del documento
     """
-    try:
-        # Convertir el string a DocumentType
-        doc_type = DocumentType(document_type)
-    except ValueError:
+    # Validar que document_type exista en la tabla documenttype
+    doc_type_obj = session.exec(
+        select(DocumentTypeDB).where(DocumentTypeDB.name == document_type)
+    ).first()
+    if not doc_type_obj:
         raise HTTPException(
-            status_code=400,
-            detail=f"Tipo de documento inválido. Debe ser uno de: {', '.join(DocumentType.__members__.keys())}"
-        )
+            status_code=400, detail="Tipo de documento no válido")
+
+    # Validar side según el tipo (puedes personalizar esto)
+    allowed_sides = {
+        "license": ["front", "back"],
+        "property_card": ["front", "back"],
+        "soat": [None],
+        "technical_inspections": [None]
+    }
+    if allowed_sides.get(document_type) and side not in allowed_sides[document_type]:
+        raise HTTPException(
+            status_code=400, detail="Variante no permitida para este tipo de documento")
 
     # Obtener el ID del usuario autenticado
     user_id = request.state.user_id
@@ -44,29 +58,34 @@ async def upload_driver_document(
     if not driver:
         raise HTTPException(status_code=404, detail="Driver not found")
 
-    # Obtener o crear DriverDocuments
+    # Buscar o crear DriverDocuments por driver_info_id y document_type_id
     driver_documents = session.exec(
         select(DriverDocuments).where(
-            DriverDocuments.driver_info_id == driver.driver_info_id)
+            DriverDocuments.driver_info_id == driver.driver_info_id,
+            DriverDocuments.document_type_id == doc_type_obj.id
+        )
     ).first()
 
     if not driver_documents:
         driver_documents = DriverDocuments(
-            driver_info_id=driver.driver_info_id)
+            driver_info_id=driver.driver_info_id,
+            document_type_id=doc_type_obj.id
+        )
         session.add(driver_documents)
         session.commit()
         session.refresh(driver_documents)
 
     # Guardar el documento
-    document_info = await upload_service.save_document(
+    document_info = await upload_service.save_document_dbtype(
         file=file,
         user_id=user_id,
-        document_type=doc_type,
+        document_type=document_type,
+        side=side,
         description=description
     )
 
     # Actualizar el campo correspondiente en el modelo
-    field_name = f"{doc_type.value}_url"
+    field_name = f"{doc_type_obj.name}_url"
     if hasattr(driver_documents, field_name):
         setattr(driver_documents, field_name, document_info["url"])
         session.add(driver_documents)
@@ -87,11 +106,11 @@ async def upload_driver_document(
             upload_service.delete_document(document_info["url"])
             raise HTTPException(
                 status_code=400,
-                detail=f"No se encontró un campo correspondiente para el tipo de documento {doc_type}"
+                detail=f"No se encontró un campo correspondiente para el tipo de documento {doc_type_obj}"
             )
 
     return {
-        "message": f"Documento {doc_type} actualizado exitosamente",
+        "message": f"Documento {doc_type_obj.name} actualizado exitosamente",
         "document": document_info
     }
 

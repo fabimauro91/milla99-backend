@@ -5,7 +5,7 @@ from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
 from app.models.driver_info import DriverInfo, DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
-from app.models.driver import DriverFullRead
+from app.models.driver import DriverFullRead, Driver
 from app.core.db import engine
 
 
@@ -31,21 +31,31 @@ class DriverService:
             driver_role = session.exec(
                 select(Role).where(Role.id == "DRIVER")).first()
             if not driver_role:
-                raise HTTPException(status_code=500, detail="Rol DRIVER no existe")
+                raise HTTPException(
+                    status_code=500, detail="Rol DRIVER no existe")
 
             user.roles.append(driver_role)
             session.add(user)
             session.commit()
             session.refresh(user)
 
-        # 3. Crear el DriverInfo
-        driver_info = DriverInfo(
-            **driver_info_data.dict(),
-            user_id=user.id
-        )
-        self.session.add(driver_info)
-        self.session.commit()
-        self.session.refresh(driver_info)
+            # 3. Crear el DriverInfo
+            driver_info = DriverInfo(
+                **driver_info_data.dict(),
+                user_id=user.id
+            )
+            session.add(driver_info)
+            session.commit()
+            session.refresh(driver_info)
+
+            # 3.5 Crear el Driver (registro principal en la tabla driver)
+            driver = Driver(
+                user_id=user.id,
+                driver_info_id=driver_info.id
+            )
+            session.add(driver)
+            session.commit()
+            session.refresh(driver)
 
             # 4. Crear el VehicleInfo
             vehicle_info = VehicleInfo(

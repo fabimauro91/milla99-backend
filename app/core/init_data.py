@@ -8,6 +8,10 @@ from app.models.user import User, UserCreate
 from app.models.vehicle_type import VehicleType
 from app.core.db import engine
 from app.core.config import settings
+from app.models.driver import DriverDocumentsInput
+from app.services.driver_service import DriverService
+from app.models.driver_info import DriverInfoCreate
+from app.models.vehicle_info import VehicleInfoCreate
 
 
 def init_roles():
@@ -64,7 +68,7 @@ def init_test_user():
             user.roles.append(client_role)
             session.add(user)
             session.commit()
-            
+
             # Actualizar el estado del rol a verificado
             user_has_role = session.exec(
                 select(UserHasRole).where(
@@ -72,13 +76,26 @@ def init_test_user():
                     UserHasRole.id_rol == client_role.id
                 )
             ).first()
-            
+
             if user_has_role:
                 user_has_role.is_verified = True
                 user_has_role.status = RoleStatus.APPROVED
                 user_has_role.verified_at = datetime.utcnow()
                 session.add(user_has_role)
                 session.commit()
+
+        # Crear datos del documento del conductor
+        driver_documents_data = DriverDocumentsInput(
+            property_card_front_url="string",
+            property_card_back_url="string",
+            license_front_url="string",
+            license_back_url="string",
+            license_expiration_date="2025-05-12",
+            soat_url="string",
+            soat_expiration_date="2025-05-12",
+            vehicle_technical_inspection_url="string",
+            vehicle_technical_inspection_expiration_date="2025-05-12"
+        )
 
 
 def init_vehicle_types():
@@ -93,11 +110,53 @@ def init_vehicle_types():
             VehicleType(name="car", capacity=4),
             VehicleType(name="moto", capacity=1)
         ]
-        
+
         for vehicle_type in vehicle_types:
             session.add(vehicle_type)
-        
+
         session.commit()
+
+
+def init_test_driver():
+    with Session(engine) as session:
+        service = DriverService(session)
+        user_data = UserCreate(
+            full_name="Test",
+            country_code="+57",
+            phone_number="3142500000"
+        )
+        driver_info_data = DriverInfoCreate(
+            first_name="string",
+            last_name="string",
+            birth_date="2025-05-12",
+            email="string",
+            selfie_url="string"
+        )
+        vehicle_info_data = VehicleInfoCreate(
+            brand="string",
+            model="string",
+            model_year=0,
+            color="string",
+            plate="string",
+            vehicle_type_id=0
+        )
+        driver_documents_data = DriverDocumentsInput(
+            property_card_front_url="string",
+            property_card_back_url="string",
+            license_front_url="string",
+            license_back_url="string",
+            license_expiration_date="2025-05-12",
+            soat_url="string",
+            soat_expiration_date="2025-05-12",
+            vehicle_technical_inspection_url="string",
+            vehicle_technical_inspection_expiration_date="2025-05-12"
+        )
+        service.create_driver(
+            user_data=user_data,
+            driver_info_data=driver_info_data,
+            vehicle_info_data=vehicle_info_data,
+            driver_documents_data=driver_documents_data
+        )
 
 
 def init_data():
@@ -105,3 +164,4 @@ def init_data():
     init_document_types()
     init_test_user()
     init_vehicle_types()
+    init_test_driver()

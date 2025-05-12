@@ -108,22 +108,22 @@ class UploadService:
 
     def _validate_file(self, file: UploadFile, document_type: DocumentType) -> None:
         """Valida el archivo según su tipo de documento."""
-        # Verificar extensión
         file_ext = os.path.splitext(file.filename)[1].lower()
-        if file_ext not in ALLOWED_EXTENSIONS[document_type]:
+        allowed_exts = ALLOWED_EXTENSIONS.get(document_type, set())
+        if file_ext not in allowed_exts:
             raise HTTPException(
                 status_code=400,
-                detail=f"Tipo de archivo no permitido para {document_type}. "
-                f"Extensiones permitidas: {', '.join(ALLOWED_EXTENSIONS[document_type])}"
+                detail=f"Extensión no permitida para {document_type.name}. Permitidas: {', '.join(allowed_exts)}"
             )
-
-        # Verificar tamaño
-        if file.size and file.size > MAX_FILE_SIZES[document_type]:
-            max_size_mb = MAX_FILE_SIZES[document_type] / (1024 * 1024)
+        # Validar tamaño
+        file.file.seek(0, os.SEEK_END)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        max_size = MAX_FILE_SIZES.get(document_type, 2 * 1024 * 1024)
+        if file_size > max_size:
             raise HTTPException(
                 status_code=400,
-                detail=f"El archivo es demasiado grande para {document_type}. "
-                f"Tamaño máximo: {max_size_mb}MB"
+                detail=f"El archivo es demasiado grande. Máximo permitido: {max_size // (1024*1024)}MB"
             )
 
     def _generate_file_path(self, user_id: int, document_type: DocumentType) -> tuple[Path, str]:
@@ -209,6 +209,83 @@ class UploadService:
                 detail=f"Error al eliminar el archivo: {str(e)}"
             )
 
+    async def save_document_dbtype(
+        self,
+        file: UploadFile,
+        user_id: int,
+        document_type: str,
+        side: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> dict:
+        """
+        Guarda un documento usando el tipo de documento de la base de datos y la variante (side).
+        """
+        # Validar extensión y tamaño
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        allowed_exts = {".jpg", ".jpeg", ".png", ".pdf"}
+        if file_ext not in allowed_exts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Extensión no permitida. Permitidas: {', '.join(allowed_exts)}"
+            )
+        # Validar tamaño (ejemplo: 10MB)
+        file.file.seek(0, os.SEEK_END)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        max_size = 10 * 1024 * 1024
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El archivo es demasiado grande. Máximo permitido: {max_size // (1024*1024)}MB"
+            )
+
+        # Construir ruta: static/uploads/{document_type}/{user_id}/{side}_{uuid}.{ext}
+        folder = f"static/uploads/{document_type}/{user_id}"
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_name = f"{side + '_' if side else ''}{timestamp}_{uuid.uuid4().hex}{file_ext}"
+        file_path = os.path.join(folder, unique_name)
+        relative_url = f"/{folder}/{unique_name}"
+
+        # Guardar el archivo
+        try:
+            content = await file.read()
+            with open(file_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error al guardar el archivo: {str(e)}"
+            )
+
+        return {
+            "url": relative_url,
+            "type": document_type,
+            "side": side,
+            "user_id": user_id,
+            "description": description,
+            "original_filename": file.filename,
+            "content_type": file.content_type,
+            "size": len(content),
+            "uploaded_at": datetime.now().isoformat()
+        }
+
 
 # Instancia global del servicio
 upload_service = UploadService()
+
+
+def parse_document_type(document_type: str) -> DocumentType:
+    # Intenta por valor
+    try:
+        return DocumentType(document_type)
+    except ValueError:
+        pass
+    # Intenta por nombre (case-insensitive)
+    for member in DocumentType:
+        if member.name.lower() == document_type.lower():
+            return member
+    raise HTTPException(
+        status_code=400,
+        detail=f"Tipo de documento inválido. Debe ser uno de: {', '.join([m.name for m in DocumentType])}"
+    )

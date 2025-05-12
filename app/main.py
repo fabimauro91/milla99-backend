@@ -5,11 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 
 from .core.db import create_all_tables
-from .routers import users, drivers, auth
+from .routers import users, drivers, auth, uploads
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
-
 
 
 @asynccontextmanager
