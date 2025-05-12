@@ -31,7 +31,7 @@ def get_users_with_all_approved_docs(
     request: Request,
     session: SessionDep
 ):
-    """Obtiene usuarios con todos los documentos aprobados"""
+    """Obtiene usuarios con todos rol de estado aprobados"""
     service = VerifyDocsService(session)
     return service.get_users_with_all_approved_docs()
 
@@ -42,6 +42,7 @@ def update_role_status(
 ):
     """
     Actualiza el estado del rol de los usuarios basado en sus documentos
+    Con un solo documento que este en estado diferente a aprobado, el rol del usuario es pendiente
     """
     service = VerifyDocsService(session)
     return service.update_user_role_status()
@@ -52,7 +53,7 @@ def get_users_with_rejected_docs(
     request: Request,
     session: SessionDep
 ):
-    """Obtiene usuarios con documentos rechazados"""
+    """Obtiene usuarios con documentos rechazados y sus documentos asociados"""
     service = VerifyDocsService(session)
     return service.get_users_with_rejected_docs()
 
@@ -61,7 +62,7 @@ def get_users_with_expired_docs(
     request: Request,
     session: SessionDep
 ):
-    """Obtiene usuarios con documentos expirados"""
+    """Obtiene usuarios con documentos expirados y sus documentos asociados"""
     service = VerifyDocsService(session)
     return service.get_users_with_expired_docs()
 
@@ -70,7 +71,8 @@ def update_expired_documents(
     request: Request,
     session: SessionDep
 ):
-    """Actualiza el estado de documentos expirados"""
+    """Actualiza los documentos con estado aprobados si sus fechas estan vencidas
+       Si estan vencidas, el estado camvia a espirado """
     service = VerifyDocsService(session)
     updated_count = service.update_expired_documents()
     return {"message": f"Updated {updated_count} expired documents"}
@@ -80,7 +82,8 @@ def check_soon_to_expire_documents(
     request: Request,
     session: SessionDep
 ):
-    """Verifica documentos próximos a expirar"""
+    """Verifica si los usuarios tienen documentos próximos a expirar
+        Si tienen un documento que expira en menos de ocho dias, retorna a usuario con el cocumento"""
     service = VerifyDocsService(session)
     return service.check_soon_to_expire_documents()
 
@@ -90,7 +93,8 @@ def update_documents(
     request: Request,
     session: SessionDep
 ):
-    """Actualiza múltiples documentos"""
+    """Actualiza múltiples documentos
+        se ingresa ie id del documento  con sus datos a actualizar """
     service = VerifyDocsService(session)
     try:
         updated_docs = service.update_documents(updates)
