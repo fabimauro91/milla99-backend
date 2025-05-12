@@ -2,14 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+from fastapi.staticfiles import StaticFiles
+
 from .core.db import create_all_tables
 from .routers import users, drivers, auth
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
 
-from fastapi.staticfiles import StaticFiles
-from app.routers import uploads
 
 
 @asynccontextmanager

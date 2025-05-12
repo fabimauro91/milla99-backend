@@ -1,45 +1,63 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
-from datetime import date
+from datetime import datetime
+from typing import Optional
+from enum import Enum
+from pydantic import field_validator
 
+# Definimos el enum para el status
+class DriverStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
 
 class DriverDocumentsBase(SQLModel):
-    # Documentos del vehículo
-    property_card_front_url: Optional[str] = None
-    property_card_back_url: Optional[str] = None
-
-    # Licencia de conducción
-    license_front_url: Optional[str] = None
-    license_back_url: Optional[str] = None
-    license_expiration_date: Optional[date] = None
-
-    # SOAT
-    soat_url: Optional[str] = None
-    soat_expiration_date: Optional[date] = None
-
-    # Revisión técnico mecánica
-    vehicle_technical_inspection_url: Optional[str] = None
-    vehicle_technical_inspection_expiration_date: Optional[date] = None
-
+    document_type_id: int = Field(foreign_key="documenttype.id", nullable=False)
+    document_front_url: Optional[str] = Field(default=None, nullable=False)
+    document_back_url: Optional[str] = Field(default=None, nullable=True)
+    expiration_date: Optional[datetime] = Field(default=None, nullable=True)
+    
 
 class DriverDocuments(DriverDocumentsBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    driver_info_id: int = Field(foreign_key="driverinfo.id")
-    driver_info: Optional["DriverInfo"] = Relationship(
-        back_populates="documents")
+    driver_info_id: int = Field(foreign_key="driverinfo.id", nullable=False)
+    vehicle_info_id: Optional[int] = Field(default=None, foreign_key="vehicleinfo.id", nullable=True)
+    status: DriverStatus = Field(default=DriverStatus.PENDING, nullable=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
 
+    # Relaciones
+    driver_info: "DriverInfo" = Relationship(back_populates="documents")
+    documenttype: "DocumentType" = Relationship(back_populates="driver_documents")
+    vehicle_info: Optional["VehicleInfo"] = Relationship(back_populates="driver_documents")
+    
 
 class DriverDocumentsCreate(DriverDocumentsBase):
-    driver_info_id: int
+    pass
 
+class DriverDocumentsRead(SQLModel):
+    id: int
+    user_id: int
+    driver_info_id: int
+    document_type_id: int
+    vehicle_info_id: Optional[int]
+    soat_id: Optional[int]
+    technomechanics_id: Optional[int]
+    drivers_license_id: Optional[int]
+    status: DriverStatus
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class DriverDocumentsUpdate(SQLModel):
-    property_card_front_url: Optional[str] = None
-    property_card_back_url: Optional[str] = None
-    license_front_url: Optional[str] = None
-    license_back_url: Optional[str] = None
-    license_expiration_date: Optional[date] = None
-    soat_url: Optional[str] = None
-    soat_expiration_date: Optional[date] = None
-    vehicle_technical_inspection_url: Optional[str] = None
-    vehicle_technical_inspection_expiration_date: Optional[date] = None
+    document_type_id: Optional[int] = None
+    vehicle_info_id: Optional[int] = None
+    soat_id: Optional[int] = None
+    technomechanics_id: Optional[int] = None
+    drivers_license_id: Optional[int] = None
+    document_front_url: Optional[str] = None
+    document_back_url: Optional[str] = None
+    status: Optional[DriverStatus] = None
+    expiration_date: Optional[datetime] = None

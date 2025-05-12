@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN :str    # Reemplaza con tu Token
     TWILIO_PHONE_NUMBER :str # Número de Twilio
 
+    CLICK_SEND_USERNAME: str
+    CLICK_SEND_PASSWORD: str
+    CLICK_SEND_PHONE: str
+
     model_config = ConfigDict(
         env_file=".env",
         case_sensitive=True

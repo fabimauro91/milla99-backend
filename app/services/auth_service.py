@@ -7,8 +7,9 @@ from ..models.w_verification import Verification, VerificationCreate
 from ..models.user import User
 from ..core.config import settings
 from jose import jwt
-from twilio.rest import Client
-
+import clicksend_client
+from clicksend_client import SmsMessage
+from clicksend_client.rest import ApiException
 
 class AuthService:
     def __init__(self, session: Session):
@@ -99,6 +100,8 @@ class AuthService:
             message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
             
             await self.send_whatsapp_message(full_phone, message)
+            await self.generate_mns_verification(full_phone, message)
+
             return verif, verification_code
         except Exception as e:
             self.session.rollback()
@@ -107,7 +110,7 @@ class AuthService:
                 detail=f"Error in verification process: {str(e)}"
             )
 
-    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str]:
+    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str, User]:
         # Buscar el usuario primero
         user = self.session.exec(
             select(User).where(
@@ -156,8 +159,8 @@ class AuthService:
         self.session.commit()
 
         # Actualizar estado de verificación del usuario
-        if not user.is_verified:
-            user.is_verified = True
+        if not user.is_verified_phone:
+            user.is_verified_phone = True
         if not user.is_active:
             user.is_active = True
             
@@ -166,7 +169,7 @@ class AuthService:
         # Generar token JWT
         access_token = self.create_access_token(user.id)
 
-        return True, access_token
+        return True, access_token, user
     
     def create_access_token(self, user_id: int):
         to_encode = {"sub": str(user_id)}
@@ -183,26 +186,29 @@ class AuthService:
             if not to_phone.startswith('+'):
                 to_phone = f'+{to_phone}'
 
-            # Crear el cliente de Twilio
-            client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+            configuration = clicksend_client.Configuration()
+            configuration.username = settings.CLICK_SEND_USERNAME
+            configuration.password = settings.CLICK_SEND_PASSWORD
 
-            # Enviar el mensaje
-            message_response = client.messages.create(
-                body=message,
-                from_=settings.TWILIO_PHONE_NUMBER,
-                to=to_phone
-            )
+            # Crear instancia de la API     para instalar pip install clicksend-client
+            api_instance = clicksend_client.SMSApi(clicksend_client.ApiClient(configuration))
 
-            # Logging para debugging
-            print(f"Message sent successfully to {to_phone}. SID: {message_response.sid}")
-
-            return {
-                "status": "success",
-                "message_sid": message_response.sid,
-                "detail": "Message sent successfully",
-                "to": to_phone
+            message_list = {
+                "messages": [
+                    {
+                        "source": "milla99",
+                        "body": message,
+                        "to": to_phone,
+                        "from": settings.CLICK_SEND_PHONE
+                    }
+                ]
             }
 
+            # Enviar mensaje
+            api_response = api_instance.sms_send_post(message_list)
+            print(str(api_response))
+            
+            
         except Exception as e:
             print(f"Error sending SMS: {str(e)}")
             raise HTTPException(

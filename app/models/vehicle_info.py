@@ -1,8 +1,12 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING
 from datetime import date, datetime
 from enum import Enum
 from .vehicle_type import VehicleType
+
+if TYPE_CHECKING:
+    from .driver_info import DriverInfo
+    from .driver_documents import DriverDocuments
 
 
 class VehicleInfoBase(SQLModel):
@@ -23,6 +27,7 @@ class VehicleInfo(VehicleInfoBase, table=True):
     driver_info: Optional["DriverInfo"] = Relationship(
         back_populates="vehicle_info")
     vehicle_type: VehicleType = Relationship(back_populates="vehicles")
+    driver_documents: List["DriverDocuments"] = Relationship(back_populates="vehicle_info")
 
 
 class VehicleInfoCreate(VehicleInfoBase):

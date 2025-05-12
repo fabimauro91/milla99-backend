@@ -1,10 +1,12 @@
 from sqlmodel import Session, select
 from fastapi import HTTPException, status
+from app.models.driver_documents import DriverDocuments, DriverDocumentsCreate
 from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
 from app.models.driver_info import DriverInfo, DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
-from app.models.driver_full_read import DriverFullRead
+from app.models.driver import DriverFullRead
+from app.core.db import engine
 
 
 class DriverService:
@@ -15,25 +17,26 @@ class DriverService:
         self,
         user_data: UserCreate,
         driver_info_data: DriverInfoCreate,
-        vehicle_info_data: VehicleInfoCreate
+        vehicle_info_data: VehicleInfoCreate,
+        driver_documents_data
     ) -> DriverFullRead:
-        # 1. Crear el Usuario
-        user = User(**user_data.dict())
-        self.session.add(user)
-        self.session.commit()
-        self.session.refresh(user)
+        with Session(engine) as session:
+            # 1. Crear el Usuario
+            user = User(**user_data.dict())
+            session.add(user)
+            session.commit()
+            session.refresh(user)
 
-        # 2. Asignar el rol DRIVER
-        driver_role = self.session.exec(
-            select(Role).where(Role.id == "DRIVER")).first()
-        if not driver_role:
-            raise HTTPException(status_code=500, detail="Rol DRIVER no existe")
+            # 2. Asignar el rol DRIVER
+            driver_role = session.exec(
+                select(Role).where(Role.id == "DRIVER")).first()
+            if not driver_role:
+                raise HTTPException(status_code=500, detail="Rol DRIVER no existe")
 
-        user.roles.append(driver_role)
-        self.session.add(user)
-        self.session.commit()
-        self.session.refresh(user)
-        _ = user.roles  # Fuerza la carga de la relación
+            user.roles.append(driver_role)
+            session.add(user)
+            session.commit()
+            session.refresh(user)
 
         # 3. Crear el DriverInfo
         driver_info = DriverInfo(
@@ -44,31 +47,69 @@ class DriverService:
         self.session.commit()
         self.session.refresh(driver_info)
 
-        # 4. Crear el VehicleInfo
-        vehicle_info = VehicleInfo(
-            **vehicle_info_data.dict(),
-            driver_info_id=driver_info.id
-        )
-        self.session.add(vehicle_info)
-        self.session.commit()
-        self.session.refresh(vehicle_info)
+            # 4. Crear el VehicleInfo
+            vehicle_info = VehicleInfo(
+                **vehicle_info_data.dict(),
+                driver_info_id=driver_info.id
+            )
+            session.add(vehicle_info)
+            session.commit()
+            session.refresh(vehicle_info)
 
-        # Consultar el usuario actualizado desde la base de datos
-        user_db = self.session.exec(
-            select(User).where(User.id == user.id)).first()
-        _ = user_db.roles  # Fuerza la carga de la relación
-        user_dict = user_db.dict()
-        user_dict["roles"] = [
-            {
-                "id": role.id,
-                "name": role.name,
-                "route": role.route
-            }
-            for role in user_db.roles
-        ]
+            # 5. Crear múltiples DriverDocuments
+            docs = []
+            docs_data = driver_documents_data
 
-        return DriverFullRead(
-            user=UserRead.model_validate(user_dict),
-            driver_info=driver_info,
-            vehicle_info=vehicle_info
-        )
+            # Tarjeta de propiedad
+            if docs_data.property_card_front_url or docs_data.property_card_back_url:
+                docs.append(DriverDocuments(
+                    driver_info_id=driver_info.id,
+                    vehicle_info_id=vehicle_info.id,
+                    document_type_id=1,  # 1 = Tarjeta de propiedad
+                    document_front_url=docs_data.property_card_front_url,
+                    document_back_url=docs_data.property_card_back_url,
+                    expiration_date=None
+                ))
+
+            # Licencia de conducir
+            if docs_data.license_front_url or docs_data.license_back_url or docs_data.license_expiration_date:
+                docs.append(DriverDocuments(
+                    driver_info_id=driver_info.id,
+                    vehicle_info_id=vehicle_info.id,
+                    document_type_id=2,  # 2 = Licencia
+                    document_front_url=docs_data.license_front_url,
+                    document_back_url=docs_data.license_back_url,
+                    expiration_date=docs_data.license_expiration_date
+                ))
+
+            # SOAT
+            if docs_data.soat_url or docs_data.soat_expiration_date:
+                docs.append(DriverDocuments(
+                    driver_info_id=driver_info.id,
+                    vehicle_info_id=vehicle_info.id,
+                    document_type_id=3,  # 3 = SOAT
+                    document_front_url=docs_data.soat_url,
+                    expiration_date=docs_data.soat_expiration_date
+                ))
+
+            # Tecnomecánica
+            if docs_data.vehicle_technical_inspection_url or docs_data.vehicle_technical_inspection_expiration_date:
+                docs.append(DriverDocuments(
+                    driver_info_id=driver_info.id,
+                    vehicle_info_id=vehicle_info.id,
+                    document_type_id=4,  # 4 = Tecnomecánica
+                    document_front_url=docs_data.vehicle_technical_inspection_url,
+                    expiration_date=docs_data.vehicle_technical_inspection_expiration_date
+                ))
+
+            for doc in docs:
+                session.add(doc)
+            session.commit()
+
+            # Convertir a DriverFullRead
+            return DriverFullRead(
+                user=UserRead.model_validate(user),
+                driver_info=driver_info,
+                vehicle_info=vehicle_info,
+                driver_documents=docs
+            )

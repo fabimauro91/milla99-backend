@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 from typing import List
 
-from app.models.driver import Driver, DriverCreate, DriverFullCreate
+from app.models.driver import Driver, DriverCreate, DriverFullCreate, DriverFullRead
 from app.core.db import get_session
 from app.models.user import UserRead
 from app.services.driver_service import DriverService
@@ -17,5 +17,6 @@ def create_driver(data: DriverFullCreate, session: Session = Depends(get_session
     return service.create_driver(
         user_data=data.user,
         driver_info_data=data.driver_info,
-        vehicle_info_data=data.vehicle_info
+        vehicle_info_data=data.vehicle_info,
+        driver_documents_data=data.driver_documents
     )
