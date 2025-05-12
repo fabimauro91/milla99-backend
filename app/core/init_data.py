@@ -1,10 +1,15 @@
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
+from datetime import datetime
 from app.models.role import Role
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.driver_documents import DriverDocuments, DriverStatus
+from app.models.user_has_roles import UserHasRole, RoleStatus
+from app.models.document_type import DocumentType
+from app.models.user import User, UserCreate
+from app.models.vehicle_type import VehicleType
 from app.core.db import engine
 from app.core.config import settings
 
@@ -39,6 +44,22 @@ def init_document_types():
         session.commit()
 
 
+def init_document_types():
+    document_types = [
+        DocumentType(name="property_card"),
+        DocumentType(name="license"),
+        DocumentType(name="soat"),
+        DocumentType(name="technical_inspections")
+    ]
+    with Session(engine) as session:
+        for doc_type in document_types:
+            exists = session.exec(
+                select(DocumentType).where(DocumentType.name == doc_type.name)).first()
+            if not exists:
+                session.add(doc_type)
+        session.commit()
+
+
 def init_test_user():
     with Session(engine) as session:
         # Buscar si ya existe el usuario de prueba
@@ -50,11 +71,14 @@ def init_test_user():
                 country_code="+57",
                 phone_number=settings.TEST_CLIENT_PHONE,
                 is_verified_phone=True,
+                is_verified_phone=True,
                 is_active=True
             )
             session.add(user)
             session.commit()
             session.refresh(user)
+
+        # Asignar el rol CLIENT si no lo tiene y verificarlo
 
         # Asignar el rol CLIENT si no lo tiene y verificarlo
         client_role = session.exec(
@@ -78,6 +102,25 @@ def init_test_user():
                 user_has_role.verified_at = datetime.utcnow()
                 session.add(user_has_role)
                 session.commit()
+
+
+def init_vehicle_types():
+    session.commit()
+    
+    # Actualizar el estado del rol a verificado
+    user_has_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user.id,
+            UserHasRole.id_rol == client_role.id
+        )
+    ).first()
+    
+    if user_has_role:
+        user_has_role.is_verified = True
+        user_has_role.status = RoleStatus.APPROVED
+        user_has_role.verified_at = datetime.utcnow()
+        session.add(user_has_role)
+        session.commit()
 
 def init_test_driver():
     with Session(engine) as session:
@@ -155,6 +198,21 @@ def init_driver_documents():
                 )
                 session.add(user_has_role)
                 session.commit()
+        # Verificar si ya existen tipos de vehículos
+        existing_types = session.exec(select(VehicleType)).all()
+        if existing_types:
+            return
+
+        # Crear tipos de vehículos
+        vehicle_types = [
+            VehicleType(name="car", capacity=4),
+            VehicleType(name="moto", capacity=1)
+        ]
+        
+        for vehicle_type in vehicle_types:
+            session.add(vehicle_type)
+        
+        session.commit()
 
         # Obtener los tipos de documentos
         license_type = session.exec(
@@ -224,5 +282,7 @@ def init_driver_documents():
 def init_data():
     init_roles()
     init_document_types()
+    init_document_types()
     init_test_user()
     init_driver_documents()
+    init_vehicle_types()

@@ -1,8 +1,10 @@
 from sqlmodel import Session, select
 from app.models.user import User, UserCreate, UserUpdate
 from app.models.role import Role
+from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi import HTTPException, status
 from sqlalchemy.orm import selectinload
+from datetime import datetime
 
 
 class UserService:
@@ -29,18 +31,28 @@ class UserService:
             self.session.add(user)
             self.session.flush()  # Para obtener el id antes del commit
 
-            # Asignar los roles que vengan en el request
-            if user_data.roles:
-                for role_id in user_data.roles:
-                    role = self.session.exec(
-                        select(Role).where(Role.id == role_id)).first()
-                    if not role:
-                        raise HTTPException(
-                            status_code=400, detail=f"Rol {role_id} no existe")
-                    user.roles.append(role)
-            else:
+            # Asignar el rol CLIENT por defecto
+            client_role = self.session.exec(
+                select(Role).where(Role.id == "CLIENT")).first()
+            if not client_role:
                 raise HTTPException(
-                    status_code=400, detail="Debes enviar al menos un rol")
+                    status_code=500, detail="Rol CLIENT no existe")
+            
+            # La relación se crea automáticamente a través del link_model
+            user.roles.append(client_role)
+            
+            # Actualizar el estado de la relación a través del link_model
+            user_role = self.session.exec(
+                select(UserHasRole).where(
+                    UserHasRole.id_user == user.id,
+                    UserHasRole.id_rol == client_role.id
+                )
+            ).first()
+            if user_role:
+                user_role.is_verified = True
+                user_role.status = RoleStatus.APPROVED
+                user_role.verified_at = datetime.utcnow()
+                self.session.add(user_role)
 
             self.session.add(user)
             # El commit se hace automáticamente al salir del with
@@ -82,12 +94,12 @@ class UserService:
 
     def verify_user(self, user_id: int) -> User:
         user = self.get_user(user_id)
-        if user.is_verified:
+        if user.is_verified_phone:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User is already verified."
             )
-        user.is_verified = True
+        user.is_verified_phone = True
         user.is_active = True
         self.session.add(user)
         self.session.commit()

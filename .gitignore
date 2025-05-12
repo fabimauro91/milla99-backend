@@ -24,3 +24,6 @@ __pycache__/
 # Archivos de VSCode y otros editores
 .vscode/
 .idea/
+
+# Nueva carpeta
+static/

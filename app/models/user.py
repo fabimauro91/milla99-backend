@@ -6,7 +6,6 @@ import phonenumbers
 import re
 from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
-from app.models.driver import Driver
 from datetime import datetime
 
 
@@ -14,15 +13,6 @@ from datetime import datetime
 CountryCode = Annotated[str, constr(pattern=r"^\+\d{1,3}$")]
 PhoneNumber = Annotated[str, constr(min_length=7, max_length=15)]
 
-
-class UserRole(str, Enum):
-    admin = "admin"
-    user = "user"
-
-
-class UserType(str, Enum):
-    driver = "driver"
-    delivery = "delivery"
 
 
 class UserBase(SQLModel):
@@ -62,6 +52,7 @@ class User(UserBase, table=True):
         back_populates="users", link_model=UserHasRole)
     driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
     driver: Optional["Driver"] = Relationship(back_populates="user")
+    driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
 
 
 
