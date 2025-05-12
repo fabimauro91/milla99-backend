@@ -10,14 +10,15 @@ class VehicleInfoBase(SQLModel):
     model: str = Field(nullable=False)
     model_year: int = Field(nullable=False)
     color: str = Field(nullable=False)
-    plate: str = Field(unique=True, nullable=False)
+    plate: str = Field(nullable=False)
     vehicle_type_id: int = Field(foreign_key="vehicletype.id", nullable=False)
 
 
 class VehicleInfo(VehicleInfoBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
+                                 "onupdate": datetime.utcnow})
     driver_info_id: int = Field(foreign_key="driverinfo.id")
     driver_info: Optional["DriverInfo"] = Relationship(
         back_populates="vehicle_info")
