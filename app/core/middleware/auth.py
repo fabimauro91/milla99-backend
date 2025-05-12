@@ -21,7 +21,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/verify-docs/expired", "GET"),
             ("/verify-docs/check-expired", "POST"),
             ("/verify-docs/check-expiring-soon", "GET"),
-            ("/verify-docs/update-documents", "PUT")
+            ("/verify-docs/update-documents", "PUT"),
+            ("/verify-docs/update-role-status", "POST")
         ]
         
 
