@@ -8,6 +8,7 @@ from enum import Enum
 
 # Definir tipos de documentos y sus categorí
 
+
 class DocumentType(str, Enum):
     # Documentos del conductor
     DRIVER_PROFILE = "profile"           # Foto de perfil del conductor
@@ -211,7 +212,7 @@ class UploadService:
     async def save_document_dbtype(
         self,
         file: UploadFile,
-        user_id: int,
+        driver_id: int,
         document_type: str,
         side: Optional[str] = None,
         description: Optional[str] = None
@@ -238,8 +239,8 @@ class UploadService:
                 detail=f"El archivo es demasiado grande. Máximo permitido: {max_size // (1024*1024)}MB"
             )
 
-        # Construir ruta: static/uploads/{document_type}/{user_id}/{side}_{uuid}.{ext}
-        folder = f"static/uploads/{document_type}/{user_id}"
+        # Construir ruta: static/uploads/driver/{driver_id}/{document_type}/{side}_{uuid}.{ext}
+        folder = f"static/uploads/drivers/{driver_id}/{document_type}"
         Path(folder).mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_name = f"{side + '_' if side else ''}{timestamp}_{uuid.uuid4().hex}{file_ext}"
@@ -261,7 +262,7 @@ class UploadService:
             "url": relative_url,
             "type": document_type,
             "side": side,
-            "user_id": user_id,
+            "driver_id": driver_id,
             "description": description,
             "original_filename": file.filename,
             "content_type": file.content_type,

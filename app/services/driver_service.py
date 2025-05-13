@@ -129,7 +129,7 @@ class DriverService:
                 if file:
                     doc_info = await upload_service.save_document_dbtype(
                         file=file,
-                        user_id=user.id,
+                        driver_id=driver.id,
                         document_type=doc_type,
                         side=side,
                         description=f"{doc_type} {side if side else ''}"

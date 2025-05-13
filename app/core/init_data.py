@@ -117,51 +117,8 @@ def init_vehicle_types():
         session.commit()
 
 
-def init_test_driver():
-    with Session(engine) as session:
-        service = DriverService(session)
-        user_data = UserCreate(
-            full_name="Test",
-            country_code="+57",
-            phone_number="3142500000"
-        )
-        driver_info_data = DriverInfoCreate(
-            first_name="string",
-            last_name="string",
-            birth_date="2025-05-12",
-            email="string",
-            selfie_url="string"
-        )
-        vehicle_info_data = VehicleInfoCreate(
-            brand="string",
-            model="string",
-            model_year=0,
-            color="string",
-            plate="string",
-            vehicle_type_id=0
-        )
-        driver_documents_data = DriverDocumentsInput(
-            property_card_front_url="string",
-            property_card_back_url="string",
-            license_front_url="string",
-            license_back_url="string",
-            license_expiration_date="2025-05-12",
-            soat_url="string",
-            soat_expiration_date="2025-05-12",
-            vehicle_technical_inspection_url="string",
-            vehicle_technical_inspection_expiration_date="2025-05-12"
-        )
-        service.create_driver(
-            user_data=user_data,
-            driver_info_data=driver_info_data,
-            vehicle_info_data=vehicle_info_data,
-            driver_documents_data=driver_documents_data
-        )
-
-
 def init_data():
     init_roles()
     init_document_types()
     init_test_user()
     init_vehicle_types()
-    init_test_driver()

@@ -127,7 +127,6 @@ async def create_driver(
             ),
             driver_documents=result.driver_documents
         )
-
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
