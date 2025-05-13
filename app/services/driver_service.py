@@ -27,6 +27,36 @@ class DriverService:
         selfie: Optional[UploadFile] = None
     ) -> DriverFullResponse:
         with Session(engine) as session:
+            # Buscar usuario por teléfono
+            existing_user = session.exec(
+                select(User).where(User.phone_number == user_data.phone_number)
+            ).first()
+
+            if existing_user:
+                # Buscar si ya tiene un driver asociado
+                existing_driver = session.exec(
+                    select(Driver)
+                    .where(Driver.user_id == existing_user.id)
+                ).first()
+
+                if existing_driver:
+                    # Buscar el vehicle_info asociado a ese driver_info y de tipo carro
+                    driver_info = session.exec(
+                        select(DriverInfo).where(DriverInfo.id ==
+                                                 existing_driver.driver_info_id)
+                    ).first()
+                    vehicle_info = session.exec(
+                        select(VehicleInfo).where(
+                            VehicleInfo.driver_info_id == driver_info.id,
+                            VehicleInfo.vehicle_type_id == 1
+                        )
+                    ).first()
+                    if vehicle_info:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Ya existe un conductor de tipo carro para este usuario."
+                        )
+
             # 1. Crear el Usuario
             user = User(**user_data.dict())
             session.add(user)
