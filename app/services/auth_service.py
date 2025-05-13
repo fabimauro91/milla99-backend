@@ -11,6 +11,7 @@ import clicksend_client
 from clicksend_client import SmsMessage
 from clicksend_client.rest import ApiException
 
+
 class AuthService:
     def __init__(self, session: Session):
         self.session = session
@@ -25,7 +26,7 @@ class AuthService:
         }
 
         payload = {
-           "messaging_product": "whatsapp",
+            "messaging_product": "whatsapp",
             "to": to_phone,
             "type": "text",
             "text": {"body": message}
@@ -39,7 +40,8 @@ class AuthService:
                     json=payload
                 )
                 print("Payload enviado:", payload)
-                print("Respuesta de WhatsApp:", response.status_code, response.text)
+                print("Respuesta de WhatsApp:",
+                      response.status_code, response.text)
                 response.raise_for_status()
                 return True
         except httpx.RequestError as e:
@@ -56,7 +58,7 @@ class AuthService:
                 User.phone_number == phone_number
             )
         ).first()
-        
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -65,7 +67,8 @@ class AuthService:
 
         # Generar código y fecha de expiración
         verification_code = self.generate_verification_code()
-        expires_at = datetime.utcnow() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
+        expires_at = datetime.utcnow(
+        ) + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
 
         # Buscar si ya existe una verificación para este usuario
         existing_verification = self.session.exec(
@@ -98,9 +101,9 @@ class AuthService:
             # Enviar mensaje WhatsApp
             full_phone = f"{country_code}{phone_number}"
             message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
-            
+
             await self.send_whatsapp_message(full_phone, message)
-            await self.generate_mns_verification(full_phone, message)
+            # await self.generate_mns_verification(full_phone, message)
 
             return verif, verification_code
         except Exception as e:
@@ -163,21 +166,22 @@ class AuthService:
             user.is_verified_phone = True
         if not user.is_active:
             user.is_active = True
-            
+
         self.session.commit()
 
         # Generar token JWT
         access_token = self.create_access_token(user.id)
 
         return True, access_token, user
-    
+
     def create_access_token(self, user_id: int):
         to_encode = {"sub": str(user_id)}
         # Convertir minutos a timedelta
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         expire = datetime.utcnow() + expires_delta
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        encoded_jwt = jwt.encode(
+            to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
 
     async def generate_mns_verification(self, to_phone: str, message: str) -> dict:
@@ -191,7 +195,8 @@ class AuthService:
             configuration.password = settings.CLICK_SEND_PASSWORD
 
             # Crear instancia de la API     para instalar pip install clicksend-client
-            api_instance = clicksend_client.SMSApi(clicksend_client.ApiClient(configuration))
+            api_instance = clicksend_client.SMSApi(
+                clicksend_client.ApiClient(configuration))
 
             message_list = {
                 "messages": [
@@ -207,8 +212,7 @@ class AuthService:
             # Enviar mensaje
             api_response = api_instance.sms_send_post(message_list)
             print(str(api_response))
-            
-            
+
         except Exception as e:
             print(f"Error sending SMS: {str(e)}")
             raise HTTPException(
