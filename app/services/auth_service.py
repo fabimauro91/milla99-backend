@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 from ..models.w_verification import Verification, VerificationCreate
-from ..models.user import User,VehicleTypeRead,VehicleInfoRead,UserRead,RoleRead,DriverInfoRead
+from ..models.user import User, VehicleTypeRead, VehicleInfoRead, UserRead, RoleRead, DriverInfoRead
 from ..models.vehicle_info import VehicleInfo
 from ..models.driver_info import DriverInfo
 from ..core.config import settings
@@ -106,7 +106,7 @@ class AuthService:
             message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
 
             await self.send_whatsapp_message(full_phone, message)
-            #await self.generate_mns_verification(full_phone, message)
+            # await self.generate_mns_verification(full_phone, message)
 
             return verif, verification_code
         except Exception as e:
@@ -126,13 +126,13 @@ class AuthService:
             )
         ).first()
 
-        if not user:        #retirna si el telefono y pais no corresponde
+        if not user:  # retirna si el telefono y pais no corresponde
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
 
-        verification = self.session.exec(       #busca codigo  si el tiempo de ducracion no a expirado
+        verification = self.session.exec(  # busca codigo  si el tiempo de ducracion no a expirado
             select(Verification)
             .where(
                 Verification.user_id == user.id,
@@ -141,7 +141,7 @@ class AuthService:
             )
         ).first()
 
-        if not verification:                #si el tiempo expiró verificacion esta vacio
+        if not verification:  # si el tiempo expiró verificacion esta vacio
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No active verification found"
@@ -176,7 +176,6 @@ class AuthService:
         # Generar token JWT
         access_token = self.create_access_token(user.id)
 
-        
         # Preparar datos de vehículo y driver_info (si aplica)
         vehicle_info_data = None
         driver_info_data = None
@@ -189,7 +188,8 @@ class AuthService:
 
             if driver_info:
                 # DriverInfo
-                driver_info_data = DriverInfoRead.model_validate(driver_info, from_attributes=True)
+                driver_info_data = DriverInfoRead.model_validate(
+                    driver_info, from_attributes=True)
 
                 # VehicleInfo
                 vehicle_info = self.session.exec(
@@ -201,12 +201,15 @@ class AuthService:
                 if vehicle_info:
                     vehicle_type_data = None
                     if vehicle_info.vehicle_type:
-                        vehicle_type_data = VehicleTypeRead.model_validate(vehicle_info.vehicle_type, from_attributes=True)
-                    vehicle_info_data = VehicleInfoRead.model_validate(vehicle_info, from_attributes=True)
+                        vehicle_type_data = VehicleTypeRead.model_validate(
+                            vehicle_info.vehicle_type, from_attributes=True)
+                    vehicle_info_data = VehicleInfoRead.model_validate(
+                        vehicle_info, from_attributes=True)
                     vehicle_info_data.vehicle_type = vehicle_type_data
 
         # Convertir roles a RoleRead
-        roles_data = [RoleRead.model_validate(role, from_attributes=True) for role in user.roles]
+        roles_data = [RoleRead.model_validate(
+            role, from_attributes=True) for role in user.roles]
 
         # Construir el usuario de respuesta
         user_data = UserRead(

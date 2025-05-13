@@ -3,7 +3,6 @@ from app.services.upload_service import parse_document_type, upload_service, Doc
 from app.core.db import get_session
 from sqlmodel import Session, select
 from typing import Optional
-from app.models.driver import Driver
 from app.models.driver_info import DriverInfo
 from app.models.driver_documents import DriverDocuments
 from app.models.document_type import DocumentType as DocumentTypeDB
@@ -53,22 +52,22 @@ async def upload_driver_document(
     user_id = request.state.user_id
 
     # Obtener el driver asociado al usuario
-    driver = session.exec(select(Driver).where(
-        Driver.user_id == user_id)).first()
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver not found")
+    driver_info = session.exec(select(DriverInfo).where(
+        DriverInfo.user_id == user_id)).first()
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
 
     # Buscar o crear DriverDocuments por driver_info_id y document_type_id
     driver_documents = session.exec(
         select(DriverDocuments).where(
-            DriverDocuments.driver_info_id == driver.driver_info_id,
+            DriverDocuments.driver_info_id == driver_info.id,
             DriverDocuments.document_type_id == doc_type_obj.id
         )
     ).first()
 
     if not driver_documents:
         driver_documents = DriverDocuments(
-            driver_info_id=driver.driver_info_id,
+            driver_info_id=driver_info.id,
             document_type_id=doc_type_obj.id
         )
         session.add(driver_documents)
@@ -116,7 +115,7 @@ async def upload_driver_document(
     else:
         # Si el campo no existe en DriverDocuments, intentar en DriverInfo
         driver_info = session.exec(
-            select(DriverInfo).where(DriverInfo.id == driver.driver_info_id)
+            select(DriverInfo).where(DriverInfo.id == driver_info.id)
         ).first()
         if driver_info and hasattr(driver_info, field_name):
             setattr(driver_info, field_name, document_info["url"])
@@ -161,15 +160,15 @@ async def delete_driver_document(
     user_id = request.state.user_id
 
     # Obtener el driver asociado al usuario
-    driver = session.exec(select(Driver).where(
-        Driver.user_id == user_id)).first()
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver not found")
+    driver_info = session.exec(select(DriverInfo).where(
+        DriverInfo.user_id == user_id)).first()
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
 
     # Buscar el documento en DriverDocuments
     driver_documents = session.exec(
         select(DriverDocuments).where(
-            DriverDocuments.driver_info_id == driver.driver_info_id)
+            DriverDocuments.driver_info_id == driver_info.id)
     ).first()
 
     field_name = f"{doc_type.value}_url"
@@ -182,7 +181,7 @@ async def delete_driver_document(
     else:
         # Si no está en DriverDocuments, buscar en DriverInfo
         driver_info = session.exec(
-            select(DriverInfo).where(DriverInfo.id == driver.driver_info_id)
+            select(DriverInfo).where(DriverInfo.id == driver_info.id)
         ).first()
         if driver_info and hasattr(driver_info, field_name):
             url_to_delete = getattr(driver_info, field_name)
@@ -217,7 +216,7 @@ async def upload_driver_info_selfie(
 
     # Verificar si el usuario tiene un conductor
     existing_driver = session.exec(
-        select(Driver).where(Driver.user_id == user_id)
+        select(DriverInfo).where(DriverInfo.user_id == user_id)
     ).first()
 
     # Guardar la selfie usando el servicio de uploads
@@ -232,7 +231,7 @@ async def upload_driver_info_selfie(
     if existing_driver:
         driver_info = session.exec(
             select(DriverInfo).where(DriverInfo.id ==
-                                     existing_driver.driver_info_id)
+                                     existing_driver.id)
         ).first()
 
         if driver_info:

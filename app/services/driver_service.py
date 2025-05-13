@@ -5,7 +5,7 @@ from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
 from app.models.driver_info import DriverInfo, DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
-from app.models.driver import DriverFullRead, Driver, DriverDocumentsInput
+from app.models.driver import DriverFullRead, DriverDocumentsInput
 from app.core.db import engine
 from app.services.upload_service import upload_service, DocumentType
 from typing import Optional
@@ -35,15 +35,15 @@ class DriverService:
             if existing_user:
                 # Buscar si ya tiene un driver asociado
                 existing_driver = session.exec(
-                    select(Driver)
-                    .where(Driver.user_id == existing_user.id)
+                    select(DriverInfo)
+                    .where(DriverInfo.user_id == existing_user.id)
                 ).first()
 
                 if existing_driver:
                     # Buscar el vehicle_info asociado a ese driver_info y de tipo carro
                     driver_info = session.exec(
                         select(DriverInfo).where(DriverInfo.id ==
-                                                 existing_driver.driver_info_id)
+                                                 existing_driver.id)
                     ).first()
                     vehicle_info = session.exec(
                         select(VehicleInfo).where(
@@ -98,15 +98,6 @@ class DriverService:
             session.commit()
             session.refresh(driver_info)
 
-            # 5. Crear el Driver (registro principal en la tabla driver)
-            driver = Driver(
-                user_id=user.id,
-                driver_info_id=driver_info.id
-            )
-            session.add(driver)
-            session.commit()
-            session.refresh(driver)
-
             # 6. Crear el VehicleInfo
             vehicle_info = VehicleInfo(
                 **vehicle_info_data.dict(),
@@ -129,7 +120,7 @@ class DriverService:
                 if file:
                     doc_info = await upload_service.save_document_dbtype(
                         file=file,
-                        driver_id=driver.id,
+                        driver_id=driver_info.id,
                         document_type=doc_type,
                         side=side,
                         description=f"{doc_type} {side if side else ''}"

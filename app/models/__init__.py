@@ -7,7 +7,7 @@
 from .role import Role
 from .user_has_roles import UserHasRole
 from .document_type import DocumentType
-from .driver import Driver, DriverCreate
+from .driver import DriverCreate
 from .driver_info import DriverInfo, DriverInfoBase
 from .vehicle_info import VehicleInfo, VehicleInfoCreate, VehicleInfoUpdate
 from .vehicle_type import VehicleType, VehicleTypeCreate, VehicleTypeUpdate
