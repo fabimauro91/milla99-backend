@@ -26,7 +26,7 @@ def get_users_with_pending_docs(
     service = VerifyDocsService(session)
     return service.get_users_with_pending_docs()
 
-@router.get("/approved", response_model=List[UserRead])
+#@router.get("/approved", response_model=List[UserRead])
 def get_users_with_all_approved_docs(
     request: Request,
     session: SessionDep
@@ -48,7 +48,7 @@ def update_role_status(
     return service.update_user_role_status()
 
 
-@router.get("/rejected", response_model=List[UserWithDocs])
+#@router.get("/rejected", response_model=List[UserWithDocs])
 def get_users_with_rejected_docs(
     request: Request,
     session: SessionDep
@@ -57,7 +57,7 @@ def get_users_with_rejected_docs(
     service = VerifyDocsService(session)
     return service.get_users_with_rejected_docs()
 
-@router.get("/expired", response_model=List[UserWithDocs])
+#@router.get("/expired", response_model=List[UserWithDocs])
 def get_users_with_expired_docs(
     request: Request,
     session: SessionDep
@@ -66,7 +66,7 @@ def get_users_with_expired_docs(
     service = VerifyDocsService(session)
     return service.get_users_with_expired_docs()
 
-@router.post("/check-expired", status_code=status.HTTP_200_OK)
+#@router.post("/check-expired", status_code=status.HTTP_200_OK)
 def update_expired_documents(
     request: Request,
     session: SessionDep
@@ -77,7 +77,7 @@ def update_expired_documents(
     updated_count = service.update_expired_documents()
     return {"message": f"Updated {updated_count} expired documents"}
 
-@router.get("/check-expiring-soon", response_model=List[UserWithExpiringDocsResponse])
+#@router.get("/check-expiring-soon", response_model=List[UserWithExpiringDocsResponse])
 def check_soon_to_expire_documents(
     request: Request,
     session: SessionDep
