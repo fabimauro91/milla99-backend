@@ -28,6 +28,18 @@ def test_create_user(client):
     user_data = response.json()
     assert user_data["roles"][0]["is_verified"] is True
     assert user_data["roles"][0]["status"] == "approved"
+    assert data["is_verified_phone"] is False
+    # Verificar que se asignó el rol CLIENT y está verificado
+    assert len(data["roles"]) == 1
+    assert data["roles"][0]["id"] == "CLIENT"
+    assert data["roles"][0]["name"] == "pasajero"
+    
+    # Verificar que el rol está verificado en user_has_roles
+    user_id = data["id"]
+    response = client.get(f"/users/{user_id}")
+    user_data = response.json()
+    assert user_data["roles"][0]["is_verified"] is True
+    assert user_data["roles"][0]["status"] == "approved"
 
 # test for get all users
 

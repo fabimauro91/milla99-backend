@@ -4,12 +4,15 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 from ..models.w_verification import Verification, VerificationCreate
-from ..models.user import User
+from ..models.user import User,VehicleTypeRead,VehicleInfoRead,UserRead,RoleRead,DriverInfoRead
+from ..models.vehicle_info import VehicleInfo
+from ..models.driver_info import DriverInfo
 from ..core.config import settings
 from jose import jwt
 import clicksend_client
 from clicksend_client import SmsMessage
 from clicksend_client.rest import ApiException
+from sqlalchemy.orm import joinedload
 
 class AuthService:
     def __init__(self, session: Session):
@@ -100,7 +103,7 @@ class AuthService:
             message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
             
             await self.send_whatsapp_message(full_phone, message)
-            await self.generate_mns_verification(full_phone, message)
+            #await self.generate_mns_verification(full_phone, message)
 
             return verif, verification_code
         except Exception as e:
@@ -110,7 +113,8 @@ class AuthService:
                 detail=f"Error in verification process: {str(e)}"
             )
 
-    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str, User]:
+    def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str, UserRead]:
+
         # Buscar el usuario primero
         user = self.session.exec(
             select(User).where(
@@ -119,13 +123,13 @@ class AuthService:
             )
         ).first()
 
-        if not user:
+        if not user:        #retirna si el telefono y pais no corresponde
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
 
-        verification = self.session.exec(
+        verification = self.session.exec(       #busca codigo  si el tiempo de ducracion no a expirado
             select(Verification)
             .where(
                 Verification.user_id == user.id,
@@ -134,7 +138,7 @@ class AuthService:
             )
         ).first()
 
-        if not verification:
+        if not verification:                #si el tiempo expiró verificacion esta vacio
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No active verification found"
@@ -169,8 +173,53 @@ class AuthService:
         # Generar token JWT
         access_token = self.create_access_token(user.id)
 
-        return True, access_token, user
-    
+        
+        # Preparar datos de vehículo y driver_info (si aplica)
+        vehicle_info_data = None
+        driver_info_data = None
+        is_driver = any(role.id == "DRIVER" for role in user.roles)
+
+        if is_driver:
+            driver_info = self.session.exec(
+                select(DriverInfo).where(DriverInfo.user_id == user.id)
+            ).first()
+
+            if driver_info:
+                # DriverInfo
+                driver_info_data = DriverInfoRead.model_validate(driver_info, from_attributes=True)
+
+                # VehicleInfo
+                vehicle_info = self.session.exec(
+                    select(VehicleInfo)
+                    .where(VehicleInfo.driver_info_id == driver_info.id)
+                    .options(joinedload(VehicleInfo.vehicle_type))
+                ).first()
+
+                if vehicle_info:
+                    vehicle_type_data = None
+                    if vehicle_info.vehicle_type:
+                        vehicle_type_data = VehicleTypeRead.model_validate(vehicle_info.vehicle_type, from_attributes=True)
+                    vehicle_info_data = VehicleInfoRead.model_validate(vehicle_info, from_attributes=True)
+                    vehicle_info_data.vehicle_type = vehicle_type_data
+
+        # Convertir roles a RoleRead
+        roles_data = [RoleRead.model_validate(role, from_attributes=True) for role in user.roles]
+
+        # Construir el usuario de respuesta
+        user_data = UserRead(
+            id=user.id,
+            country_code=user.country_code,
+            phone_number=user.phone_number,
+            is_verified_phone=user.is_verified_phone,
+            is_active=user.is_active,
+            full_name=user.full_name,
+            roles=roles_data,
+            vehicle_info=vehicle_info_data,
+            driver_info=driver_info_data
+        )
+
+        return True, access_token, user_data
+
     def create_access_token(self, user_id: int):
         to_encode = {"sub": str(user_id)}
         # Convertir minutos a timedelta
