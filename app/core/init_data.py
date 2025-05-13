@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from datetime import datetime
 from app.models.role import Role
 from app.models.user import User
@@ -10,6 +10,7 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.user import User, UserCreate
 from app.models.vehicle_type import VehicleType
+from app.models.driver_info import DriverInfo  
 from app.core.db import engine
 from app.core.config import settings
 
@@ -41,23 +42,7 @@ def init_document_types():
                 select(DocumentType).where(DocumentType.name == doc_type.name)).first()
             if not exists:
                 session.add(doc_type)
-        session.commit()
-
-
-def init_document_types():
-    document_types = [
-        DocumentType(name="property_card"),
-        DocumentType(name="license"),
-        DocumentType(name="soat"),
-        DocumentType(name="technical_inspections")
-    ]
-    with Session(engine) as session:
-        for doc_type in document_types:
-            exists = session.exec(
-                select(DocumentType).where(DocumentType.name == doc_type.name)).first()
-            if not exists:
-                session.add(doc_type)
-        session.commit()
+        session.commit() 
 
 
 def init_test_user():
@@ -70,7 +55,6 @@ def init_test_user():
                 full_name="prueba_cliente",
                 country_code="+57",
                 phone_number=settings.TEST_CLIENT_PHONE,
-                is_verified_phone=True,
                 is_verified_phone=True,
                 is_active=True
             )
@@ -104,23 +88,24 @@ def init_test_user():
                 session.commit()
 
 
-def init_vehicle_types():
-    session.commit()
-    
-    # Actualizar el estado del rol a verificado
-    user_has_role = session.exec(
-        select(UserHasRole).where(
-            UserHasRole.id_user == user.id,
-            UserHasRole.id_rol == client_role.id
-        )
-    ).first()
-    
-    if user_has_role:
-        user_has_role.is_verified = True
-        user_has_role.status = RoleStatus.APPROVED
-        user_has_role.verified_at = datetime.utcnow()
-        session.add(user_has_role)
-        session.commit()
+# def init_vehicle_types():
+#     with Session(engine) as session:
+#         session.commit()
+        
+#         # Actualizar el estado del rol a verificado
+#         user_has_role = session.exec(
+#             select(UserHasRole).where(
+#                 UserHasRole.id_user == user.id,
+#                 UserHasRole.id_rol == client_role.id
+#             )
+#         ).first()
+        
+#         if user_has_role:
+#             user_has_role.is_verified = True
+#             user_has_role.status = RoleStatus.APPROVED
+#             user_has_role.verified_at = datetime.utcnow()
+#             session.add(user_has_role)
+#             session.commit()
 
 def init_test_driver():
     with Session(engine) as session:
@@ -176,7 +161,7 @@ def init_driver_documents():
             driver = User(
                 full_name="prueba_conductor",
                 country_code="+57",
-                phone_number="3001234567",
+                phone_number="3148780278",
                 is_verified_phone=True,
                 is_active=True
             )
@@ -228,6 +213,28 @@ def init_driver_documents():
             select(DocumentType).where(DocumentType.name == "property_card")
         ).first()
 
+
+        if driver:
+            # Verificar si ya existe un DriverInfo para este usuario
+            driver_info = session.exec(
+                select(DriverInfo).where(DriverInfo.user_id == driver.id)
+            ).first()
+
+            if not driver_info:
+                # Crear el DriverInfo
+                driver_info = DriverInfo(
+                    user_id=driver.id,
+                    first_name="prueva",
+                    last_name="conductor",
+                    birth_date=date(1990, 1, 1),  # Fecha de ejemplo
+                    email="conductor.prueba@example.com",
+                    selfie_url="https://example.com/selfie.jpg"
+                )
+                session.add(driver_info)
+                session.commit()
+                session.refresh(driver_info)
+
+
         # Crear documentos por defecto si no existen
         default_docs = [
             {
@@ -273,7 +280,8 @@ def init_driver_documents():
                         document_front_url=doc["front_url"],
                         document_back_url=doc["back_url"],
                         status=DriverStatus.PENDING,
-                        expiration_date=doc["expiration_date"]
+                        expiration_date=doc["expiration_date"],
+                        driver_info_id = driver_info.id
                     )
                     session.add(new_doc)
 
@@ -285,4 +293,4 @@ def init_data():
     init_document_types()
     init_test_user()
     init_driver_documents()
-    init_vehicle_types()
+    #init_vehicle_types()

@@ -4,6 +4,7 @@ from pydantic import constr, field_validator, ValidationInfo, BaseModel
 from enum import Enum
 import phonenumbers
 import re
+from datetime import datetime, date
 from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
 from datetime import datetime
@@ -53,6 +54,7 @@ class User(UserBase, table=True):
     driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
     driver: Optional["Driver"] = Relationship(back_populates="user")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
+    driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
 
 
 
@@ -110,6 +112,27 @@ class RoleRead(BaseModel):
     class Config:
         from_attributes = True
 
+class VehicleTypeRead(BaseModel):
+    id: int
+    name: str
+    capacity: int
+
+class VehicleInfoRead(BaseModel):
+    id: int
+    brand: str
+    model: str
+    model_year: int
+    color: str
+    plate: str
+    vehicle_type: VehicleTypeRead    
+
+class DriverInfoRead(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    birth_date: date
+    email: Optional[str]
+    selfie_url: str
 
 class UserRead(BaseModel):
     id: int
@@ -119,6 +142,8 @@ class UserRead(BaseModel):
     is_active: bool
     full_name: Optional[str]
     roles: List[RoleRead]
+    vehicle_info: Optional[VehicleInfoRead] = None
+    driver_info: Optional[DriverInfoRead] = None
 
     class Config:
         from_attributes = True
