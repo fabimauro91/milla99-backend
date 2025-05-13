@@ -1,25 +1,31 @@
 from sqlmodel import Session, select
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile
 from app.models.driver_documents import DriverDocuments, DriverDocumentsCreate
 from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
 from app.models.driver_info import DriverInfo, DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
-from app.models.driver import DriverFullRead, Driver
+from app.models.driver import DriverFullRead, Driver, DriverDocumentsInput
 from app.core.db import engine
+from app.services.upload_service import upload_service, DocumentType
+from typing import Optional
+from app.models.driver_response import (
+    DriverFullResponse, UserResponse, DriverInfoResponse, VehicleInfoResponse, DriverDocumentsResponse
+)
 
 
 class DriverService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_driver(
+    async def create_driver(
         self,
         user_data: UserCreate,
         driver_info_data: DriverInfoCreate,
         vehicle_info_data: VehicleInfoCreate,
-        driver_documents_data
-    ) -> DriverFullRead:
+        driver_documents_data: DriverDocumentsInput,
+        selfie: Optional[UploadFile] = None
+    ) -> DriverFullResponse:
         with Session(engine) as session:
             # 1. Crear el Usuario
             user = User(**user_data.dict())
@@ -39,16 +45,30 @@ class DriverService:
             session.commit()
             session.refresh(user)
 
-            # 3. Crear el DriverInfo
+            # 3. Manejar la selfie si se proporciona
+            selfie_url = None
+            if selfie:
+                document_info = await upload_service.save_document(
+                    file=selfie,
+                    user_id=user.id,
+                    document_type=DocumentType.DRIVER_SELFIE,
+                    description="Selfie del conductor"
+                )
+                selfie_url = document_info["url"]
+            elif driver_info_data.selfie_url:
+                selfie_url = driver_info_data.selfie_url
+
+            # 4. Crear el DriverInfo
             driver_info = DriverInfo(
-                **driver_info_data.dict(),
-                user_id=user.id
+                **driver_info_data.dict(exclude={'selfie_url'}),
+                user_id=user.id,
+                selfie_url=selfie_url
             )
             session.add(driver_info)
             session.commit()
             session.refresh(driver_info)
 
-            # 3.5 Crear el Driver (registro principal en la tabla driver)
+            # 5. Crear el Driver (registro principal en la tabla driver)
             driver = Driver(
                 user_id=user.id,
                 driver_info_id=driver_info.id
@@ -57,7 +77,7 @@ class DriverService:
             session.commit()
             session.refresh(driver)
 
-            # 4. Crear el VehicleInfo
+            # 6. Crear el VehicleInfo
             vehicle_info = VehicleInfo(
                 **vehicle_info_data.dict(),
                 driver_info_id=driver_info.id
@@ -66,60 +86,154 @@ class DriverService:
             session.commit()
             session.refresh(vehicle_info)
 
-            # 5. Crear múltiples DriverDocuments
+            # 7. Manejar los documentos
             docs = []
-            docs_data = driver_documents_data
+
+            # Función auxiliar para manejar la subida de documentos
+            async def handle_document_upload(
+                file: Optional[UploadFile],
+                doc_type: str,
+                side: Optional[str] = None,
+                existing_url: Optional[str] = None
+            ) -> Optional[str]:
+                if file:
+                    doc_info = await upload_service.save_document_dbtype(
+                        file=file,
+                        user_id=user.id,
+                        document_type=doc_type,
+                        side=side,
+                        description=f"{doc_type} {side if side else ''}"
+                    )
+                    return doc_info["url"]
+                return existing_url
 
             # Tarjeta de propiedad
-            if docs_data.property_card_front_url or docs_data.property_card_back_url:
+            if driver_documents_data.property_card_front or driver_documents_data.property_card_back:
+                property_front_url = await handle_document_upload(
+                    driver_documents_data.property_card_front,
+                    "property_card",
+                    "front",
+                    driver_documents_data.property_card_front_url
+                )
+                property_back_url = await handle_document_upload(
+                    driver_documents_data.property_card_back,
+                    "property_card",
+                    "back",
+                    driver_documents_data.property_card_back_url
+                )
                 docs.append(DriverDocuments(
                     driver_info_id=driver_info.id,
                     vehicle_info_id=vehicle_info.id,
                     document_type_id=1,  # 1 = Tarjeta de propiedad
-                    document_front_url=docs_data.property_card_front_url,
-                    document_back_url=docs_data.property_card_back_url,
+                    document_front_url=property_front_url,
+                    document_back_url=property_back_url,
                     expiration_date=None
                 ))
 
             # Licencia de conducir
-            if docs_data.license_front_url or docs_data.license_back_url or docs_data.license_expiration_date:
+            if (driver_documents_data.license_front or driver_documents_data.license_back or
+                    driver_documents_data.license_expiration_date):
+                license_front_url = await handle_document_upload(
+                    driver_documents_data.license_front,
+                    "license",
+                    "front",
+                    driver_documents_data.license_front_url
+                )
+                license_back_url = await handle_document_upload(
+                    driver_documents_data.license_back,
+                    "license",
+                    "back",
+                    driver_documents_data.license_back_url
+                )
                 docs.append(DriverDocuments(
                     driver_info_id=driver_info.id,
                     vehicle_info_id=vehicle_info.id,
                     document_type_id=2,  # 2 = Licencia
-                    document_front_url=docs_data.license_front_url,
-                    document_back_url=docs_data.license_back_url,
-                    expiration_date=docs_data.license_expiration_date
+                    document_front_url=license_front_url,
+                    document_back_url=license_back_url,
+                    expiration_date=driver_documents_data.license_expiration_date
                 ))
 
             # SOAT
-            if docs_data.soat_url or docs_data.soat_expiration_date:
+            if driver_documents_data.soat or driver_documents_data.soat_expiration_date:
+                soat_url = await handle_document_upload(
+                    driver_documents_data.soat,
+                    "soat",
+                    None,
+                    driver_documents_data.soat_url
+                )
                 docs.append(DriverDocuments(
                     driver_info_id=driver_info.id,
                     vehicle_info_id=vehicle_info.id,
                     document_type_id=3,  # 3 = SOAT
-                    document_front_url=docs_data.soat_url,
-                    expiration_date=docs_data.soat_expiration_date
+                    document_front_url=soat_url,
+                    expiration_date=driver_documents_data.soat_expiration_date
                 ))
 
             # Tecnomecánica
-            if docs_data.vehicle_technical_inspection_url or docs_data.vehicle_technical_inspection_expiration_date:
+            if (driver_documents_data.vehicle_technical_inspection or
+                    driver_documents_data.vehicle_technical_inspection_expiration_date):
+                tech_url = await handle_document_upload(
+                    driver_documents_data.vehicle_technical_inspection,
+                    "technical_inspections",
+                    None,
+                    driver_documents_data.vehicle_technical_inspection_url
+                )
                 docs.append(DriverDocuments(
                     driver_info_id=driver_info.id,
                     vehicle_info_id=vehicle_info.id,
                     document_type_id=4,  # 4 = Tecnomecánica
-                    document_front_url=docs_data.vehicle_technical_inspection_url,
-                    expiration_date=docs_data.vehicle_technical_inspection_expiration_date
+                    document_front_url=tech_url,
+                    expiration_date=driver_documents_data.vehicle_technical_inspection_expiration_date
                 ))
 
             for doc in docs:
                 session.add(doc)
             session.commit()
 
-            # Convertir a DriverFullRead
-            return DriverFullRead(
-                user=UserRead.model_validate(user),
-                driver_info=driver_info,
-                vehicle_info=vehicle_info,
-                driver_documents=docs
+            # Si tienes varios documentos, puedes construir el dict usando el que corresponda.
+            # Aquí, como ejemplo, se toma el primero de la lista docs (ajusta según tu lógica real).
+            driver_documents_obj = docs[0] if docs else None
+
+            response = DriverFullResponse(
+                user=UserResponse(
+                    full_name=user.full_name,
+                    country_code=user.country_code,
+                    phone_number=user.phone_number
+                ),
+                driver_info=DriverInfoResponse(
+                    first_name=driver_info.first_name,
+                    last_name=driver_info.last_name,
+                    birth_date=str(driver_info.birth_date),
+                    email=driver_info.email,
+                    selfie_url=driver_info.selfie_url
+                ),
+                vehicle_info=VehicleInfoResponse(
+                    brand=vehicle_info.brand,
+                    model=vehicle_info.model,
+                    model_year=vehicle_info.model_year,
+                    color=vehicle_info.color,
+                    plate=vehicle_info.plate,
+                    vehicle_type_id=vehicle_info.vehicle_type_id
+                ),
+                driver_documents=DriverDocumentsResponse(
+                    property_card_front_url=getattr(
+                        driver_documents_obj, "property_card_front_url", None),
+                    property_card_back_url=getattr(
+                        driver_documents_obj, "property_card_back_url", None),
+                    license_front_url=getattr(
+                        driver_documents_obj, "license_front_url", None),
+                    license_back_url=getattr(
+                        driver_documents_obj, "license_back_url", None),
+                    license_expiration_date=str(getattr(driver_documents_obj, "license_expiration_date", "")) if driver_documents_obj and getattr(
+                        driver_documents_obj, "license_expiration_date", None) else None,
+                    soat_url=getattr(driver_documents_obj, "soat_url", None),
+                    soat_expiration_date=str(getattr(driver_documents_obj, "soat_expiration_date", "")) if driver_documents_obj and getattr(
+                        driver_documents_obj, "soat_expiration_date", None) else None,
+                    vehicle_technical_inspection_url=getattr(
+                        driver_documents_obj, "vehicle_technical_inspection_url", None),
+                    vehicle_technical_inspection_expiration_date=str(getattr(driver_documents_obj, "vehicle_technical_inspection_expiration_date", "")) if driver_documents_obj and getattr(
+                        driver_documents_obj, "vehicle_technical_inspection_expiration_date", None) else None
+                )
             )
+            return response

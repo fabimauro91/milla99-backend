@@ -14,7 +14,7 @@ class DriverInfoBase(SQLModel):
     last_name: str
     birth_date: date
     email: Optional[str] = None
-    selfie_url: str
+    selfie_url: Optional[str] = None  # cambio de no opcional a opcional
 
 
 class DriverInfo(DriverInfoBase, table=True):
