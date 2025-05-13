@@ -5,6 +5,8 @@ from enum import Enum
 from pydantic import field_validator
 
 # Definimos el enum para el status
+
+
 class DriverStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -13,33 +15,29 @@ class DriverStatus(str, Enum):
 
 
 class DriverDocumentsBase(SQLModel):
-    user_id: int = Field(foreign_key="user.id", nullable=False)
     document_type_id: int = Field(foreign_key="documenttype.id", nullable=False)
-    # vehicle_info_id: Optional[int] = Field(default=None, foreign_key="vehicle_info.id", nullable=True)
     document_front_url: Optional[str] = Field(nullable=False)
     document_back_url: Optional[str] = Field(default=None, nullable=True)
     status: DriverStatus = Field(default=DriverStatus.PENDING, nullable=False)
-    expiration_date: Optional[datetime] = Field(default=None, nullable=True)    
-    
+    expiration_date: Optional[datetime] = Field(default=None, nullable=True)
+
 
 class DriverDocuments(DriverDocumentsBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     driver_info_id: int = Field(foreign_key="driverinfo.id", nullable=False)
-    vehicle_info_id: Optional[int] = Field(default=None, foreign_key="vehicleinfo.id", nullable=True)
-    status: DriverStatus = Field(default=DriverStatus.PENDING, nullable=False)
+    vehicle_info_id: Optional[int] = Field(
+        default=None, foreign_key="vehicleinfo.id", nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
     # Relaciones
     driver_info: "DriverInfo" = Relationship(back_populates="documents")
     documenttype: "DocumentType" = Relationship(back_populates="driver_documents")
     vehicle_info: Optional["VehicleInfo"] = Relationship(back_populates="driver_documents")
-    user: "User" = Relationship(back_populates="driver_documents")  
 
-
-    
 
 class DriverDocumentsCreate(DriverDocumentsBase):
     pass
+
 
 class DriverDocumentsRead(SQLModel):
     id: int

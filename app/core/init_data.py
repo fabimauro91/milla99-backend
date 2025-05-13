@@ -13,6 +13,10 @@ from app.models.vehicle_type import VehicleType
 from app.models.driver_info import DriverInfo  
 from app.core.db import engine
 from app.core.config import settings
+from app.models.driver import DriverDocumentsInput
+from app.services.driver_service import DriverService
+from app.models.driver_info import DriverInfoCreate
+from app.models.vehicle_info import VehicleInfoCreate
 
 
 def init_roles():
@@ -71,7 +75,7 @@ def init_test_user():
             user.roles.append(client_role)
             session.add(user)
             session.commit()
-            
+
             # Actualizar el estado del rol a verificado
             user_has_role = session.exec(
                 select(UserHasRole).where(
@@ -79,7 +83,7 @@ def init_test_user():
                     UserHasRole.id_rol == client_role.id
                 )
             ).first()
-            
+
             if user_has_role:
                 user_has_role.is_verified = True
                 user_has_role.status = RoleStatus.APPROVED
@@ -87,25 +91,37 @@ def init_test_user():
                 session.add(user_has_role)
                 session.commit()
 
+        # Crear datos del documento del conductor
+        driver_documents_data = DriverDocumentsInput(
+            property_card_front_url="string",
+            property_card_back_url="string",
+            license_front_url="string",
+            license_back_url="string",
+            license_expiration_date="2025-05-12",
+            soat_url="string",
+            soat_expiration_date="2025-05-12",
+            vehicle_technical_inspection_url="string",
+            vehicle_technical_inspection_expiration_date="2025-05-12"
+        )
 
-# def init_vehicle_types():
-#     with Session(engine) as session:
-#         session.commit()
-        
-#         # Actualizar el estado del rol a verificado
-#         user_has_role = session.exec(
-#             select(UserHasRole).where(
-#                 UserHasRole.id_user == user.id,
-#                 UserHasRole.id_rol == client_role.id
-#             )
-#         ).first()
-        
-#         if user_has_role:
-#             user_has_role.is_verified = True
-#             user_has_role.status = RoleStatus.APPROVED
-#             user_has_role.verified_at = datetime.utcnow()
-#             session.add(user_has_role)
-#             session.commit()
+
+def init_vehicle_types():
+    with Session(engine) as session:
+        # Verificar si ya existen tipos de vehículos
+        existing_types = session.exec(select(VehicleType)).all()
+        if existing_types:
+            return
+
+        # Crear tipos de vehículos
+        vehicle_types = [
+            VehicleType(name="car", capacity=4),
+            VehicleType(name="moto", capacity=1)
+        ]
+
+        for vehicle_type in vehicle_types:
+            session.add(vehicle_type)
+
+        session.commit()
 
 def init_test_driver():
     with Session(engine) as session:
@@ -193,10 +209,10 @@ def init_driver_documents():
             VehicleType(name="car", capacity=4),
             VehicleType(name="moto", capacity=1)
         ]
-        
+
         for vehicle_type in vehicle_types:
             session.add(vehicle_type)
-        
+
         session.commit()
 
         # Obtener los tipos de documentos
@@ -293,4 +309,4 @@ def init_data():
     init_document_types()
     init_test_user()
     init_driver_documents()
-    #init_vehicle_types()
+    init_vehicle_types()

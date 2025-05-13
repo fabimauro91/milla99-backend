@@ -14,7 +14,6 @@ from .core.sio_events import sio
 import socketio
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Código que se ejecuta al iniciar la aplicación
