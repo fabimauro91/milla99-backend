@@ -12,15 +12,15 @@ if TYPE_CHECKING:
     from .user import User
 
 
-class DriverBase(SQLModel):
+class DriverBase(BaseModel):
     driver_info_id: Optional[int] = Field(
         default=None, foreign_key="driverinfo.id")
 
 
-class Driver(DriverBase, table=True):
+class Driver(DriverBase):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    user: Optional["User"] = Relationship(back_populates="driver")
+    #user: Optional["User"] = Relationship(back_populates="driver")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="driver")
 
 

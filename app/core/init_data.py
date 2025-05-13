@@ -284,14 +284,13 @@ def init_driver_documents():
                 # Verificar si el documento ya existe
                 existing_doc = session.exec(
                     select(DriverDocuments).where(
-                        DriverDocuments.user_id == driver.id,
+                        DriverDocuments.driver_info_id == driver_info.id,
                         DriverDocuments.document_type_id == doc["doc_type"].id
                     )
                 ).first()
 
                 if not existing_doc:
                     new_doc = DriverDocuments(
-                        user_id=driver.id,
                         document_type_id=doc["doc_type"].id,
                         document_front_url=doc["front_url"],
                         document_back_url=doc["back_url"],

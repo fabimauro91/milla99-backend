@@ -51,10 +51,10 @@ class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
-    driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
-    driver: Optional["Driver"] = Relationship(back_populates="user")
+    #driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
+    #driver: Optional["Driver"] = Relationship(back_populates="user")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
-    driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
+    #driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
 
 
 
