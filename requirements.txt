@@ -32,3 +32,9 @@ phonenumbers
 python-jose
 twilio
 clicksend-client==5.0.78
+python-socketio
+python-engineio
+bidict
+simple-websocket
+redis
+mysql-connector-python

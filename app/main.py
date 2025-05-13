@@ -9,6 +9,8 @@ from .routers import users, drivers, auth
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
+from .core.sio_events import sio
+import socketio
 
 
 
@@ -26,7 +28,7 @@ async def lifespan(app: FastAPI):
     # Código que se ejecuta al cerrar la aplicación
     print("Cerrando la aplicación...")
 
-app = FastAPI(
+fastapi_app = FastAPI(
     lifespan=lifespan,
     title=settings.APP_NAME,
     description="Una API simple creada con FastAPI",
@@ -34,7 +36,7 @@ app = FastAPI(
 )
 
 # Configuración CORS
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=settings.CORS_CREDENTIALS,
@@ -42,12 +44,15 @@ app.add_middleware(
     allow_headers=settings.CORS_HEADERS,
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
+fastapi_app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Agregar middleware de autenticación
-app.add_middleware(JWTAuthMiddleware)
+fastapi_app.add_middleware(JWTAuthMiddleware)
 
-app.include_router(users.router)
-app.include_router(auth.router)
-app.include_router(drivers.router)
+# Agregar routers
+fastapi_app.include_router(users.router)
+fastapi_app.include_router(auth.router)
+fastapi_app.include_router(drivers.router)
+
+# Socket.IO debe ser lo último
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
