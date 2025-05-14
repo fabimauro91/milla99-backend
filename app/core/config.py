@@ -59,6 +59,8 @@ class Settings(BaseSettings):
 
     STATIC_URL_PREFIX: str = "http://localhost:8000/static/uploads"
 
+    # Configuración de Google Maps
+    GOOGLE_API_KEY: str
 
 @lru_cache()
 def get_settings():

@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .core.db import create_all_tables
 from .routers import users, drivers, auth
-from .routers import users, drivers, auth, verify_docs, client_requests
+from .routers import users, drivers, auth, verify_docs, client_requests, driver_position
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
@@ -55,6 +55,7 @@ fastapi_app.include_router(auth.router)
 fastapi_app.include_router(drivers.router)
 fastapi_app.include_router(verify_docs.router)
 fastapi_app.include_router(client_requests.router)
+fastapi_app.include_router(driver_position.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
