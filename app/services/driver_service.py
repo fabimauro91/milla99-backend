@@ -12,6 +12,7 @@ from typing import Optional
 from app.models.driver_response import (
     DriverFullResponse, UserResponse, DriverInfoResponse, VehicleInfoResponse, DriverDocumentsResponse
 )
+from app.utils.uploads import uploader
 
 
 class DriverService:
@@ -93,7 +94,8 @@ class DriverService:
                     document_type="selfie",
                     description="Selfie del conductor"
                 )
-                driver_info.selfie_url = document_info["url"]
+                driver_info.selfie_url = uploader.get_file_url(
+                    document_info["url"])
                 session.add(driver_info)
                 session.commit()
             elif driver_info_data.selfie_url:
@@ -128,7 +130,7 @@ class DriverService:
                         side=side,
                         description=f"{doc_type} {side if side else ''}"
                     )
-                    return doc_info["url"]
+                    return uploader.get_file_url(doc_info["url"])
                 return existing_url
 
             # Tarjeta de propiedad
