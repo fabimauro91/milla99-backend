@@ -28,13 +28,43 @@ class AuthService:
             "Content-Type": "application/json"
         }
 
+        # Extraer solo el código de verificación del mensaje
+        verification_code = message.split(":")[1].split(".")[0].strip()
+
         payload = {
             "messaging_product": "whatsapp",
             "to": to_phone,
-            "type": "text",
-            "text": {"body": message}
+            "type": "template",
+            "template": {
+                "name": "auth_log_99drive",
+                "language": {
+                    "code": "es_CO"
+                },
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": verification_code
+                            }
+                        ]
+                    },
+                    {
+                        "type": "button",
+                        "sub_type": "url",
+                        "index": 0,
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": verification_code  # O cualquier valor que la plantilla espera
+                            }
+                        ]
+                    }
+                ]
+            }
         }
-
+        print("saber que se envia:", f"{settings.WHATSAPP_API_URL}/{settings.WHATSAPP_PHONE_ID}/messages")
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -52,6 +82,8 @@ class AuthService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to send WhatsApp message: {str(e)}"
             )
+
+
 
     async def create_verification(self, country_code: str, phone_number: str) -> tuple[Verification, str]:
         # Verificar usuario existente
@@ -101,9 +133,10 @@ class AuthService:
             self.session.refresh(verif)
 
         try:
-            # Enviar mensaje WhatsApp
+            # Enviar mensaje WhatsApp   message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
+
             full_phone = f"{country_code}{phone_number}"
-            message = f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
+            message = f"code is: {verification_code}. "
 
             await self.send_whatsapp_message(full_phone, message)
             # await self.generate_mns_verification(full_phone, message)
@@ -113,7 +146,7 @@ class AuthService:
             self.session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error in verification process: {str(e)}"
+                detail=f"Your verification code is: {verification_code}. This code will expire in {settings.VERIFICATION_CODE_EXPIRY_MINUTES} minutes."
             )
 
     def verify_code(self, country_code: str, phone_number: str, code: str) -> tuple[bool, str, UserRead]:
