@@ -75,28 +75,31 @@ class DriverService:
             session.commit()
             session.refresh(user)
 
-            # 3. Manejar la selfie si se proporciona
-            selfie_url = None
-            if selfie:
-                document_info = await upload_service.save_document(
-                    file=selfie,
-                    user_id=user.id,
-                    document_type=DocumentType.DRIVER_SELFIE,
-                    description="Selfie del conductor"
-                )
-                selfie_url = document_info["url"]
-            elif driver_info_data.selfie_url:
-                selfie_url = driver_info_data.selfie_url
-
-            # 4. Crear el DriverInfo
+            # 4. Crear el DriverInfo (sin selfie_url aún)
             driver_info = DriverInfo(
                 **driver_info_data.dict(exclude={'selfie_url'}),
                 user_id=user.id,
-                selfie_url=selfie_url
+                selfie_url=None
             )
             session.add(driver_info)
             session.commit()
             session.refresh(driver_info)
+
+            # 5. Manejar la selfie si se proporciona (usando driver_info.id)
+            if selfie:
+                document_info = await upload_service.save_document_dbtype(
+                    file=selfie,
+                    driver_id=driver_info.id,
+                    document_type="selfie",
+                    description="Selfie del conductor"
+                )
+                driver_info.selfie_url = document_info["url"]
+                session.add(driver_info)
+                session.commit()
+            elif driver_info_data.selfie_url:
+                driver_info.selfie_url = driver_info_data.selfie_url
+                session.add(driver_info)
+                session.commit()
 
             # 6. Crear el VehicleInfo
             vehicle_info = VehicleInfo(

@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import UploadFile
 from typing import Optional
 from pathlib import Path
+from app.core.config import settings
 
 
 class FileUploader:
@@ -67,8 +68,8 @@ class FileUploader:
         return os.path.relpath(file_path, self.base_path)
 
     def get_file_url(self, relative_path: str) -> str:
-        """Convierte una ruta relativa en una URL"""
-        return f"/{relative_path.replace(os.sep, '/')}"
+        """Convierte una ruta relativa en una URL absoluta usando el prefijo de settings"""
+        return f"{settings.STATIC_URL_PREFIX}/{relative_path.replace(os.sep, '/')}"
 
 
 # Instancia global del uploader
