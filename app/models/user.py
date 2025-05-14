@@ -54,6 +54,7 @@ class User(UserBase, table=True):
     #driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
     #driver: Optional["Driver"] = Relationship(back_populates="user")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
+    driver_position: Optional["DriverPosition"] = Relationship(back_populates="user")
     #driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
 
 
