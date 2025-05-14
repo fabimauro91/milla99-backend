@@ -19,9 +19,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/openapi.json", "GET"),  # Esquema OpenAPI - AQUÍ FALTABA LA COMA
             # Rutas de verify-docs
             ("/verify-docs/", "GET"),
-            ("/verify-docs/", "POST")
-            ("/static/uploads/drivers/", "GET")
-
+            ("/verify-docs/", "POST"),
+            ("/static/uploads/drivers/", "GET"),
+            ("/client-requests", "POST"),
+            ("/client-requests/", "POST")
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

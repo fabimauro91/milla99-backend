@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum
 from geoalchemy2 import Geometry
 import enum
@@ -38,9 +38,9 @@ class ClientRequest(SQLModel, table=True):
     __tablename__ = "client_requests"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    id_client: int = Field(foreign_key="users.id")
+    id_client: int = Field(foreign_key="user.id")
     id_driver_assigned: Optional[int] = Field(
-        default=None, foreign_key="users.id")
+        default=None, foreign_key="user.id")
     fare_offered: Optional[float]
     fare_assigned: Optional[float]
     pickup_description: Optional[str] = Field(max_length=255)
@@ -59,3 +59,9 @@ class ClientRequest(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
+
+    # Relaciones explícitas
+    client: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"})
+    driver_assigned: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_driver_assigned]"})
