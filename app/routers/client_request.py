@@ -82,54 +82,19 @@ def get_time_and_distance(
         )
 
 
-@router.get("/distance/prueba")
-def get_time_and_distance_prueba():
-    url = "https://maps.googleapis.com/maps/api/distancematrix/json"
-    params = {
-        "origins": "Boston, Massachusetts, EE. UU.",
-        "destinations": "Nueva York, EE. UU.",
-        "units": "metric",
-        "key": settings.GOOGLE_API_KEY
-    }
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code != 200:
-            return JSONResponse(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                content={
-                    "message": f"Error en el API de Google Distance Matrix: {response.status_code}"}
-            )
-        data = response.json()
-        if data.get("status") != "OK":
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "message": f"Error en la respuesta del API de Google Distance Matrix: {data.get('status')}"}
-            )
-        return data
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"message": str(e)}
-        )
-
-
-@router.get("/{driver_lat}/{driver_lng}")
+@router.get("/nearby")
 def get_nearby_client_requests(
     driver_lat: float,
     driver_lng: float,
     session=Depends(get_session)
 ):
     try:
-        print(
-            f"DEBUG - Buscando solicitudes cercanas para coordenadas: {driver_lat}, {driver_lng}")
         # Crear el punto del conductor
         driver_point = func.ST_GeomFromText(
             f'POINT({driver_lng} {driver_lat})', 4326)
-        # Hora límite (últimos 30 minutos)
-        time_limit = datetime.now(timezone.utc) - timedelta(minutes=30)
-        print(f"DEBUG - Hora límite: {time_limit}")
-
+        # Hora límite (últimos 7 días)
+        time_limit = datetime.now(timezone.utc) - timedelta(minutes=10080)  # 7 días en minutos
+        distance_limit = 5000
         # Consulta ORM
         base_query = (
             session.query(
@@ -150,23 +115,25 @@ def get_nearby_client_requests(
                 ClientRequest.status == "CREATED",
                 ClientRequest.updated_at > time_limit
             )
-            .having(text("distance < 5000"))
+            .having(text(f"distance < {distance_limit}"))
         )
 
-        print("DEBUG - Query SQL:",
-              str(base_query.statement.compile(compile_kwargs={"literal_binds": True})))
-
-        print("DEBUG - Ejecutando consulta...")
         results = []
         try:
             query_results = base_query.all()
-            print(f"DEBUG - Número de resultados raw: {len(query_results)}")
+
+            if not query_results:
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={
+                        "message": f"No hay solicitudes de viaje activas en un radio de {distance_limit} metros",
+                        "data": []
+                    }
+                )
 
             for row in query_results:
                 try:
                     cr, full_name, country_code, phone_number, distance, time_difference = row
-                    print(
-                        f"DEBUG - Procesando fila: distance={distance}, time_difference={time_difference}")
 
                     result = {
                         "id": cr.id,
@@ -188,12 +155,7 @@ def get_nearby_client_requests(
                     }
                     results.append(result)
                 except Exception as e:
-                    print(
-                        f"DEBUG - Error procesando fila individual: {str(e)}")
-                    print(f"DEBUG - Datos de la fila: {row}")
                     continue
-
-            print(f"DEBUG - Número de resultados procesados: {len(results)}")
 
             results_json = []
             pickup_positions = []
@@ -213,7 +175,9 @@ def get_nearby_client_requests(
                 'key': settings.GOOGLE_API_KEY,
                 'mode': 'driving'
             }
+            
             response = requests.get(url, params=params)
+            
             if response.status_code != 200:
                 return JSONResponse(
                     status_code=status.HTTP_502_BAD_GATEWAY,
@@ -236,14 +200,9 @@ def get_nearby_client_requests(
             return JSONResponse(content=results_json, status_code=200)
 
         except Exception as e:
-            print(f"DEBUG - Error ejecutando consulta: {str(e)}")
-            print(
-                f"DEBUG - Traceback de la consulta: {traceback.format_exc()}")
             raise
 
     except Exception as e:
-        print(f"DEBUG - Error general: {str(e)}")
-        print(f"DEBUG - Traceback completo: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}"
         )

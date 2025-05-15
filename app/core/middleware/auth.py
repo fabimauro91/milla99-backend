@@ -22,7 +22,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/drivers-position/","POST"), # Rutas de drivers-position
             ("/driver-trip-offers/","POST"), # Rutas de driver-trip-offers
             ("/driver-trip-offers/", "GET"), # Rutas de driver-trip-offers
-            ("/client-request/distance", "GET"), # Rutas de client-request
+            ("/client-request/", "GET"), # Rutas de client-request
             ("/static/uploads/drivers/", "GET"),
             ("/drivers-position/", "POST"),  # Rutas de drivers-position
         ]
