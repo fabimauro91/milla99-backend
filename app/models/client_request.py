@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field as SQLField, Relationship
 from sqlalchemy import Column, Enum
 from geoalchemy2 import Geometry
 import enum
@@ -6,21 +6,24 @@ from datetime import datetime, timezone
 from typing import Optional
 from shapely.geometry import Point
 from geoalchemy2.shape import from_shape
+from pydantic import Field
 # Modelo de entrada (lo que el usuario envía)
 
 
 class ClientRequestCreate(SQLModel):
-    id_client: Optional[int] = None
-    fare_offered: Optional[float]
-    fare_assigned: Optional[float] = None
-    pickup_description: Optional[str]
-    destination_description: Optional[str]
-    client_rating: Optional[float] = None
-    driver_rating: Optional[float] = None
-    pickup_lat: float
-    pickup_lng: float
-    destination_lat: float
-    destination_lng: float
+    id_client: Optional[int] = Field(default=None, example=1)
+    fare_offered: Optional[float] = Field(default=None, example=20.0)
+    fare_assigned: Optional[float] = Field(default=None, example=25.0)
+    pickup_description: Optional[str] = Field(
+        default=None, example="Suba Bogotá")
+    destination_description: Optional[str] = Field(
+        default=None, example="Santa Rosita Engativa, Bogota")
+    client_rating: Optional[float] = Field(default=None, example=4.5)
+    driver_rating: Optional[float] = Field(default=None, example=4.8)
+    pickup_lat: float = Field(example=4.718136)
+    pickup_lng: float = Field(example=-74.07317)
+    destination_lat: float = Field(example=4.702468)
+    destination_lng: float = Field(example=-74.109776)
 
     def to_db(self):
         pickup_point = from_shape(
@@ -43,28 +46,27 @@ class StatusEnum(str, enum.Enum):
 
 
 class ClientRequest(SQLModel, table=True):
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    id_client: int = Field(foreign_key="user.id")
-    id_driver_assigned: Optional[int] = Field(
+    id: Optional[int] = SQLField(default=None, primary_key=True)
+    id_client: int = SQLField(foreign_key="user.id")
+    id_driver_assigned: Optional[int] = SQLField(
         default=None, foreign_key="user.id")
     fare_offered: Optional[float]
     fare_assigned: Optional[float] = None
-    pickup_description: Optional[str] = Field(max_length=255)
-    destination_description: Optional[str] = Field(max_length=255)
+    pickup_description: Optional[str] = SQLField(max_length=255)
+    destination_description: Optional[str] = SQLField(max_length=255)
     client_rating: Optional[float] = None
     driver_rating: Optional[float] = None
-    status: StatusEnum = Field(
+    status: StatusEnum = SQLField(
         default=StatusEnum.CREATED, sa_column=Column(Enum(StatusEnum)))
-    pickup_position: Optional[str] = Field(
+    pickup_position: Optional[str] = SQLField(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326))
     )
-    destination_position: Optional[str] = Field(
+    destination_position: Optional[str] = SQLField(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326))
     )
-    created_at: datetime = Field(
+    created_at: datetime = SQLField(
         default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(
+    updated_at: datetime = SQLField(
         default_factory=lambda: datetime.now(timezone.utc))
 
     # Relaciones explícitas

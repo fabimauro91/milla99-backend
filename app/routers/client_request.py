@@ -41,6 +41,13 @@ class ClientRequestResponse(BaseModel):
 
 
 def wkb_to_coords(wkb):
+    """
+    Convierte un campo WKBElement a un diccionario con latitud y longitud.
+    Args:
+        wkb: WKBElement de la base de datos
+    Returns:
+        dict con 'lat' y 'lng' o None si wkb es None
+    """
     from geoalchemy2.shape import to_shape
     if wkb is None:
         return None
@@ -50,11 +57,25 @@ def wkb_to_coords(wkb):
 
 @router.get("/distance")
 def get_time_and_distance(
-    origin_lat: float,
-    origin_lng: float,
-    destination_lat: float,
-    destination_lng: float
+    origin_lat: float = Query(..., example=4.718136,
+                              description="Latitud de origen"),
+    origin_lng: float = Query(..., example=-74.07317,
+                              description="Longitud de origen"),
+    destination_lat: float = Query(..., example=4.702468,
+                                   description="Latitud de destino"),
+    destination_lng: float = Query(..., example=-
+                                   74.109776, description="Longitud de destino")
 ):
+    """
+    Consulta la distancia y el tiempo estimado entre dos puntos usando Google Distance Matrix API.
+    Args:
+        origin_lat: Latitud de origen
+        origin_lng: Longitud de origen
+        destination_lat: Latitud de destino
+        destination_lng: Longitud de destino
+    Returns:
+        Respuesta JSON de Google Distance Matrix
+    """
     try:
         return get_time_and_distance_service(origin_lat, origin_lng, destination_lat, destination_lng)
     except Exception as e:
@@ -63,6 +84,11 @@ def get_time_and_distance(
 
 @router.get("/distance/prueba")
 def get_time_and_distance_prueba():
+    """
+    Endpoint de prueba para consultar distancia y tiempo entre Boston y Nueva York usando Google Distance Matrix API.
+    Returns:
+        Respuesta JSON de Google Distance Matrix
+    """
     try:
         return get_time_and_distance_prueba_service()
     except Exception as e:
@@ -71,10 +97,20 @@ def get_time_and_distance_prueba():
 
 @router.get("/nearby")
 def get_nearby_client_requests(
-    driver_lat: float,
-    driver_lng: float,
+    driver_lat: float = Query(..., example=4.708822,
+                              description="Latitud del conductor"),
+    driver_lng: float = Query(..., example=-74.076542,
+                              description="Longitud del conductor"),
     session=Depends(get_session)
 ):
+    """
+    Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5km y los enriquece con la distancia y tiempo estimado usando Google Distance Matrix API.
+    Args:
+        driver_lat: Latitud del conductor
+        driver_lng: Longitud del conductor
+    Returns:
+        Lista de solicitudes cercanas con información de distancia, tiempo y datos del cliente
+    """
     try:
         results = get_nearby_client_requests_service(
             driver_lat, driver_lng, session, wkb_to_coords)
@@ -125,7 +161,35 @@ def get_nearby_client_requests(
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED)
-def create_request(request_data: ClientRequestCreate, request: Request, session: Session = Depends(get_session)):
+def create_request(
+    request: Request,
+    request_data: ClientRequestCreate = Body(
+        ...,
+        example={
+            "id_client": 1,
+            "fare_offered": 20.0,
+            "fare_assigned": 25.0,
+            "pickup_description": "Suba Bogotá",
+            "destination_description": "Santa Rosita Engativa, Bogota",
+            "client_rating": 4.5,
+            "driver_rating": 4.8,
+            "pickup_lat": 4.718136,
+            "pickup_lng": -74.07317,
+            "destination_lat": 4.702468,
+            "destination_lng": -74.109776
+        }
+    ),
+    session: Session = Depends(get_session)
+):
+    """
+    Crea una nueva solicitud de viaje para un cliente.
+    Args:
+        request_data: Datos de la solicitud (pickup, destino, tarifa, etc.)
+        request: Objeto de la petición HTTP (usado para obtener el usuario autenticado)
+        session: Sesión de base de datos
+    Returns:
+        Objeto de la solicitud creada
+    """
     try:
         user_id = request.state.user_id
         if hasattr(request_data, 'id_client'):
@@ -155,11 +219,27 @@ def create_request(request_data: ClientRequestCreate, request: Request, session:
 
 @router.patch("/updateDriverAssigned")
 def assign_driver(
-    id: int = Body(...),
-    id_driver_assigned: int = Body(...),
-    fare_assigned: float = Body(None),
+    id: int = Body(...,
+                   description="ID de la solicitud de viaje (id_client_request)"),
+    id_driver_assigned: int = Body(...,
+                                   description="ID del conductor asignado"),
+    fare_assigned: float = Body(
+        None, description="Tarifa asignada (opcional)"),
     session: Session = Depends(get_session)
 ):
+    """
+    Asigna un conductor a una solicitud de viaje existente, cambia el estado a cualquiera de los estados
+    "CREATED", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "TRAVELLING", "FINISHED", "CANCELLED"
+    y actualiza la tarifa si se proporciona.
+
+    Args:
+        id: ID de la solicitud de viaje (id_client_request)
+        id_driver_assigned: ID del conductor asignado
+        fare_assigned: Tarifa asignada (opcional)
+        session: Sesión de base de datos
+    Returns:
+        Mensaje de éxito o error
+    """
     try:
         return assign_driver_service(session, id, id_driver_assigned, fare_assigned)
     except Exception as e:
@@ -170,10 +250,20 @@ def assign_driver(
 
 @router.patch("/updateStatus")
 def update_status(
-    id_client_request: int = Body(...),
-    status: str = Body(...),
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
 ):
+    """
+    Actualiza el estado de una solicitud de viaje existente.
+    Args:
+        id_client_request: ID de la solicitud de viaje
+        status: Nuevo estado a asignar
+        session: Sesión de base de datos
+    Returns:
+        Mensaje de éxito o error
+    """
     try:
         return update_status_service(session, id_client_request, status)
     except Exception as e:
