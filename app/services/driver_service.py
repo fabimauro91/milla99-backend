@@ -5,7 +5,7 @@ from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
 from app.models.driver_info import DriverInfo, DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
-from app.models.driver import DriverFullRead, Driver, DriverDocumentsInput
+from app.models.driver import DriverFullRead, DriverDocumentsInput
 from app.core.db import engine
 from app.services.upload_service import upload_service, DocumentType
 from typing import Optional
@@ -35,15 +35,15 @@ class DriverService:
             if existing_user:
                 # Buscar si ya tiene un driver asociado
                 existing_driver = session.exec(
-                    select(Driver)
-                    .where(Driver.user_id == existing_user.id)
+                    select(DriverInfo)
+                    .where(DriverInfo.user_id == existing_user.id)
                 ).first()
 
                 if existing_driver:
                     # Buscar el vehicle_info asociado a ese driver_info y de tipo carro
                     driver_info = session.exec(
                         select(DriverInfo).where(DriverInfo.id ==
-                                                 existing_driver.driver_info_id)
+                                                 existing_driver.id)
                     ).first()
                     vehicle_info = session.exec(
                         select(VehicleInfo).where(
@@ -98,15 +98,6 @@ class DriverService:
             session.commit()
             session.refresh(driver_info)
 
-            # 5. Crear el Driver (registro principal en la tabla driver)
-            driver = Driver(
-                user_id=user.id,
-                driver_info_id=driver_info.id
-            )
-            session.add(driver)
-            session.commit()
-            session.refresh(driver)
-
             # 6. Crear el VehicleInfo
             vehicle_info = VehicleInfo(
                 **vehicle_info_data.dict(),
@@ -129,7 +120,7 @@ class DriverService:
                 if file:
                     doc_info = await upload_service.save_document_dbtype(
                         file=file,
-                        driver_id=driver.id,
+                        driver_id=driver_info.id,
                         document_type=doc_type,
                         side=side,
                         description=f"{doc_type} {side if side else ''}"
@@ -221,9 +212,34 @@ class DriverService:
                 session.add(doc)
             session.commit()
 
-            # Si tienes varios documentos, puedes construir el dict usando el que corresponda.
-            # Aquí, como ejemplo, se toma el primero de la lista docs (ajusta según tu lógica real).
-            driver_documents_obj = docs[0] if docs else None
+            # Consultar documentos actualizados desde la base de datos
+            property_card_doc = session.exec(
+                select(DriverDocuments).where(
+                    DriverDocuments.driver_info_id == driver_info.id,
+                    DriverDocuments.document_type_id == 1
+                )
+            ).first()
+
+            license_doc = session.exec(
+                select(DriverDocuments).where(
+                    DriverDocuments.driver_info_id == driver_info.id,
+                    DriverDocuments.document_type_id == 2
+                )
+            ).first()
+
+            soat_doc = session.exec(
+                select(DriverDocuments).where(
+                    DriverDocuments.driver_info_id == driver_info.id,
+                    DriverDocuments.document_type_id == 3
+                )
+            ).first()
+
+            vehicle_tech_doc = session.exec(
+                select(DriverDocuments).where(
+                    DriverDocuments.driver_info_id == driver_info.id,
+                    DriverDocuments.document_type_id == 4
+                )
+            ).first()
 
             response = DriverFullResponse(
                 user=UserResponse(
@@ -247,23 +263,18 @@ class DriverService:
                     vehicle_type_id=vehicle_info.vehicle_type_id
                 ),
                 driver_documents=DriverDocumentsResponse(
-                    property_card_front_url=getattr(
-                        driver_documents_obj, "property_card_front_url", None),
-                    property_card_back_url=getattr(
-                        driver_documents_obj, "property_card_back_url", None),
-                    license_front_url=getattr(
-                        driver_documents_obj, "license_front_url", None),
-                    license_back_url=getattr(
-                        driver_documents_obj, "license_back_url", None),
-                    license_expiration_date=str(getattr(driver_documents_obj, "license_expiration_date", "")) if driver_documents_obj and getattr(
-                        driver_documents_obj, "license_expiration_date", None) else None,
-                    soat_url=getattr(driver_documents_obj, "soat_url", None),
-                    soat_expiration_date=str(getattr(driver_documents_obj, "soat_expiration_date", "")) if driver_documents_obj and getattr(
-                        driver_documents_obj, "soat_expiration_date", None) else None,
-                    vehicle_technical_inspection_url=getattr(
-                        driver_documents_obj, "vehicle_technical_inspection_url", None),
-                    vehicle_technical_inspection_expiration_date=str(getattr(driver_documents_obj, "vehicle_technical_inspection_expiration_date", "")) if driver_documents_obj and getattr(
-                        driver_documents_obj, "vehicle_technical_inspection_expiration_date", None) else None
+                    property_card_front_url=property_card_doc.document_front_url if property_card_doc else None,
+                    property_card_back_url=property_card_doc.document_back_url if property_card_doc else None,
+                    license_front_url=license_doc.document_front_url if license_doc else None,
+                    license_back_url=license_doc.document_back_url if license_doc else None,
+                    license_expiration_date=str(
+                        license_doc.expiration_date) if license_doc and license_doc.expiration_date else None,
+                    soat_url=soat_doc.document_front_url if soat_doc else None,
+                    soat_expiration_date=str(
+                        soat_doc.expiration_date) if soat_doc and soat_doc.expiration_date else None,
+                    vehicle_technical_inspection_url=vehicle_tech_doc.document_front_url if vehicle_tech_doc else None,
+                    vehicle_technical_inspection_expiration_date=str(
+                        vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
                 )
             )
             return response

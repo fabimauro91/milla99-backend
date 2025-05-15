@@ -17,11 +17,11 @@ class DriverBase(BaseModel):
         default=None, foreign_key="driverinfo.id")
 
 
-class Driver(DriverBase):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
-    #user: Optional["User"] = Relationship(back_populates="driver")
-    driver_info: Optional["DriverInfo"] = Relationship(back_populates="driver")
+# class Driver(DriverBase):
+#     id: Optional[int] = Field(default=None, primary_key=True)
+#     user_id: int = Field(foreign_key="user.id")
+#     #user: Optional["User"] = Relationship(back_populates="driver")
+#     driver_info: Optional["DriverInfo"] = Relationship(back_populates="driver")
 
 
 class DriverCreate(DriverBase):

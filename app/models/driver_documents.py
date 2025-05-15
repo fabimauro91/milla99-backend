@@ -15,8 +15,9 @@ class DriverStatus(str, Enum):
 
 
 class DriverDocumentsBase(SQLModel):
-    document_type_id: int = Field(foreign_key="documenttype.id", nullable=False)
-    document_front_url: Optional[str] = Field(nullable=False)
+    document_type_id: int = Field(
+        foreign_key="documenttype.id", nullable=False)
+    document_front_url: Optional[str] = Field(default=None, nullable=True)
     document_back_url: Optional[str] = Field(default=None, nullable=True)
     status: DriverStatus = Field(default=DriverStatus.PENDING, nullable=False)
     expiration_date: Optional[datetime] = Field(default=None, nullable=True)
@@ -28,11 +29,14 @@ class DriverDocuments(DriverDocumentsBase, table=True):
     vehicle_info_id: Optional[int] = Field(
         default=None, foreign_key="vehicleinfo.id", nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
+                                 "onupdate": datetime.utcnow})
     # Relaciones
     driver_info: "DriverInfo" = Relationship(back_populates="documents")
-    documenttype: "DocumentType" = Relationship(back_populates="driver_documents")
-    vehicle_info: Optional["VehicleInfo"] = Relationship(back_populates="driver_documents")
+    documenttype: "DocumentType" = Relationship(
+        back_populates="driver_documents")
+    vehicle_info: Optional["VehicleInfo"] = Relationship(
+        back_populates="driver_documents")
 
 
 class DriverDocumentsCreate(DriverDocumentsBase):
@@ -74,5 +78,5 @@ class DriverDocumentsCreateRequest(SQLModel):
     document_type_id: int
     document_front_url: str
     document_back_url: Optional[str] = None
-    expiration_date: Optional[datetime] = None 
+    expiration_date: Optional[datetime] = None
     # vehicle_info_id: Optional[int] = None

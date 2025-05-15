@@ -38,3 +38,5 @@ bidict
 simple-websocket
 redis
 mysql-connector-python
+geoalchemy2>=0.14
+shapely>=2.0.0

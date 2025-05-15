@@ -4,8 +4,9 @@ from typing import List, Optional
 from fastapi.responses import JSONResponse
 import json
 from sqlalchemy import select
+import traceback
 
-from app.models.driver import Driver, DriverCreate, DriverDocumentsInput, DriverFullCreate, DriverFullRead
+from app.models.driver import DriverCreate, DriverDocumentsInput, DriverFullCreate, DriverFullRead
 from app.core.db import get_session
 from app.models.user import UserRead
 from app.services.driver_service import DriverService
@@ -103,7 +104,6 @@ async def create_driver(
             selfie=driver_data.selfie
         )
 
-        # Construir respuesta personalizada
         return DriverFullResponse(
             user=UserResponse(
                 full_name=result.user.full_name,
@@ -127,12 +127,14 @@ async def create_driver(
             ),
             driver_documents=result.driver_documents
         )
+
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al decodificar JSON: {str(e)}"
         )
     except Exception as e:
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear el conductor: {str(e)}"
@@ -168,14 +170,11 @@ async def update_driver(
     vehicle_technical_inspection_expiration_date: Optional[str] = Form(None),
     session: Session = Depends(get_session)
 ):
-    driver = session.get(Driver, driver_id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver no encontrado")
-
-    driver_info = session.get(DriverInfo, driver.driver_info_id)
+    driver_info = session.get(DriverInfo, driver_id)
     if not driver_info:
-        raise HTTPException(
-            status_code=404, detail="DriverInfo no encontrado para este driver")
+        raise HTTPException(status_code=404, detail="DriverInfo no encontrado")
+
+    print(f"PATCH driver_id: {driver_id}, driver_info.id: {driver_info.id}")
 
     vehicle_info = session.exec(
         select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)
@@ -199,7 +198,7 @@ async def update_driver(
     if selfie is not None:
         selfie_url = await uploader.save_driver_document(
             file=selfie,
-            driver_id=driver.id,
+            driver_info_id=driver_info.id,
             document_type="selfie"
         )
         driver_info.selfie_url = selfie_url
@@ -254,7 +253,7 @@ async def update_driver(
         if file is not None and doc_type_id is not None:
             url = await uploader.save_driver_document(
                 file=file,
-                driver_id=driver.id,
+                driver_id=driver_info.id,
                 document_type=doc_type,
                 subfolder=side
             )

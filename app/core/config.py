@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     CLICK_SEND_PASSWORD: str
     CLICK_SEND_PHONE: str
 
+    # Configuración de Google Maps
+    GOOGLE_API_KEY: str
+
 @lru_cache()
 def get_settings():
     return Settings()

@@ -10,13 +10,13 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.user import User, UserCreate
 from app.models.vehicle_type import VehicleType
-from app.models.driver_info import DriverInfo  
+from app.models.driver_info import DriverInfo
 from app.core.db import engine
 from app.core.config import settings
 from app.models.driver import DriverDocumentsInput
 from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
-from app.models.vehicle_info import VehicleInfoCreate
+from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
 
 
 def init_roles():
@@ -46,7 +46,7 @@ def init_document_types():
                 select(DocumentType).where(DocumentType.name == doc_type.name)).first()
             if not exists:
                 session.add(doc_type)
-        session.commit() 
+        session.commit()
 
 
 def init_test_user():
@@ -123,6 +123,7 @@ def init_vehicle_types():
 
         session.commit()
 
+
 def init_test_driver():
     with Session(engine) as session:
         # Buscar si ya existe el conductor de prueba
@@ -165,6 +166,7 @@ def init_test_driver():
                 session.commit()
 
         return driver
+
 
 def init_driver_documents():
     with Session(engine) as session:
@@ -223,12 +225,12 @@ def init_driver_documents():
             select(DocumentType).where(DocumentType.name == "soat")
         ).first()
         tech_type = session.exec(
-            select(DocumentType).where(DocumentType.name == "technical_inspections")
+            select(DocumentType).where(
+                DocumentType.name == "technical_inspections")
         ).first()
         card_type = session.exec(
             select(DocumentType).where(DocumentType.name == "property_card")
         ).first()
-
 
         if driver:
             # Verificar si ya existe un DriverInfo para este usuario
@@ -249,7 +251,6 @@ def init_driver_documents():
                 session.add(driver_info)
                 session.commit()
                 session.refresh(driver_info)
-
 
         # Crear documentos por defecto si no existen
         default_docs = [
@@ -296,11 +297,133 @@ def init_driver_documents():
                         document_back_url=doc["back_url"],
                         status=DriverStatus.PENDING,
                         expiration_date=doc["expiration_date"],
-                        driver_info_id = driver_info.id
+                        driver_info_id=driver_info.id
                     )
                     session.add(new_doc)
 
         session.commit()
+
+
+def init_demo_driver():
+    with Session(engine) as session:
+        # 1. Crear o buscar usuario demo
+        user = session.exec(select(User).where(
+            User.full_name == "demo_driver")).first()
+        if not user:
+            user = User(
+                full_name="demo_driver",
+                country_code="+57",
+                phone_number="3009999999",
+                is_verified_phone=True,
+                is_active=True
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+        # 2. Asignar el rol DRIVER si no lo tiene
+        driver_role = session.exec(
+            select(Role).where(Role.id == "DRIVER")).first()
+        if driver_role and driver_role not in user.roles:
+            user.roles.append(driver_role)
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+        # 3. Crear o buscar DriverInfo
+        driver_info = session.exec(select(DriverInfo).where(
+            DriverInfo.user_id == user.id)).first()
+        if not driver_info:
+            driver_info = DriverInfo(
+                user_id=user.id,
+                first_name="John",
+                last_name="Doe",
+                birth_date=date(1990, 1, 1),
+                email="john@example.com",
+                selfie_url="/img/demo/front foto.jpg"
+            )
+            session.add(driver_info)
+            session.commit()
+            session.refresh(driver_info)
+
+        # 4. Crear o buscar VehicleInfo
+        vehicle_type = session.exec(select(VehicleType).where(
+            VehicleType.name == "car")).first()
+        vehicle_info = session.exec(select(VehicleInfo).where(
+            VehicleInfo.driver_info_id == driver_info.id)).first()
+        if not vehicle_info:
+            vehicle_info = VehicleInfo(
+                brand="Toyota",
+                model="Corolla",
+                model_year=2004,
+                color="Red",
+                plate="ABC123",
+                vehicle_type_id=vehicle_type.id if vehicle_type else 1,
+                driver_info_id=driver_info.id
+            )
+            session.add(vehicle_info)
+            session.commit()
+            session.refresh(vehicle_info)
+
+        # 5. Obtener tipos de documentos
+        license_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "license")).first()
+        soat_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "soat")).first()
+        tech_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "technical_inspections")).first()
+        card_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "property_card")).first()
+
+        # 6. Crear documentos demo
+        demo_docs = [
+            {
+                "doc_type": license_type,
+                "front_url": "/img/demo/front foto.jpg",
+                "back_url": "/img/demo/back foto.jpg",
+                "expiration_date": date(2025, 1, 1)
+            },
+            {
+                "doc_type": soat_type,
+                "front_url": "/img/demo/front foto.jpg",
+                "back_url": None,
+                "expiration_date": date(2024, 12, 31)
+            },
+            {
+                "doc_type": tech_type,
+                "front_url": "/img/demo/front foto.jpg",
+                "back_url": None,
+                "expiration_date": date(2024, 12, 31)
+            },
+            {
+                "doc_type": card_type,
+                "front_url": "/img/demo/front foto.jpg",
+                "back_url": "/img/demo/back foto.jpg",
+                "expiration_date": date(2025, 12, 31)
+            }
+        ]
+
+        for doc in demo_docs:
+            if doc["doc_type"]:
+                existing_doc = session.exec(
+                    select(DriverDocuments).where(
+                        DriverDocuments.driver_info_id == driver_info.id,
+                        DriverDocuments.document_type_id == doc["doc_type"].id
+                    )
+                ).first()
+                if not existing_doc:
+                    new_doc = DriverDocuments(
+                        document_type_id=doc["doc_type"].id,
+                        document_front_url=doc["front_url"],
+                        document_back_url=doc["back_url"],
+                        status=DriverStatus.PENDING,
+                        expiration_date=doc["expiration_date"],
+                        driver_info_id=driver_info.id,
+                        vehicle_info_id=vehicle_info.id
+                    )
+                    session.add(new_doc)
+        session.commit()
+
 
 def init_data():
     init_roles()
@@ -309,3 +432,4 @@ def init_data():
     init_test_user()
     init_driver_documents()
     init_vehicle_types()
+    init_demo_driver()

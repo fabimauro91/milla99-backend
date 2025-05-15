@@ -10,13 +10,16 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # Lista de rutas públicas que no requieren autenticación
         # Formato: (ruta, método_http)
         public_paths = [
-           ("/users/", "POST"),
+            ("/users/", "POST"),
             ("/users/", "GET"),  # Solo el registro de usuarios
             ("/auth/verify/", "POST"),  # Rutas de verificación
             ("/docs", "GET"),  # Documentación
             ("/openapi.json", "GET"),  # Esquema OpenAPI
             ("/drivers/", "POST"),  # Creación de drivers
             ("/openapi.json", "GET"),  # Esquema OpenAPI - AQUÍ FALTABA LA COMA
+            ("/verify-docs/","GET"), # Rutas de verify-docs
+            ("/verify-docs/","POST"),
+            ("/drivers-position/","POST"), # Rutas de drivers-position
            # Rutas de verify-docs
             ("/verify-docs/", "GET"),   
             ("/verify-docs/", "POST"),
@@ -25,8 +28,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
              ("/driver-trip-offers/", "PATCH")
 
         ]
-        
-
 
         # Verificar si la ruta y método actual están en la lista de públicas
         is_public = any(
