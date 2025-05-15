@@ -246,6 +246,7 @@ def assign_driver(
     fare_assigned: float = Body(None),
     session: Session = Depends(get_session)
 ):
+    """Asigna un conductor a una solicitud de viaje"""
     try:
         client_request = session.query(ClientRequest).filter(
             ClientRequest.id == id).first()
