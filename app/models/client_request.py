@@ -4,22 +4,30 @@ from geoalchemy2 import Geometry
 import enum
 from datetime import datetime, timezone
 from typing import Optional
-
+from shapely.geometry import Point
+from geoalchemy2.shape import from_shape
 # Modelo de entrada (lo que el usuario envía)
 
 
 class ClientRequestCreate(SQLModel):
-    id_client: int
+    id_client: Optional[int] = None
     fare_offered: Optional[float]
-    fare_assigned: Optional[float]
+    fare_assigned: Optional[float] = None
     pickup_description: Optional[str]
     destination_description: Optional[str]
-    client_rating: Optional[float]
-    driver_rating: Optional[float]
+    client_rating: Optional[float] = None
+    driver_rating: Optional[float] = None
     pickup_lat: float
     pickup_lng: float
     destination_lat: float
     destination_lng: float
+
+    def to_db(self):
+        pickup_point = from_shape(
+            Point(self.pickup_lng, self.pickup_lat), srid=4326)
+        destination_point = from_shape(
+            Point(self.destination_lng, self.destination_lat), srid=4326)
+        return self
 
 
 class StatusEnum(str, enum.Enum):
@@ -41,11 +49,11 @@ class ClientRequest(SQLModel, table=True):
     id_driver_assigned: Optional[int] = Field(
         default=None, foreign_key="user.id")
     fare_offered: Optional[float]
-    fare_assigned: Optional[float]
+    fare_assigned: Optional[float] = None
     pickup_description: Optional[str] = Field(max_length=255)
     destination_description: Optional[str] = Field(max_length=255)
-    client_rating: Optional[float]
-    driver_rating: Optional[float]
+    client_rating: Optional[float] = None
+    driver_rating: Optional[float] = None
     status: StatusEnum = Field(
         default=StatusEnum.CREATED, sa_column=Column(Enum(StatusEnum)))
     pickup_position: Optional[str] = Field(

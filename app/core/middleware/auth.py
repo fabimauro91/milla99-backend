@@ -21,10 +21,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/verify-docs/", "GET"),
             ("/verify-docs/", "POST"),
             ("/static/uploads/drivers/", "GET"),
-            ("/client-requests", "POST"),
-            ("/client-requests/", "POST")
             ("/drivers-position/", "POST"),  # Rutas de drivers-position
-
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

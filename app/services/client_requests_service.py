@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from app.models.client_requests import ClientRequest, ClientRequestCreate
+from app.models.client_request import ClientRequest, ClientRequestCreate
 
 
 def create_client_request(db: Session, data: ClientRequestCreate):
