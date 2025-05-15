@@ -304,3 +304,25 @@ def assign_driver(
         session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Error al asignar conductor: {str(e)}")
+
+
+@router.patch("/updateStatus")
+def update_status(
+    id_client_request: int = Body(...),
+    status: str = Body(...),
+    session: Session = Depends(get_session)
+):
+    try:
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == id_client_request).first()
+        if not client_request:
+            raise HTTPException(
+                status_code=404, detail="Solicitud no encontrada")
+        client_request.status = status
+        client_request.updated_at = datetime.utcnow()
+        session.commit()
+        return {"success": True, "message": "Status actualizado correctamente"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error al actualizar el status: {str(e)}")
