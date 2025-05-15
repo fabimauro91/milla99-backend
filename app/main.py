@@ -18,7 +18,7 @@ import socketio
 async def lifespan(app: FastAPI):
     # Código que se ejecuta al iniciar la aplicación
     import secrets
-    print(secrets.token_hex(32))
+    # print(secrets.token_hex(32))
     print("Iniciando la aplicación...")
     # Crear las tablas
     for _ in create_all_tables(app):

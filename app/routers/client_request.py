@@ -1,23 +1,25 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Body
 from fastapi.responses import JSONResponse
-import requests
-from app.core.config import settings
 from app.core.db import get_session
 from app.models.client_request import ClientRequest, ClientRequestCreate
-from app.models.user import User
-from app.services.client_requests_service import create_client_request
+from app.services.client_requests_service import (
+    create_client_request,
+    get_time_and_distance_service,
+    get_time_and_distance_prueba_service,
+    get_nearby_client_requests_service,
+    assign_driver_service,
+    update_status_service
+)
+from sqlalchemy.orm import Session
 import traceback
-from geoalchemy2.shape import to_shape
 from pydantic import BaseModel
-from sqlalchemy.orm import joinedload, Session
-from sqlalchemy import func, and_, text
-from geoalchemy2.functions import ST_Distance_Sphere
-from datetime import datetime, timedelta, timezone
-import json
 
 router = APIRouter(prefix="/client-request", tags=["client-request"])
 
-# Modelo de respuesta personalizado
+
+class Position(BaseModel):
+    lat: float
+    lng: float
 
 
 class ClientRequestResponse(BaseModel):
@@ -30,8 +32,8 @@ class ClientRequestResponse(BaseModel):
     client_rating: float | None = None
     driver_rating: float | None = None
     status: str
-    pickup_position: dict | None = None
-    destination_position: dict | None = None
+    pickup_position: Position | None = None
+    destination_position: Position | None = None
     created_at: str
     updated_at: str
 
@@ -39,6 +41,7 @@ class ClientRequestResponse(BaseModel):
 
 
 def wkb_to_coords(wkb):
+    from geoalchemy2.shape import to_shape
     if wkb is None:
         return None
     point = to_shape(wkb)
@@ -52,34 +55,18 @@ def get_time_and_distance(
     destination_lat: float,
     destination_lng: float
 ):
-    url = "https://maps.googleapis.com/maps/api/distancematrix/json"
-    params = {
-        "origins": f"{origin_lat},{origin_lng}",
-        "destinations": f"{destination_lat},{destination_lng}",
-        "units": "metric",
-        "key": settings.GOOGLE_API_KEY
-    }
     try:
-        response = requests.get(url, params=params)
-        if response.status_code != 200:
-            return JSONResponse(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                content={
-                    "message": f"Error en el API de Google Distance Matrix: {response.status_code}"}
-            )
-        data = response.json()
-        if data.get("status") != "OK":
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "message": f"Error en la respuesta del API de Google Distance Matrix: {data.get('status')}"}
-            )
-        return data
+        return get_time_and_distance_service(origin_lat, origin_lng, destination_lat, destination_lng)
     except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"message": str(e)}
-        )
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
+
+
+@router.get("/distance/prueba")
+def get_time_and_distance_prueba():
+    try:
+        return get_time_and_distance_prueba_service()
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
 
 @router.get("/nearby")
@@ -89,134 +76,61 @@ def get_nearby_client_requests(
     session=Depends(get_session)
 ):
     try:
-        # Crear el punto del conductor
-        driver_point = func.ST_GeomFromText(
-            f'POINT({driver_lng} {driver_lat})', 4326)
-        # Hora límite (últimos 7 días)
-        time_limit = datetime.now(timezone.utc) - timedelta(minutes=10080)  # 7 días en minutos
-        distance_limit = 5000
-        # Consulta ORM
-        base_query = (
-            session.query(
-                ClientRequest,
-                User.full_name,
-                User.country_code,
-                User.phone_number,
-                ST_Distance_Sphere(ClientRequest.pickup_position,
-                                   driver_point).label("distance"),
-                func.timestampdiff(
-                    text('MINUTE'),
-                    ClientRequest.updated_at,
-                    func.utc_timestamp()
-                ).label("time_difference")
+        results = get_nearby_client_requests_service(
+            driver_lat, driver_lng, session, wkb_to_coords)
+        if not results:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "message": f"No hay solicitudes de viaje activas en un radio de 5000 metros",
+                    "data": []
+                }
             )
-            .join(User, User.id == ClientRequest.id_client)
-            .filter(
-                ClientRequest.status == "CREATED",
-                ClientRequest.updated_at > time_limit
+        # Google Distance Matrix
+        pickup_positions = [
+            f"{r['pickup_position']['lat']},{r['pickup_position']['lng']}" for r in results]
+        origins = f"{driver_lat},{driver_lng}"
+        destinations = '|'.join(pickup_positions)
+        import requests
+        from app.core.config import settings
+        url = 'https://maps.googleapis.com/maps/api/distancematrix/json'
+        params = {
+            'destinations': destinations,
+            'origins': origins,
+            'units': 'metric',
+            'key': settings.GOOGLE_API_KEY,
+            'mode': 'driving'
+        }
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            return JSONResponse(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                content={
+                    "message": f"Error en el API de Google Distance Matrix: {response.status_code}"}
             )
-            .having(text(f"distance < {distance_limit}"))
-        )
-
-        results = []
-        try:
-            query_results = base_query.all()
-
-            if not query_results:
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "message": f"No hay solicitudes de viaje activas en un radio de {distance_limit} metros",
-                        "data": []
-                    }
-                )
-
-            for row in query_results:
-                try:
-                    cr, full_name, country_code, phone_number, distance, time_difference = row
-
-                    result = {
-                        "id": cr.id,
-                        "id_client": cr.id_client,
-                        "fare_offered": cr.fare_offered,
-                        "pickup_description": cr.pickup_description,
-                        "destination_description": cr.destination_description,
-                        "status": cr.status,
-                        "updated_at": cr.updated_at.isoformat(),
-                        "pickup_position": wkb_to_coords(cr.pickup_position),
-                        "destination_position": wkb_to_coords(cr.destination_position),
-                        "distance": float(distance) if distance is not None else None,
-                        "time_difference": int(time_difference) if time_difference is not None else None,
-                        "client": {
-                            "full_name": full_name,
-                            "country_code": country_code,
-                            "phone_number": phone_number
-                        }
-                    }
-                    results.append(result)
-                except Exception as e:
-                    continue
-
-            results_json = []
-            pickup_positions = []
-            for result in results:
-                results_json.append(result)
-                pickup_positions.append(
-                    f"{result['pickup_position']['lat']},{result['pickup_position']['lng']}"
-                )
-
-            origins = f"{driver_lat},{driver_lng}"
-            destinations = '|'.join(pickup_positions)
-            url = 'https://maps.googleapis.com/maps/api/distancematrix/json'
-            params = {
-                'destinations': destinations,
-                'origins': origins,
-                'units': 'metric',
-                'key': settings.GOOGLE_API_KEY,
-                'mode': 'driving'
-            }
-            
-            response = requests.get(url, params=params)
-            
-            if response.status_code != 200:
-                return JSONResponse(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    content={
-                        "message": f"Error en el API de Google Distance Matrix: {response.status_code}"}
-                )
-
-            google_data = response.json()
-            if google_data.get('status') != 'OK':
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "message": f"Error en la respuesta del API de Google Distance Matrix: {google_data.get('status')}"}
-                )
-
-            elements = google_data['rows'][0]['elements']
-            for index, element in enumerate(elements):
-                results_json[index]['google_distance_matrix'] = element
-
-            return JSONResponse(content=results_json, status_code=200)
-
-        except Exception as e:
-            raise
-
+        google_data = response.json()
+        if google_data.get('status') != 'OK':
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "message": f"Error en la respuesta del API de Google Distance Matrix: {google_data.get('status')}"}
+            )
+        elements = google_data['rows'][0]['elements']
+        for index, element in enumerate(elements):
+            results[index]['google_distance_matrix'] = element
+        return JSONResponse(content=results, status_code=200)
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}"
-        )
+            status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED)
-def create_request(request_data: ClientRequestCreate, request: Request, session: requests.Session = Depends(get_session)):
+def create_request(request_data: ClientRequestCreate, request: Request, session: Session = Depends(get_session)):
     try:
         user_id = request.state.user_id
         if hasattr(request_data, 'id_client'):
             request_data.id_client = user_id
-        print(f"DEBUG - id_client (user_id): {request_data.id_client}")
         db_obj = create_client_request(session, request_data)
-        # Serializar los campos geográficos
         response = {
             "id": db_obj.id,
             "id_client": db_obj.id_client,
@@ -246,20 +160,8 @@ def assign_driver(
     fare_assigned: float = Body(None),
     session: Session = Depends(get_session)
 ):
-    """Asigna un conductor a una solicitud de viaje"""
     try:
-        client_request = session.query(ClientRequest).filter(
-            ClientRequest.id == id).first()
-        if not client_request:
-            raise HTTPException(
-                status_code=404, detail="Solicitud no encontrada")
-        client_request.id_driver_assigned = id_driver_assigned
-        client_request.status = "ACCEPTED"
-        client_request.updated_at = datetime.utcnow()
-        if fare_assigned is not None:
-            client_request.fare_assigned = fare_assigned
-        session.commit()
-        return {"success": True, "message": "Conductor asignado correctamente"}
+        return assign_driver_service(session, id, id_driver_assigned, fare_assigned)
     except Exception as e:
         session.rollback()
         raise HTTPException(
@@ -273,15 +175,7 @@ def update_status(
     session: Session = Depends(get_session)
 ):
     try:
-        client_request = session.query(ClientRequest).filter(
-            ClientRequest.id == id_client_request).first()
-        if not client_request:
-            raise HTTPException(
-                status_code=404, detail="Solicitud no encontrada")
-        client_request.status = status
-        client_request.updated_at = datetime.utcnow()
-        session.commit()
-        return {"success": True, "message": "Status actualizado correctamente"}
+        return update_status_service(session, id_client_request, status)
     except Exception as e:
         session.rollback()
         raise HTTPException(
