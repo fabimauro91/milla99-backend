@@ -13,3 +13,5 @@ from .vehicle_info import VehicleInfo, VehicleInfoCreate, VehicleInfoUpdate
 from .vehicle_type import VehicleType, VehicleTypeCreate, VehicleTypeUpdate
 from .user import User, UserCreate, UserUpdate, UserRead
 from .driver_documents import DriverDocuments, DriverDocumentsCreate, DriverDocumentsUpdate
+from .driver_trip_offer import DriverTripOffer
+from .client_request import ClientRequest

@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import datetime
+from pydantic import BaseModel
 
 class VehicleTypeBase(SQLModel):
     name: str = Field(unique=True, index=True)
@@ -19,3 +20,11 @@ class VehicleTypeCreate(VehicleTypeBase):
 class VehicleTypeUpdate(SQLModel):
     name: Optional[str] = None
     capacity: Optional[int] = None
+
+class VehicleTypeRead(BaseModel):
+    id: int
+    name: str
+    capacity: int
+
+    class Config:
+        from_attributes = True

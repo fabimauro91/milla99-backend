@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, TYPE_CHECKING, List
 from datetime import date
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .user import User
@@ -38,3 +39,14 @@ class DriverInfoUpdate(SQLModel):
     birth_date: Optional[date] = None
     email: Optional[str] = None
     selfie_url: Optional[str] = None
+
+class DriverInfoRead(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    birth_date: date
+    email: Optional[str]
+    selfie_url: Optional[str]
+
+    class Config:
+        from_attributes = True

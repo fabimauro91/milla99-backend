@@ -3,6 +3,8 @@ from typing import Optional, List, TYPE_CHECKING
 from datetime import date, datetime
 from enum import Enum
 from .vehicle_type import VehicleType
+from pydantic import BaseModel
+from app.models.vehicle_type import VehicleType, VehicleTypeRead
 
 if TYPE_CHECKING:
     from .driver_info import DriverInfo
@@ -41,3 +43,16 @@ class VehicleInfoUpdate(SQLModel):
     color: Optional[str] = None
     plate: Optional[str] = None
     vehicle_type_id: Optional[int] = None
+
+
+class VehicleInfoRead(BaseModel):
+    id: int
+    brand: str
+    model: str
+    model_year: int
+    color: str
+    plate: str
+    vehicle_type: Optional[VehicleTypeRead] = None
+
+    class Config:
+        from_attributes = True
