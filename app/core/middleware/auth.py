@@ -23,6 +23,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/driver-trip-offers/","POST"), # Rutas de driver-trip-offers
             ("/driver-trip-offers/", "GET"), # Rutas de driver-trip-offers
             ("/client-request/distance", "GET"), # Rutas de client-request
+            ("/static/uploads/drivers/", "GET"),
+            ("/drivers-position/", "POST"),  # Rutas de drivers-position
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

@@ -17,6 +17,9 @@ from app.models.driver import DriverDocumentsInput
 from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
+from app.utils.uploads import uploader
+import shutil
+import os
 
 
 def init_roles():
@@ -334,17 +337,23 @@ def init_demo_driver():
         driver_info = session.exec(select(DriverInfo).where(
             DriverInfo.user_id == user.id)).first()
         if not driver_info:
+            selfie_rel = f"drivers/{user.id}/selfie/demo_selfie.jpg"
+            selfie_url = uploader.get_file_url(selfie_rel)
             driver_info = DriverInfo(
                 user_id=user.id,
                 first_name="John",
                 last_name="Doe",
                 birth_date=date(1990, 1, 1),
                 email="john@example.com",
-                selfie_url="/img/demo/front foto.jpg"
+                selfie_url=selfie_url
             )
             session.add(driver_info)
             session.commit()
             session.refresh(driver_info)
+            # Copiar selfie demo
+            selfie_dest = os.path.join("static/uploads", selfie_rel)
+            os.makedirs(os.path.dirname(selfie_dest), exist_ok=True)
+            shutil.copyfile("img/demo/front foto.jpg", selfie_dest)
 
         # 4. Crear o buscar VehicleInfo
         vehicle_type = session.exec(select(VehicleType).where(
@@ -375,30 +384,30 @@ def init_demo_driver():
         card_type = session.exec(select(DocumentType).where(
             DocumentType.name == "property_card")).first()
 
-        # 6. Crear documentos demo
+        # 6. Crear documentos demo con rutas reales y URLs completas
         demo_docs = [
             {
                 "doc_type": license_type,
-                "front_url": "/img/demo/front foto.jpg",
-                "back_url": "/img/demo/back foto.jpg",
+                "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/license/demo_license_front.jpg"),
+                "back_url": uploader.get_file_url(f"drivers/{driver_info.id}/license/demo_license_back.jpg"),
                 "expiration_date": date(2025, 1, 1)
             },
             {
                 "doc_type": soat_type,
-                "front_url": "/img/demo/front foto.jpg",
+                "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/soat/demo_soat_front.jpg"),
                 "back_url": None,
                 "expiration_date": date(2024, 12, 31)
             },
             {
                 "doc_type": tech_type,
-                "front_url": "/img/demo/front foto.jpg",
+                "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/technical_inspections/demo_tech_front.jpg"),
                 "back_url": None,
                 "expiration_date": date(2024, 12, 31)
             },
             {
                 "doc_type": card_type,
-                "front_url": "/img/demo/front foto.jpg",
-                "back_url": "/img/demo/back foto.jpg",
+                "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/property_card/demo_card_front.jpg"),
+                "back_url": uploader.get_file_url(f"drivers/{driver_info.id}/property_card/demo_card_back.jpg"),
                 "expiration_date": date(2025, 12, 31)
             }
         ]
@@ -422,6 +431,17 @@ def init_demo_driver():
                         vehicle_info_id=vehicle_info.id
                     )
                     session.add(new_doc)
+                    # Copiar archivo demo si no existe
+                    if doc["front_url"]:
+                        dest_path = os.path.join(
+                            "static/uploads", doc["front_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        shutil.copyfile("img/demo/front foto.jpg", dest_path)
+                    if doc["back_url"]:
+                        dest_path = os.path.join(
+                            "static/uploads", doc["back_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        shutil.copyfile("img/demo/back foto.jpg", dest_path)
         session.commit()
 
 
