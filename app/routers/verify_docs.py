@@ -10,7 +10,7 @@ from app.services.verify_docs_service import VerifyDocsService, UserWithDocs, Us
 
 
 
-router = APIRouter(prefix="/verify-docs", tags=["document verification - ADMIN"])
+router = APIRouter(prefix="/verify-docs", tags=["ADMIN: document verification"])
 
 @router.get("/pending", response_model=List[UserWithDocs])
 def get_users_with_pending_docs(

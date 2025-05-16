@@ -5,8 +5,7 @@ from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Relationship, Column, Integer, ForeignKey
 
 
-class TimeDistanceValue(SQLModel, table=True):
-    __tablename__ = "time_and_distance_value"
+class VehicleTypeConfiguration(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     km_value: float = Field(..., nullable=False)
     min_value: float = Field(..., nullable=False)
@@ -27,10 +26,10 @@ class TimeDistanceValue(SQLModel, table=True):
             nullable=False
         )
     )
-    vehicle_type: Optional["VehicleType"] = Relationship(back_populates="time_distance_value")
+    vehicle_type: Optional["VehicleType"] = Relationship(back_populates="vehicle_type_configuration")
 
 class CalculateFareRequest(BaseModel):
-    fare_id: int
+    type_vehicle_id: int
     origin_lat: float
     origin_lng: float
     destination_lat: float
@@ -45,19 +44,19 @@ class FareCalculationResponse(BaseModel):
     duration: str
 
 
-class TimeDistanceValueCreate(BaseModel):
+class VehicleTypeConfigurationCreate(BaseModel):
     km_value: float
     min_value: float
     tarifa_value: Optional[float] = None
     weight_value: Optional[float] = None
 
-class TimeDistanceValueUpdate(BaseModel):
+class VehicleTypeConfigurationUpdate(BaseModel):
     km_value: Optional[float] = None
     min_value: Optional[float] = None
     tarifa_value: Optional[float] = None
     weight_value: Optional[float] = None
 
-class TimeDistanceValueResponse(BaseModel):
+class VehicleTypeConfigurationResponse(BaseModel):
     id: int
     km_value: float
     min_value: float

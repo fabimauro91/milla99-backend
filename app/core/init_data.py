@@ -19,7 +19,7 @@ from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
 from app.utils.uploads import uploader
 import shutil
 import os
-from app.models.time_distance_value import TimeDistanceValue
+from app.models.vehicle_type_configuration import VehicleTypeConfiguration
 
 
 def init_roles():
@@ -133,20 +133,20 @@ def init_vehicle_types(engine):
 def init_time_distance_values(engine, vehicle_types):
     with Session(engine) as session:
         # Verificar si ya existen registros
-        existing_values = session.exec(select(TimeDistanceValue)).all()
+        existing_values = session.exec(select(VehicleTypeConfiguration)).all()
         if existing_values:
             return
 
         # Crear valores iniciales y asociarlos a VehicleType
         time_distance_values = [
-            TimeDistanceValue(
+            VehicleTypeConfiguration(
                 km_value=1200.0,
                 min_value=150.0,
                 tarifa_value=6000.0,
                 weight_value=350.5,
                 vehicle_type_id=vehicle_types[0].id  # Asociar al primer VehicleType (car)
             ),
-            TimeDistanceValue(
+            VehicleTypeConfiguration(
                 km_value=800.0,
                 min_value=100.0,
                 tarifa_value=3000.0,
@@ -499,36 +499,6 @@ def init_demo_driver():
                         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                         shutil.copyfile("img/demo/back foto.jpg", dest_path)
         session.commit()
-
-
-# def init_time_distance_values():
-#     with Session(engine) as session:
-#         # Verificar si ya existen registros
-#         existing_values = session.exec(select(TimeDistanceValue)).all()
-#         if existing_values:
-#             return
-
-#         # Crear valores iniciales
-#         time_distance_values = [
-#             TimeDistanceValue(
-#                 km_value=800.0,    # Valor por kilómetro
-#                 min_value=100.0,    # Valor por minuto
-#                 tarifa_value=3000.0,  # Tarifa mínima
-#                 weight_value=350.0     # Peso base
-#             ),
-#             TimeDistanceValue(
-#                 km_value=1200.0,    # Valor por kilómetro para otra tarifa
-#                 min_value=150.0,    # Valor por minuto para otra tarifa
-#                 tarifa_value=6000.0,  # Tarifa mínima para otra tarifa
-#                 weight_value=350.5     # Peso para otra tarifa
-#             )
-#         ]
-
-#         for value in time_distance_values:
-#             session.add(value)
-
-#         session.commit()
-
 
 def init_data():
     init_roles()

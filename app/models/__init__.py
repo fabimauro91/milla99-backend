@@ -14,5 +14,5 @@ from .user import User, UserCreate, UserUpdate, UserRead
 from .driver_documents import DriverDocuments, DriverDocumentsCreate, DriverDocumentsUpdate
 from .client_request import ClientRequest, ClientRequestCreate
 from .driver_position import DriverPosition
-from .time_distance_value import TimeDistanceValue,TimeDistanceValueCreate,TimeDistanceValueUpdate,TimeDistanceValueResponse
+from .vehicle_type_configuration import VehicleTypeConfiguration, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 from .driver_trip_offer import DriverTripOfferCreate, DriverTripOffer
