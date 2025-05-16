@@ -199,7 +199,7 @@ def init_driver_documents():
                     id_user=driver.id,
                     id_rol=driver_role.id,
                     is_verified=True,
-                    status=RoleStatus.PENDING,
+                    status=RoleStatus.APPROVED,
                     verified_at=datetime.utcnow()
                 )
                 session.add(user_has_role)

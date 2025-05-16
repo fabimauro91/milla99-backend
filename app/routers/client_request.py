@@ -243,6 +243,8 @@ def assign_driver(
     """
     try:
         return assign_driver_service(session, id, id_driver_assigned, fare_assigned)
+    except HTTPException as e:
+        raise e
     except Exception as e:
         session.rollback()
         raise HTTPException(

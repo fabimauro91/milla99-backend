@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from fastapi import HTTPException, status
 from app.core.config import settings
-from app.models.user_has_roles import UserHasRole
+from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.driver_info import DriverInfo
 from app.models.vehicle_info import VehicleInfo
 from sqlalchemy.orm import selectinload
@@ -130,17 +130,39 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
 
 
 def assign_driver_service(session: Session, id: int, id_driver_assigned: int, fare_assigned: float = None):
-    client_request = session.query(ClientRequest).filter(
-        ClientRequest.id == id).first()
-    if not client_request:
-        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    client_request.id_driver_assigned = id_driver_assigned
-    client_request.status = "ACCEPTED"
-    client_request.updated_at = datetime.utcnow()
-    if fare_assigned is not None:
-        client_request.fare_assigned = fare_assigned
-    session.commit()
-    return {"success": True, "message": "Conductor asignado correctamente"}
+    # Validación: El conductor debe tener el rol DRIVER y status APPROVED
+    try:
+        user_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == id_driver_assigned,
+            UserHasRole.id_rol == "DRIVER"
+        ).first()
+
+        print("DEBUG user_role:", user_role)
+        if user_role:
+            print("DEBUG user_role.status:", user_role.status)
+
+        if not user_role or user_role.status != RoleStatus.APPROVED:
+            print("DEBUG: No tiene rol DRIVER aprobado")
+            raise HTTPException(
+                status_code=400,
+                detail="El usuario no tiene el rol de conductor aprobado. No se puede asignar como conductor."
+            )
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == id).first()
+        if not client_request:
+            raise HTTPException(
+                status_code=404, detail="Solicitud no encontrada")
+        client_request.id_driver_assigned = id_driver_assigned
+        client_request.status = "ACCEPTED"
+        client_request.updated_at = datetime.utcnow()
+        if fare_assigned is not None:
+            client_request.fare_assigned = fare_assigned
+        session.commit()
+        return {"success": True, "message": "Conductor asignado correctamente"}
+    except Exception as e:
+        print("TRACEBACK:")
+        print(traceback.format_exc())
+        raise
 
 
 def update_status_service(session: Session, id_client_request: int, status: str):
