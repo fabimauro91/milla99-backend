@@ -30,7 +30,7 @@ def get_user(user_id: int, request: Request, session: SessionDep):
     return service.get_user(user_id)
 
 # Update user endpoint (protegida)
-@router.patch("/{user_id}", response_model=User)
+#@router.patch("/{user_id}", response_model=User)
 def update_user(
     user_id: int,
     user_data: UserUpdate,
@@ -42,13 +42,13 @@ def update_user(
     return service.update_user(user_id, user_data)
 
 # Delete user endpoint (protegida)
-@router.delete("/{user_id}", status_code=status.HTTP_200_OK)
+#@router.delete("/{user_id}", status_code=status.HTTP_200_OK)
 def delete_user(user_id: int, request: Request, session: SessionDep):
     service = UserService(session)
     return service.delete_user(user_id)
 
 # Verify user endpoint (protegida)
-@router.patch("/{user_id}/verify", response_model=User)
+#@router.patch("/{user_id}/verify", response_model=User)
 async def verify_user(user_id: int, request: Request, session: SessionDep):
     service = UserService(session)
     return service.verify_user(user_id)

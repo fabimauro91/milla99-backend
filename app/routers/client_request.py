@@ -5,7 +5,6 @@ from app.models.client_request import ClientRequest, ClientRequestCreate
 from app.services.client_requests_service import (
     create_client_request,
     get_time_and_distance_service,
-    get_time_and_distance_prueba_service,
     get_nearby_client_requests_service,
     assign_driver_service,
     update_status_service
@@ -81,18 +80,6 @@ def get_time_and_distance(
     except Exception as e:
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
-
-@router.get("/distance/prueba")
-def get_time_and_distance_prueba():
-    """
-    Endpoint de prueba para consultar distancia y tiempo entre Boston y Nueva York usando Google Distance Matrix API.
-    Returns:
-        Respuesta JSON de Google Distance Matrix
-    """
-    try:
-        return get_time_and_distance_prueba_service()
-    except Exception as e:
-        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
 
 @router.get("/nearby")

@@ -19,12 +19,15 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/openapi.json", "GET"),  # Esquema OpenAPI - AQUÍ FALTABA LA COMA
             ("/verify-docs/","GET"), # Rutas de verify-docs
             ("/verify-docs/","POST"),
-            ("/drivers-position/","POST"), # Rutas de drivers-position
-            ("/driver-trip-offers/","POST"), # Rutas de driver-trip-offers
-            ("/driver-trip-offers/", "GET"), # Rutas de driver-trip-offers
-            ("/client-request/", "GET"), # Rutas de client-request
-            ("/static/uploads/drivers/", "GET"),
-            ("/drivers-position/", "POST"),  # Rutas de drivers-position
+            ("/drivers-position/","POST"), # Rutas POST de drivers-position
+            ("/drivers-position/","GET"), # Rutas GET de drivers-position
+            ("/drivers-position/","DELETE"), # Rutas DELETE de drivers-position
+            ("/driver-trip-offers/","POST"), # Rutas POST de driver-trip-offers
+            ("/driver-trip-offers/", "GET"), # Rutas GET de driver-trip-offers
+            ("/client-request/", "GET"), # Rutas GET de client-request
+            ("/client-request/", "POST"), # Rutas POST de client-request
+            ("/client-request/","PATCH"), # Rutas GET de client-request/distance
+            ("/static/uploads/drivers/", "GET")
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

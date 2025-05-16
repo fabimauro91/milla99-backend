@@ -2,13 +2,13 @@ import socketio
 import json
 
 # Configura Redis como message manager
-# mgr = socketio.AsyncRedisManager('redis://localhost:6379/0')
-# sio = socketio.AsyncServer(
-#     async_mode='asgi',
-#     client_manager=mgr,
-#     cors_allowed_origins='*'
-# )
-sio = socketio.AsyncServer(async_mode='asgi')
+mgr = socketio.AsyncRedisManager('redis://localhost:6379/0')
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    client_manager=mgr,
+    cors_allowed_origins='*'
+)
+#sio = socketio.AsyncServer(async_mode='asgi')
 
 @sio.event
 async def connect(sid, environ):
@@ -44,3 +44,75 @@ async def change_driver_position(sid, data):
             'lng': data['lng']
         }
     ) 
+
+@sio.event
+async def new_client_request(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'El cliente emitio una nueva solicitud de servicio en socket: {sid}: {data}')
+    await sio.emit(
+        'created_client_request',
+        {
+            'id_socket': sid,
+            'id_client_request': data['id_client_request'],
+        }
+    ) 
+
+@sio.event
+async def new_driver_offer(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'El conductor emitio una nueva oferta de servicio en socket: {sid}: {data}')
+    await sio.emit(
+        f'created_driver_offer/{data["id_client_request"]}',
+        {
+            'id_socket': sid
+        }
+    ) 
+
+@sio.event
+async def new_driver_assigned(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'El cliente emitio una nueva asignacion de conductor en socket: {sid}: {data}')
+    await sio.emit(
+        f'driver_assigned/{data["id_driver"]}',
+        {
+            'id_socket': sid,
+            "id_client_request": data["id_client_request"]
+        }
+    ) 
+
+@sio.event
+async def trip_change_driver_position(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'El conductor actualizo su posicion en el socket: {sid}: {data}')
+    await sio.emit(
+        f'trip_new_driver_position/{data["id_client"]}',
+        {
+            'id_socket': sid,
+            'lat': data['lat'],
+            'lng': data['lng']
+        }
+    ) 
+
+@sio.event
+async def update_status_trip(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'Se actualizo el estado de la viaje en el socket: {sid}: {data}')
+    await sio.emit(
+        f'new_status_trip/{data["id_client_request"]}',
+        {
+            'id_socket': sid,
+            'status': data['status'],
+            'id_client_request': data['id_client_request']
+        }
+    ) 
+

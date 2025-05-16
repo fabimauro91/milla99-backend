@@ -52,24 +52,6 @@ def get_time_and_distance_service(origin_lat, origin_lng, destination_lat, desti
     return data
 
 
-def get_time_and_distance_prueba_service():
-    url = "https://maps.googleapis.com/maps/api/distancematrix/json"
-    params = {
-        "origins": "Boston, Massachusetts, EE. UU.",
-        "destinations": "Nueva York, EE. UU.",
-        "units": "metric",
-        "key": settings.GOOGLE_API_KEY
-    }
-    response = requests.get(url, params=params)
-    if response.status_code != 200:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"Error en el API de Google Distance Matrix: {response.status_code}")
-    data = response.json()
-    if data.get("status") != "OK":
-        raise HTTPException(status_code=status.HTTP_200_OK,
-                            detail=f"Error en la respuesta del API de Google Distance Matrix: {data.get('status')}")
-    return data
-
 
 def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session, wkb_to_coords):
     driver_point = func.ST_GeomFromText(

@@ -53,11 +53,10 @@ fastapi_app.add_middleware(JWTAuthMiddleware)
 fastapi_app.include_router(users.router)
 fastapi_app.include_router(auth.router)
 fastapi_app.include_router(drivers.router)
-fastapi_app.include_router(verify_docs.router)
 fastapi_app.include_router(client_request.router)
-fastapi_app.include_router(driver_position.router)
 fastapi_app.include_router(driver_trip_offer.router)
-fastapi_app.include_router(client_request.router)
+fastapi_app.include_router(driver_position.router)
+fastapi_app.include_router(verify_docs.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

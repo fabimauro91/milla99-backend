@@ -15,14 +15,15 @@ class DriverPosition(SQLModel, table=True):
     user: Optional["User"] = Relationship(back_populates="driver_position")
 
 class DriverPositionCreate(BaseModel):
-    id_driver: int
-    lat: float
-    lng: float
+    id_driver: int = Field(..., description="ID único del conductor. Ejemplo: 123")
+    lat: float = Field(..., description="Latitud donde se encuentra el conductor. Ejemplo: 4.710989")
+    lng: float = Field(..., description="Longitud donde se encuentra el conductor. Ejemplo: -74.072092")
 
 class DriverPositionRead(BaseModel):
-    id_driver: int
-    lat: float
-    lng: float
+    id_driver: int = Field(..., description="ID único del conductor. Ejemplo: 123")
+    lat: float = Field(..., description="Latitud de la posición del conductor. Ejemplo: 4.710989")
+    lng: float = Field(..., description="Longitud de la posición del conductor. Ejemplo: -74.072092")
+    distance_km: Optional[float] = Field(None, description="Distancia al punto de búsqueda en kilómetros. Ejemplo: 2.35")
 
     @classmethod
     def from_orm_with_point(cls, obj):
