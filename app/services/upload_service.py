@@ -239,13 +239,14 @@ class UploadService:
                 detail=f"El archivo es demasiado grande. Máximo permitido: {max_size // (1024*1024)}MB"
             )
 
-        # Construir ruta: static/uploads/driver/{driver_id}/{document_type}/{side}_{uuid}.{ext}
+        # Construir ruta: static/uploads/drivers/{driver_id}/{document_type}/{side}_{uuid}.{ext}
         folder = f"static/uploads/drivers/{driver_id}/{document_type}"
         Path(folder).mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_name = f"{side + '_' if side else ''}{timestamp}_{uuid.uuid4().hex}{file_ext}"
         file_path = os.path.join(folder, unique_name)
-        relative_url = f"/{folder}/{unique_name}"
+        # La ruta relativa NO debe incluir /static/uploads/
+        relative_url = os.path.relpath(file_path, "static/uploads")
 
         # Guardar el archivo
         try:

@@ -134,6 +134,7 @@ class DriverInfoRead(BaseModel):
     birth_date: date
     email: Optional[str]
     selfie_url: str
+    vehicle_info: Optional[VehicleInfoRead] = None
 
 class UserRead(BaseModel):
     id: int
@@ -143,7 +144,6 @@ class UserRead(BaseModel):
     is_active: bool
     full_name: Optional[str]
     roles: List[RoleRead]
-    vehicle_info: Optional[VehicleInfoRead] = None
     driver_info: Optional[DriverInfoRead] = None
 
     class Config:
@@ -154,8 +154,6 @@ class UserInDB(UserBase):
     id: int
     is_active: bool
     is_verified_phone: bool
-    created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -165,8 +163,6 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     is_verified_phone: bool
-    created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True

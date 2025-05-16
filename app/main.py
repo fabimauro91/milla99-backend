@@ -4,9 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi.staticfiles import StaticFiles
 
+
 from .core.db import create_all_tables
 from .routers import users, drivers, auth
-from .routers import  users, drivers, auth, verify_docs, driver_position,time_distance
+from .routers import  users, drivers, auth, verify_docs, driver_position,time_distance, driver_trip_offer, client_request
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
@@ -18,7 +19,7 @@ import socketio
 async def lifespan(app: FastAPI):
     # Código que se ejecuta al iniciar la aplicación
     import secrets
-    print(secrets.token_hex(32))
+    # print(secrets.token_hex(32))
     print("Iniciando la aplicación...")
     # Crear las tablas
     for _ in create_all_tables(app):
@@ -54,8 +55,11 @@ fastapi_app.include_router(users.router)
 fastapi_app.include_router(auth.router)
 fastapi_app.include_router(drivers.router)
 fastapi_app.include_router(verify_docs.router)
+fastapi_app.include_router(client_request.router)
 fastapi_app.include_router(driver_position.router)
 fastapi_app.include_router(time_distance.router)
+fastapi_app.include_router(driver_trip_offer.router)
+fastapi_app.include_router(client_request.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
