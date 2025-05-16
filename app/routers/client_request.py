@@ -289,10 +289,9 @@ def update_status(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
 
 
-@router.get("/")
+@router.get("/{client_request_id}")
 def get_client_request_detail(
-    client_request_id: int = Query(...,
-                                   description="ID de la solicitud de viaje"),
+    client_request_id: int,
     session: Session = Depends(get_session)
 ):
     """
