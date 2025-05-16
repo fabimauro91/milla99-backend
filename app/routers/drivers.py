@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, Path
 from sqlmodel import Session
 from typing import List, Optional
 from fastapi.responses import JSONResponse
@@ -377,3 +377,15 @@ async def update_driver(
                 vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
         )
     )
+
+
+@router.get("/{driver_id}")
+def get_driver_detail(
+    driver_id: int = Path(..., description="ID único del conductor"),
+    session: Session = Depends(get_session)
+):
+    """
+    Devuelve la información personal, de usuario y del vehículo de un conductor dado su driver_id.
+    """
+    service = DriverService(session)
+    return service.get_driver_detail_service(session, driver_id)

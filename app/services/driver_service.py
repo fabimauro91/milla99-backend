@@ -283,3 +283,53 @@ class DriverService:
                 )
             )
             return response
+
+    def get_driver_detail_service(self, session: Session, driver_id: int):
+        """
+        Devuelve la información personal, de usuario y del vehículo de un conductor dado su driver_id.
+        """
+        from app.models.driver_info import DriverInfo
+        from app.models.user import User
+        from app.models.vehicle_info import VehicleInfo
+        from sqlalchemy import select
+
+        driver_info = session.get(DriverInfo, driver_id)
+        if not driver_info:
+            raise HTTPException(
+                status_code=404, detail="DriverInfo no encontrado")
+
+        # Obtener el usuario asociado
+        user = session.get(User, driver_info.user_id)
+        user_data = {
+            "id": user.id,
+            "full_name": user.full_name,
+            "country_code": user.country_code,
+            "phone_number": user.phone_number
+        } if user else None
+
+        # Obtener el vehículo asociado
+        vehicle_info = session.exec(
+            select(VehicleInfo).where(
+                VehicleInfo.driver_info_id == driver_info.id)
+        ).scalars().first()
+
+        vehicle_data = {
+            "brand": vehicle_info.brand,
+            "model": vehicle_info.model,
+            "model_year": vehicle_info.model_year,
+            "color": vehicle_info.color,
+            "plate": vehicle_info.plate,
+            "vehicle_type_id": vehicle_info.vehicle_type_id
+        } if vehicle_info else None
+
+        return {
+            "user": user_data,
+            "driver_info": {
+                "id": driver_info.id,
+                "first_name": driver_info.first_name,
+                "last_name": driver_info.last_name,
+                "email": driver_info.email,
+                "selfie_url": driver_info.selfie_url
+            },
+            "vehicle_info": vehicle_data
+        }
