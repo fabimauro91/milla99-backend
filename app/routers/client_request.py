@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Body
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Body, Path
 from fastapi.responses import JSONResponse
 from app.core.db import get_session
-from app.models.client_request import ClientRequest, ClientRequestCreate
+from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
 from app.services.client_requests_service import (
     create_client_request,
     get_time_and_distance_service,
@@ -9,7 +9,8 @@ from app.services.client_requests_service import (
     get_nearby_client_requests_service,
     assign_driver_service,
     update_status_service,
-    get_client_request_detail_service
+    get_client_request_detail_service,
+    get_client_requests_by_status_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -298,3 +299,20 @@ def get_client_request_detail(
     Consulta el estado y la información detallada de una Client Request específica.
     """
     return get_client_request_detail_service(session, client_request_id)
+
+
+@router.get("/by-status/{status}")
+def get_client_requests_by_status(
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
+    session: Session = Depends(get_session)
+):
+    """
+    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    """
+    # Validar que el status sea uno de los permitidos
+    if status not in StatusEnum.__members__:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
+        )
+    return get_client_requests_by_status_service(session, status)

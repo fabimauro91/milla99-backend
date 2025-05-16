@@ -238,3 +238,30 @@ def get_client_request_detail_service(session: Session, client_request_id: int):
         "driver_info": driver_info,
         "vehicle_info": vehicle_info
     }
+
+
+def get_client_requests_by_status_service(session: Session, status: str):
+    """
+    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    """
+    from app.models.client_request import ClientRequest
+    results = session.query(ClientRequest).filter(
+        ClientRequest.status == status).all()
+    # Puedes personalizar la respuesta según lo que quieras mostrar
+    return [
+        {
+            "id": cr.id,
+            "id_client": cr.id_client,
+            "id_driver_assigned": cr.id_driver_assigned,
+            "fare_offered": cr.fare_offered,
+            "fare_assigned": cr.fare_assigned,
+            "pickup_description": cr.pickup_description,
+            "destination_description": cr.destination_description,
+            "client_rating": cr.client_rating,
+            "driver_rating": cr.driver_rating,
+            "status": str(cr.status),
+            "created_at": cr.created_at.isoformat(),
+            "updated_at": cr.updated_at.isoformat()
+        }
+        for cr in results
+    ]
