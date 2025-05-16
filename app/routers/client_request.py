@@ -14,6 +14,7 @@ from app.services.client_requests_service import (
 from sqlalchemy.orm import Session
 import traceback
 from pydantic import BaseModel
+from app.models.user_has_roles import UserHasRole, RoleStatus
 
 router = APIRouter(prefix="/client-request", tags=["client-request"])
 
@@ -193,6 +194,18 @@ def create_request(
     """
     try:
         user_id = request.state.user_id
+
+        # Validación: El usuario debe tener el rol CLIENT y status APPROVED
+        user_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == user_id,
+            UserHasRole.id_rol == "CLIENT"
+        ).first()
+        if not user_role or user_role.status != RoleStatus.APPROVED:
+            raise HTTPException(
+                status_code=400,
+                detail="El usuario no tiene el rol de cliente aprobado. No puede crear solicitudes."
+            )
+
         if hasattr(request_data, 'id_client'):
             request_data.id_client = user_id
         db_obj = create_client_request(session, request_data)
@@ -215,7 +228,8 @@ def create_request(
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(
-            status_code=500, detail=f"Error al crear la solicitud de viaje: {str(e)}")
+            status_code=500, detail=f"Error al crear la solicitud de viaje: {str(e)}"
+        )
 
 
 @router.patch("/updateDriverAssigned")
