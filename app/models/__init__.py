@@ -13,3 +13,4 @@ from .vehicle_type import VehicleType, VehicleTypeCreate, VehicleTypeUpdate
 from .user import User, UserCreate, UserUpdate, UserRead
 from .driver_documents import DriverDocuments, DriverDocumentsCreate, DriverDocumentsUpdate
 from .driver_position import DriverPosition
+from .time_distance_value import TimeDistanceValue,TimeDistanceValueCreate,TimeDistanceValueUpdate,TimeDistanceValueResponse

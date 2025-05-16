@@ -17,6 +17,7 @@ from app.models.driver import DriverDocumentsInput
 from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
+from app.models.time_distance_value import TimeDistanceValue
 
 
 def init_roles():
@@ -425,6 +426,35 @@ def init_demo_driver():
         session.commit()
 
 
+def init_time_distance_values():
+    with Session(engine) as session:
+        # Verificar si ya existen registros
+        existing_values = session.exec(select(TimeDistanceValue)).all()
+        if existing_values:
+            return
+
+        # Crear valores iniciales
+        time_distance_values = [
+            TimeDistanceValue(
+                km_value=800.0,    # Valor por kilómetro
+                min_value=100.0,    # Valor por minuto
+                tarifa_value=3000.0,  # Tarifa mínima
+                weight_value=350.0     # Peso base
+            ),
+            TimeDistanceValue(
+                km_value=1200.0,    # Valor por kilómetro para otra tarifa
+                min_value=150.0,    # Valor por minuto para otra tarifa
+                tarifa_value=6000.0,  # Tarifa mínima para otra tarifa
+                weight_value=350.5     # Peso para otra tarifa
+            )
+        ]
+
+        for value in time_distance_values:
+            session.add(value)
+
+        session.commit()
+
+
 def init_data():
     init_roles()
     init_document_types()
@@ -433,3 +463,4 @@ def init_data():
     init_driver_documents()
     init_vehicle_types()
     init_demo_driver()
+    init_time_distance_values()
