@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from app.models.client_request import ClientRequest, ClientRequestCreate
+from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
 from app.models.user import User
 from sqlalchemy import func, text
 from geoalchemy2.functions import ST_Distance_Sphere
@@ -9,6 +9,11 @@ from datetime import datetime, timedelta, timezone
 import requests
 from fastapi import HTTPException, status
 from app.core.config import settings
+from app.models.user_has_roles import UserHasRole
+from app.models.driver_info import DriverInfo
+from app.models.vehicle_info import VehicleInfo
+from sqlalchemy.orm import selectinload
+import traceback
 
 
 def create_client_request(db: Session, data: ClientRequestCreate):
@@ -147,3 +152,77 @@ def update_status_service(session: Session, id_client_request: int, status: str)
     client_request.updated_at = datetime.utcnow()
     session.commit()
     return {"success": True, "message": "Status actualizado correctamente"}
+
+
+def get_driver_vehicle_info_service(session: Session, driver_id: int, user_id: int):
+    """
+    Obtiene la información del vehículo de un conductor.
+    Verifica que el conductor esté asignado a alguna solicitud activa.
+    """
+    try:
+        # Verificar si el conductor está asignado a alguna solicitud activa
+        active_request = session.query(ClientRequest).filter(
+            ClientRequest.id_driver_assigned == driver_id,
+            ClientRequest.status.in_([
+                StatusEnum.ACCEPTED,
+                StatusEnum.ON_THE_WAY,
+                StatusEnum.ARRIVED,
+                StatusEnum.TRAVELLING
+            ])
+        ).first()
+
+        if not active_request:
+            print("DEBUG: No active request found for driver_id", driver_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No se encontró ninguna solicitud activa asignada a este conductor"
+            )
+
+        # Obtener la información del conductor y su vehículo
+        driver = session.query(User).options(
+            selectinload(User.driver_info).selectinload(
+                DriverInfo.vehicle_info)
+        ).filter(User.id == driver_id).first()
+
+        print("DEBUG driver:", driver)
+        print("DEBUG driver_info:", getattr(driver, 'driver_info', None))
+        if getattr(driver, 'driver_info', None):
+            print("DEBUG vehicle_info:", getattr(
+                driver.driver_info, 'vehicle_info', None))
+
+        if not driver:
+            print("DEBUG: No driver found with id", driver_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conductor no encontrado"
+            )
+
+        if not driver.driver_info or not driver.driver_info.vehicle_info:
+            print("DEBUG: Falta driver_info o vehicle_info para el driver", driver_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El conductor no tiene información de vehículo registrada"
+            )
+
+        return {
+            "request_id": active_request.id,
+            "request_status": str(active_request.status),
+            "driver": {
+                "id": driver.id,
+                "full_name": driver.full_name,
+                "phone_number": driver.phone_number,
+                "country_code": driver.country_code
+            },
+            "vehicle_info": {
+                "brand": driver.driver_info.vehicle_info.brand,
+                "model": driver.driver_info.vehicle_info.model,
+                "model_year": driver.driver_info.vehicle_info.model_year,
+                "color": driver.driver_info.vehicle_info.color,
+                "plate": driver.driver_info.vehicle_info.plate,
+                "vehicle_type_id": driver.driver_info.vehicle_info.vehicle_type_id
+            }
+        }
+    except Exception as e:
+        print("TRACEBACK:")
+        print(traceback.format_exc())
+        raise
