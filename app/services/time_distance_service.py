@@ -1,33 +1,34 @@
 from typing import Optional, Dict, Any
 from datetime import datetime
 from sqlmodel import Session, select
-from app.models.time_distance_value import TimeDistanceValue,GoogleData, FareCalculationResponse 
+from app.models.time_distance_value import TimeDistanceValue, FareCalculationResponse 
+import requests
 
 
 class TimeDistanceValueService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_time_distance_value(
-        self,
-        km_value: float,
-        min_value: float,
-        tarifa_value: Optional[float] = None,
-        weight_value: Optional[float] = None
-    ) -> TimeDistanceValue:
-        """
-        Crea un nuevo registro de TimeDistanceValue
-        """
-        time_distance_value = TimeDistanceValue(
-            km_value=km_value,
-            min_value=min_value,
-            tarifa_value=tarifa_value,
-            weight_value=weight_value
-        )
-        self.session.add(time_distance_value)
-        self.session.commit()
-        self.session.refresh(time_distance_value)
-        return time_distance_value
+    # def create_time_distance_value(
+    #     self,
+    #     km_value: float,
+    #     min_value: float,
+    #     tarifa_value: Optional[float] = None,
+    #     weight_value: Optional[float] = None
+    # ) -> TimeDistanceValue:
+    #     """
+    #     Crea un nuevo registro de TimeDistanceValue
+    #     """ 
+    #     time_distance_value = TimeDistanceValue(
+    #         km_value=km_value,
+    #         min_value=min_value,
+    #         tarifa_value=tarifa_value,
+    #         weight_value=weight_value
+    #     )
+    #     self.session.add(time_distance_value)
+    #     self.session.commit()
+    #     self.session.refresh(time_distance_value)
+    #     return time_distance_value
 
     def get_time_distance_value_by_id(self, id: int) -> Optional[TimeDistanceValue]:
         """
@@ -64,15 +65,34 @@ class TimeDistanceValueService:
 
     
     def get_time_distance_value_by_id(self, id: int):
-        # Asumiendo que tienes un modelo SQLAlchemy para esto
-        return self.Session.query(TimeDistanceValue).filter(TimeDistanceValue.id == id).first()
+        statement = select(TimeDistanceValue).where(TimeDistanceValue.id == id)
+        result = self.session.exec(statement).first()
+        return result
 
 
+    def get_google_distance_data(self, origin_lat, origin_lng, destination_lat, destination_lng, api_key):
+        url = "https://maps.googleapis.com/maps/api/distancematrix/json"
+        params = {
+            "origins": f"{origin_lat},{origin_lng}",
+            "destinations": f"{destination_lat},{destination_lng}",
+            "units": "metric",
+            "key": api_key
+        }
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            raise Exception(f"Error en el API de Google Distance Matrix: {response.status_code}")
+        data = response.json()
+        if data.get("status") != "OK":
+            raise Exception(f"Error en la respuesta del API de Google Distance Matrix: {data.get('status')}")
+        return data  
 
-    def calculate_total_value(self, id: int, google_data: Dict) -> FareCalculationResponse:
+    async def calculate_total_value(self, id: int, google_data: Dict) -> FareCalculationResponse:
         """
         Calcula el valor total basado en los datos de Google y retorna la información necesaria
         """
+
+        print("Payload enviado:", id)
+        print("Payload enviado:", google_data)
         try:
             # Obtener el registro de tarifas
             time_distance_value = self.get_time_distance_value_by_id(id)

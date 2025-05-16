@@ -1,13 +1,11 @@
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum
-from geoalchemy2 import Geometry
+# Eliminar: from geoalchemy2 import Geometry
 import enum
 from datetime import datetime, timezone
 from typing import Optional
 
 # Modelo de entrada (lo que el usuario envía)
-
-
 class ClientRequestCreate(SQLModel):
     id_client: int
     fare_offered: Optional[float]
@@ -21,7 +19,6 @@ class ClientRequestCreate(SQLModel):
     destination_lat: float
     destination_lng: float
 
-
 class StatusEnum(str, enum.Enum):
     CREATED = "CREATED"
     ACCEPTED = "ACCEPTED"
@@ -32,10 +29,7 @@ class StatusEnum(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 # Modelo de base de datos
-
-
 class ClientRequest(SQLModel, table=True):
-
     id: Optional[int] = Field(default=None, primary_key=True)
     id_client: int = Field(foreign_key="user.id")
     id_driver_assigned: Optional[int] = Field(
@@ -48,12 +42,13 @@ class ClientRequest(SQLModel, table=True):
     driver_rating: Optional[float]
     status: StatusEnum = Field(
         default=StatusEnum.CREATED, sa_column=Column(Enum(StatusEnum)))
-    pickup_position: Optional[str] = Field(
-        sa_column=Column(Geometry(geometry_type="POINT", srid=4326))
-    )
-    destination_position: Optional[str] = Field(
-        sa_column=Column(Geometry(geometry_type="POINT", srid=4326))
-    )
+
+    # Cambiar campos geométricos por coordenadas simples
+    pickup_lat: Optional[float] = None
+    pickup_lng: Optional[float] = None
+    destination_lat: Optional[float] = None
+    destination_lng: Optional[float] = None
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(

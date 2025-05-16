@@ -2,6 +2,7 @@ from typing import Optional,Dict, Any, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field
 from pydantic import BaseModel
+from sqlmodel import SQLModel, Field, Relationship, Column, Integer, ForeignKey
 
 
 class TimeDistanceValue(SQLModel, table=True):
@@ -17,33 +18,23 @@ class TimeDistanceValue(SQLModel, table=True):
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.utcnow}
     )
-class Distance(BaseModel):
-    text: str
-    value: int
-
-class Duration(BaseModel):
-    text: str
-    value: int
-
-class Element(BaseModel):
-    distance: Distance
-    duration: Duration
-
-class Row(BaseModel):
-    elements: List[Element]
-
-class GoogleData(BaseModel):
-    destination_addresses: List[str]
-    origin_addresses: List[str]
-    rows: List[Row]
-
-# class CalculateFareRequest(BaseModel):
-#     google_data: GoogleData
-#     fare_id: int
+    # Llave foránea única a VehicleType
+    vehicle_type_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("vehicletype.id", ondelete="CASCADE"),
+            unique=True,
+            nullable=False
+        )
+    )
+    vehicle_type: Optional["VehicleType"] = Relationship(back_populates="time_distance_value")
 
 class CalculateFareRequest(BaseModel):
-    google_data: Dict[str, Any]  # Esto aceptará cualquier estructura JSON válida
-    fare_id: int   
+    fare_id: int
+    origin_lat: float
+    origin_lng: float
+    destination_lat: float
+    destination_lng: float
 
 # Modelo para la respuesta
 class FareCalculationResponse(BaseModel):

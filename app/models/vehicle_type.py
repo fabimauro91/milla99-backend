@@ -9,6 +9,8 @@ class VehicleTypeBase(SQLModel):
 class VehicleType(VehicleTypeBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Relación uno a uno con TimeDistanceValue
+    time_distance_value: Optional["TimeDistanceValue"] = Relationship(back_populates="vehicle_type")
     
     # Relación con VehicleInfo
     vehicles: List["VehicleInfo"] = Relationship(back_populates="vehicle_type")
