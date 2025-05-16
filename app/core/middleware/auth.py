@@ -28,6 +28,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/client-request/", "POST"), # Rutas POST de client-request
             ("/client-request/","PATCH"), # Rutas GET de client-request/distance
             ("/static/uploads/drivers/", "GET")
+            ("/time-distance/","POST"),
+            ("/time-distance/","PATCH"),
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

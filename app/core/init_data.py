@@ -2,7 +2,6 @@ from sqlmodel import Session, select
 from datetime import datetime, timedelta, date
 from datetime import datetime
 from app.models.role import Role
-from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.driver_documents import DriverDocuments, DriverStatus
@@ -20,6 +19,7 @@ from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
 from app.utils.uploads import uploader
 import shutil
 import os
+from app.models.time_distance_value import TimeDistanceValue
 
 
 def init_roles():
@@ -108,7 +108,7 @@ def init_test_user():
         )
 
 
-def init_vehicle_types():
+def init_vehicle_types(engine):
     with Session(engine) as session:
         # Verificar si ya existen tipos de vehículos
         existing_types = session.exec(select(VehicleType)).all()
@@ -123,6 +123,40 @@ def init_vehicle_types():
 
         for vehicle_type in vehicle_types:
             session.add(vehicle_type)
+
+        session.commit()
+        session.refresh(vehicle_types[0])  # Refrescar para obtener el ID
+        session.refresh(vehicle_types[1])  # Refrescar para obtener el ID
+        return vehicle_types  # Retornar los tipos de vehículos creados
+
+
+def init_time_distance_values(engine, vehicle_types):
+    with Session(engine) as session:
+        # Verificar si ya existen registros
+        existing_values = session.exec(select(TimeDistanceValue)).all()
+        if existing_values:
+            return
+
+        # Crear valores iniciales y asociarlos a VehicleType
+        time_distance_values = [
+            TimeDistanceValue(
+                km_value=1200.0,
+                min_value=150.0,
+                tarifa_value=6000.0,
+                weight_value=350.5,
+                vehicle_type_id=vehicle_types[0].id  # Asociar al primer VehicleType (car)
+            ),
+            TimeDistanceValue(
+                km_value=800.0,
+                min_value=100.0,
+                tarifa_value=3000.0,
+                weight_value=350.0,
+                vehicle_type_id=vehicle_types[1].id  # Asociar al segundo VehicleType (moto)
+            )
+        ]
+
+        for value in time_distance_values:
+            session.add(value)
 
         session.commit()
 
@@ -467,10 +501,44 @@ def init_demo_driver():
         session.commit()
 
 
+# def init_time_distance_values():
+#     with Session(engine) as session:
+#         # Verificar si ya existen registros
+#         existing_values = session.exec(select(TimeDistanceValue)).all()
+#         if existing_values:
+#             return
+
+#         # Crear valores iniciales
+#         time_distance_values = [
+#             TimeDistanceValue(
+#                 km_value=800.0,    # Valor por kilómetro
+#                 min_value=100.0,    # Valor por minuto
+#                 tarifa_value=3000.0,  # Tarifa mínima
+#                 weight_value=350.0     # Peso base
+#             ),
+#             TimeDistanceValue(
+#                 km_value=1200.0,    # Valor por kilómetro para otra tarifa
+#                 min_value=150.0,    # Valor por minuto para otra tarifa
+#                 tarifa_value=6000.0,  # Tarifa mínima para otra tarifa
+#                 weight_value=350.5     # Peso para otra tarifa
+#             )
+#         ]
+
+#         for value in time_distance_values:
+#             session.add(value)
+
+#         session.commit()
+
+
 def init_data():
     init_roles()
     init_document_types()
     init_test_user()
     init_driver_documents()
-    init_vehicle_types()
+    vehicle_types = init_vehicle_types(engine)
+    if not vehicle_types:
+        # Si ya existen, obténlos de la base de datos
+        with Session(engine) as session:
+            vehicle_types = session.exec(select(VehicleType)).all()
+    init_time_distance_values(engine, vehicle_types)
     init_demo_driver()

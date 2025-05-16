@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # Configuración de la base de datos
     DATABASE_URL: str = "sqlite:///./milla99.db"
+    #DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/drivers"
 
     # Configuración CORS
     CORS_ORIGINS: List[str] = ["*"]
@@ -21,11 +22,6 @@ class Settings(BaseSettings):
 
     # Teléfono de prueba para usuario de prueba
     TEST_CLIENT_PHONE: str = "+573148780278"
-
-    model_config = ConfigDict(
-        env_file=".env",
-        case_sensitive=True
-    )
 
     # WhatsApp API Settings
     WHATSAPP_API_URL: str
@@ -39,20 +35,6 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
-    TWILIO_ACCOUNT_SID: str  # Reemplaza con tu SID
-    TWILIO_AUTH_TOKEN: str    # Reemplaza con tu Token
-    TWILIO_PHONE_NUMBER: str  # Número de Twilio
-
-    CLICK_SEND_USERNAME: str
-    CLICK_SEND_PASSWORD: str
-    CLICK_SEND_PHONE: str
-
-    model_config = ConfigDict(
-        env_file=".env",
-        case_sensitive=True
-    )
-
-    # Configuración de ClickSend
     CLICK_SEND_USERNAME: str
     CLICK_SEND_PASSWORD: str
     CLICK_SEND_PHONE: str
@@ -62,6 +44,10 @@ class Settings(BaseSettings):
     # Configuración de Google Maps
     GOOGLE_API_KEY: str
 
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
 
 @lru_cache()
 def get_settings():
