@@ -10,7 +10,9 @@ from app.services.client_requests_service import (
     assign_driver_service,
     update_status_service,
     get_client_request_detail_service,
-    get_client_requests_by_status_service
+    get_client_requests_by_status_service,
+    update_client_rating_service,
+    update_driver_rating_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -316,3 +318,37 @@ def get_client_requests_by_status(
             detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
         )
     return get_client_requests_by_status_service(session, status)
+
+
+@router.patch("/updateClientRating")
+def update_client_rating(
+    request: Request,
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    client_rating: float = Body(...,
+                                description="Nueva calificación del cliente"),
+    session: Session = Depends(get_session)
+):
+    """
+    Actualiza la calificación del cliente para una solicitud de viaje.
+    Solo el conductor asignado puede calificar al cliente.
+    """
+    user_id = request.state.user_id
+    return update_client_rating_service(session, id_client_request, client_rating, user_id)
+
+
+@router.patch("/updateDriverRating")
+def update_driver_rating(
+    request: Request,
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    driver_rating: float = Body(...,
+                                description="Nueva calificación del conductor"),
+    session: Session = Depends(get_session)
+):
+    """
+    Actualiza la calificación del conductor para una solicitud de viaje.
+    Solo el cliente puede calificar al conductor.
+    """
+    user_id = request.state.user_id
+    return update_driver_rating_service(session, id_client_request, driver_rating, user_id)

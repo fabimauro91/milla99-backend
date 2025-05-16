@@ -265,3 +265,31 @@ def get_client_requests_by_status_service(session: Session, status: str):
         }
         for cr in results
     ]
+
+
+def update_client_rating_service(session: Session, id_client_request: int, client_rating: float, user_id: int):
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if client_request.id_driver_assigned != user_id:
+        raise HTTPException(
+            status_code=403, detail="Solo el conductor asignado puede calificar al cliente")
+    client_request.client_rating = client_rating
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Calificación del cliente actualizada correctamente"}
+
+
+def update_driver_rating_service(session: Session, id_client_request: int, driver_rating: float, user_id: int):
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if client_request.id_client != user_id:
+        raise HTTPException(
+            status_code=403, detail="Solo el cliente puede calificar al conductor")
+    client_request.driver_rating = driver_rating
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Calificación del conductor actualizada correctamente"}
