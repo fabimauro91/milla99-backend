@@ -176,75 +176,65 @@ def update_status_service(session: Session, id_client_request: int, status: str)
     return {"success": True, "message": "Status actualizado correctamente"}
 
 
-def get_driver_vehicle_info_service(session: Session, driver_id: int, user_id: int):
+def get_client_request_detail_service(session: Session, client_request_id: int):
     """
-    Obtiene la información del vehículo de un conductor.
-    Verifica que el conductor esté asignado a alguna solicitud activa.
+    Devuelve el detalle de una Client Request, incluyendo info de usuario, driver y vehículo si aplica.
     """
-    try:
-        # Verificar si el conductor está asignado a alguna solicitud activa
-        active_request = session.query(ClientRequest).filter(
-            ClientRequest.id_driver_assigned == driver_id,
-            ClientRequest.status.in_([
-                StatusEnum.ACCEPTED,
-                StatusEnum.ON_THE_WAY,
-                StatusEnum.ARRIVED,
-                StatusEnum.TRAVELLING
-            ])
-        ).first()
+    from app.models.user import User
+    from app.models.client_request import ClientRequest
 
-        if not active_request:
-            print("DEBUG: No active request found for driver_id", driver_id)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No se encontró ninguna solicitud activa asignada a este conductor"
-            )
+    # Buscar la solicitud
+    cr = session.query(ClientRequest).filter(
+        ClientRequest.id == client_request_id).first()
+    if not cr:
+        raise HTTPException(
+            status_code=404, detail="Client Request no encontrada")
 
-        # Obtener la información del conductor y su vehículo
-        driver = session.query(User).options(
-            selectinload(User.driver_info).selectinload(
-                DriverInfo.vehicle_info)
-        ).filter(User.id == driver_id).first()
+    # Buscar el usuario que la creó
+    user = session.query(User).filter(User.id == cr.id_client).first()
+    client_data = {
+        "id": user.id,
+        "full_name": user.full_name,
+        "phone_number": user.phone_number,
+        "country_code": user.country_code
+    } if user else None
 
-        print("DEBUG driver:", driver)
-        print("DEBUG driver_info:", getattr(driver, 'driver_info', None))
-        if getattr(driver, 'driver_info', None):
-            print("DEBUG vehicle_info:", getattr(
-                driver.driver_info, 'vehicle_info', None))
-
-        if not driver:
-            print("DEBUG: No driver found with id", driver_id)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conductor no encontrado"
-            )
-
-        if not driver.driver_info or not driver.driver_info.vehicle_info:
-            print("DEBUG: Falta driver_info o vehicle_info para el driver", driver_id)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="El conductor no tiene información de vehículo registrada"
-            )
-
-        return {
-            "request_id": active_request.id,
-            "request_status": str(active_request.status),
-            "driver": {
-                "id": driver.id,
-                "full_name": driver.full_name,
-                "phone_number": driver.phone_number,
-                "country_code": driver.country_code
-            },
-            "vehicle_info": {
-                "brand": driver.driver_info.vehicle_info.brand,
-                "model": driver.driver_info.vehicle_info.model,
-                "model_year": driver.driver_info.vehicle_info.model_year,
-                "color": driver.driver_info.vehicle_info.color,
-                "plate": driver.driver_info.vehicle_info.plate,
-                "vehicle_type_id": driver.driver_info.vehicle_info.vehicle_type_id
+    # Buscar info del conductor asignado (si existe)
+    driver_info = None
+    vehicle_info = None
+    if cr.id_driver_assigned:
+        driver = session.query(User).filter(
+            User.id == cr.id_driver_assigned).first()
+        if driver and driver.driver_info:
+            di = driver.driver_info
+            driver_info = {
+                "id": di.id,
+                "first_name": di.first_name,
+                "last_name": di.last_name,
+                "email": di.email,
+                "selfie_url": di.selfie_url
             }
-        }
-    except Exception as e:
-        print("TRACEBACK:")
-        print(traceback.format_exc())
-        raise
+            if di.vehicle_info:
+                vi = di.vehicle_info
+                vehicle_info = {
+                    "brand": vi.brand,
+                    "model": vi.model,
+                    "model_year": vi.model_year,
+                    "color": vi.color,
+                    "plate": vi.plate,
+                    "vehicle_type_id": vi.vehicle_type_id
+                }
+
+    return {
+        "id": cr.id,
+        "status": str(cr.status),
+        "fare_offered": cr.fare_offered,
+        "pickup_description": cr.pickup_description,
+        "destination_description": cr.destination_description,
+        "created_at": cr.created_at.isoformat(),
+        "updated_at": cr.updated_at.isoformat(),
+        "client": client_data,
+        "id_driver_assigned": cr.id_driver_assigned,
+        "driver_info": driver_info,
+        "vehicle_info": vehicle_info
+    }

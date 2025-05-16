@@ -9,7 +9,7 @@ from app.services.client_requests_service import (
     get_nearby_client_requests_service,
     assign_driver_service,
     update_status_service,
-    get_driver_vehicle_info_service
+    get_client_request_detail_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -289,33 +289,13 @@ def update_status(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
 
 
-@router.get("/driver/vehicle-info")
-def get_driver_vehicle_info(
-    driver_id: int = Query(...,
-                           description="ID del conductor cuya información se quiere obtener"),
-    request: Request = None,
+@router.get("/")
+def get_client_request_detail(
+    client_request_id: int = Query(...,
+                                   description="ID de la solicitud de viaje"),
     session: Session = Depends(get_session)
 ):
     """
-    Obtiene la información del vehículo de un conductor específico.
-    Solo los usuarios con rol de DRIVER pueden acceder a esta información.
-    Se puede usar cuando hay una solicitud con conductor asignado.
-
-    Args:
-        driver_id: ID del conductor cuya información se quiere obtener (query parameter)
-        request: Objeto de la petición HTTP (usado para obtener el usuario autenticado)
-        session: Sesión de base de datos
-
-    Returns:
-        Información del vehículo del conductor o mensaje de error
+    Consulta el estado y la información detallada de una Client Request específica.
     """
-    try:
-        user_id = request.state.user_id
-        return get_driver_vehicle_info_service(session, driver_id, user_id)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al obtener la información del vehículo: {str(e)}"
-        )
+    return get_client_request_detail_service(session, client_request_id)
