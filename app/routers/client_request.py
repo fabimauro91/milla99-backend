@@ -1,17 +1,22 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Body
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Body, Path
 from fastapi.responses import JSONResponse
 from app.core.db import get_session
-from app.models.client_request import ClientRequest, ClientRequestCreate
+from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
 from app.services.client_requests_service import (
     create_client_request,
     get_time_and_distance_service,
     get_nearby_client_requests_service,
     assign_driver_service,
-    update_status_service
+    update_status_service,
+    get_client_request_detail_service,
+    get_client_requests_by_status_service,
+    update_client_rating_service,
+    update_driver_rating_service
 )
 from sqlalchemy.orm import Session
 import traceback
 from pydantic import BaseModel
+from app.models.user_has_roles import UserHasRole, RoleStatus
 
 router = APIRouter(prefix="/client-request", tags=["client-request"])
 
@@ -179,6 +184,18 @@ def create_request(
     """
     try:
         user_id = request.state.user_id
+
+        # Validación: El usuario debe tener el rol CLIENT y status APPROVED
+        user_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == user_id,
+            UserHasRole.id_rol == "CLIENT"
+        ).first()
+        if not user_role or user_role.status != RoleStatus.APPROVED:
+            raise HTTPException(
+                status_code=400,
+                detail="El usuario no tiene el rol de cliente aprobado. No puede crear solicitudes."
+            )
+
         if hasattr(request_data, 'id_client'):
             request_data.id_client = user_id
         db_obj = create_client_request(session, request_data)
@@ -201,7 +218,8 @@ def create_request(
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(
-            status_code=500, detail=f"Error al crear la solicitud de viaje: {str(e)}")
+            status_code=500, detail=f"Error al crear la solicitud de viaje: {str(e)}"
+        )
 
 
 @router.patch("/updateDriverAssigned")
@@ -229,6 +247,8 @@ def assign_driver(
     """
     try:
         return assign_driver_service(session, id, id_driver_assigned, fare_assigned)
+    except HTTPException as e:
+        raise e
     except Exception as e:
         session.rollback()
         raise HTTPException(
@@ -257,3 +277,65 @@ def update_status(
         session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
+
+
+@router.get("/{client_request_id}")
+def get_client_request_detail(
+    client_request_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Consulta el estado y la información detallada de una Client Request específica.
+    """
+    return get_client_request_detail_service(session, client_request_id)
+
+
+@router.get("/by-status/{status}")
+def get_client_requests_by_status(
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
+    session: Session = Depends(get_session)
+):
+    """
+    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    """
+    # Validar que el status sea uno de los permitidos
+    if status not in StatusEnum.__members__:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
+        )
+    return get_client_requests_by_status_service(session, status)
+
+
+@router.patch("/updateClientRating")
+def update_client_rating(
+    request: Request,
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    client_rating: float = Body(...,
+                                description="Nueva calificación del cliente"),
+    session: Session = Depends(get_session)
+):
+    """
+    Actualiza la calificación del cliente para una solicitud de viaje.
+    Solo el conductor asignado puede calificar al cliente.
+    """
+    user_id = request.state.user_id
+    return update_client_rating_service(session, id_client_request, client_rating, user_id)
+
+
+@router.patch("/updateDriverRating")
+def update_driver_rating(
+    request: Request,
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    driver_rating: float = Body(...,
+                                description="Nueva calificación del conductor"),
+    session: Session = Depends(get_session)
+):
+    """
+    Actualiza la calificación del conductor para una solicitud de viaje.
+    Solo el cliente puede calificar al conductor.
+    """
+    user_id = request.state.user_id
+    return update_driver_rating_service(session, id_client_request, driver_rating, user_id)

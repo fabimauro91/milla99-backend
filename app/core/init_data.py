@@ -199,7 +199,7 @@ def init_driver_documents():
                     id_user=driver.id,
                     id_rol=driver_role.id,
                     is_verified=True,
-                    status=RoleStatus.PENDING,
+                    status=RoleStatus.APPROVED,
                     verified_at=datetime.utcnow()
                 )
                 session.add(user_has_role)
@@ -254,6 +254,28 @@ def init_driver_documents():
                 session.add(driver_info)
                 session.commit()
                 session.refresh(driver_info)
+
+            # Crear VehicleInfo para el driver de prueba si no existe
+            vehicle_info = session.exec(
+                select(VehicleInfo).where(
+                    VehicleInfo.driver_info_id == driver_info.id)
+            ).first()
+
+            if not vehicle_info:
+                vehicle_type = session.exec(select(VehicleType).where(
+                    VehicleType.name == "car")).first()
+                vehicle_info = VehicleInfo(
+                    brand="Tesla",
+                    model="Tracker",
+                    model_year=2024,
+                    color="Azul",
+                    plate="XYZ987",
+                    vehicle_type_id=vehicle_type.id if vehicle_type else 1,
+                    driver_info_id=driver_info.id
+                )
+                session.add(vehicle_info)
+                session.commit()
+                session.refresh(vehicle_info)
 
         # Crear documentos por defecto si no existen
         default_docs = [
@@ -447,7 +469,6 @@ def init_demo_driver():
 
 def init_data():
     init_roles()
-    init_document_types()
     init_document_types()
     init_test_user()
     init_driver_documents()
