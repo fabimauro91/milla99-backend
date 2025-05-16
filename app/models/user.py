@@ -56,6 +56,14 @@ class User(UserBase, table=True):
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
     driver_position: Optional["DriverPosition"] = Relationship(back_populates="user")
     #driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
+    client_requests: List["ClientRequest"] = Relationship(
+        back_populates="client",
+        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"}
+    )
+    assigned_requests: List["ClientRequest"] = Relationship(
+        back_populates="driver_assigned",
+        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_driver_assigned]"}
+    )
 
 
 

@@ -1,34 +1,25 @@
-from sqlmodel import SQLModel, Field as SQLField, Relationship
+from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum
-# Eliminar: from geoalchemy2 import Geometry
 import enum
 from datetime import datetime, timezone
 from typing import Optional
-from shapely.geometry import Point
-from geoalchemy2.shape import from_shape
-from pydantic import Field
+from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
+
 # Modelo de entrada (lo que el usuario envía)
 class ClientRequestCreate(SQLModel):
-    id_client: Optional[int] = Field(default=None, example=1)
-    fare_offered: Optional[float] = Field(default=None, example=20.0)
-    fare_assigned: Optional[float] = Field(default=None, example=25.0)
-    pickup_description: Optional[str] = Field(
+    id_client: Optional[int] = PydanticField(default=None, example=1)
+    fare_offered: Optional[float] = PydanticField(default=None, example=20.0)
+    fare_assigned: Optional[float] = PydanticField(default=None, example=25.0)
+    pickup_description: Optional[str] = PydanticField(
         default=None, example="Suba Bogotá")
-    destination_description: Optional[str] = Field(
+    destination_description: Optional[str] = PydanticField(
         default=None, example="Santa Rosita Engativa, Bogota")
-    client_rating: Optional[float] = Field(default=None, example=4.5)
-    driver_rating: Optional[float] = Field(default=None, example=4.8)
-    pickup_lat: float = Field(example=4.718136)
-    pickup_lng: float = Field(example=-74.07317)
-    destination_lat: float = Field(example=4.702468)
-    destination_lng: float = Field(example=-74.109776)
-
-    def to_db(self):
-        pickup_point = from_shape(
-            Point(self.pickup_lng, self.pickup_lat), srid=4326)
-        destination_point = from_shape(
-            Point(self.destination_lng, self.destination_lat), srid=4326)
-        return self
+    client_rating: Optional[float] = PydanticField(default=None, example=4.5)
+    driver_rating: Optional[float] = PydanticField(default=None, example=4.8)
+    pickup_lat: float = PydanticField(example=4.718136)
+    pickup_lng: float = PydanticField(example=-74.07317)
+    destination_lat: float = PydanticField(example=4.702468)
+    destination_lng: float = PydanticField(example=-74.109776)
 
 class StatusEnum(str, enum.Enum):
     CREATED = "CREATED"
@@ -41,48 +32,36 @@ class StatusEnum(str, enum.Enum):
 
 # Modelo de base de datos
 class ClientRequest(SQLModel, table=True):
-<<<<<<< HEAD
     id: Optional[int] = Field(default=None, primary_key=True)
     id_client: int = Field(foreign_key="user.id")
-    id_driver_assigned: Optional[int] = Field(
-=======
-    id: Optional[int] = SQLField(default=None, primary_key=True)
-    id_client: int = SQLField(foreign_key="user.id")
-    id_driver_assigned: Optional[int] = SQLField(
->>>>>>> origin/develop
-        default=None, foreign_key="user.id")
-    fare_offered: Optional[float]
-    fare_assigned: Optional[float] = None
-    pickup_description: Optional[str] = SQLField(max_length=255)
-    destination_description: Optional[str] = SQLField(max_length=255)
-    client_rating: Optional[float] = None
-    driver_rating: Optional[float] = None
-    status: StatusEnum = SQLField(
-        default=StatusEnum.CREATED, sa_column=Column(Enum(StatusEnum)))
-<<<<<<< HEAD
+    id_driver_assigned: Optional[int] = Field(default=None, foreign_key="user.id")
+    fare_offered: Optional[float] = Field(default=None)
+    fare_assigned: Optional[float] = Field(default=None)
+    pickup_description: Optional[str] = Field(default=None, max_length=255)
+    destination_description: Optional[str] = Field(default=None, max_length=255)
+    client_rating: Optional[float] = Field(default=None)
+    driver_rating: Optional[float] = Field(default=None)
+    status: StatusEnum = Field(
+        default=StatusEnum.CREATED,
+        sa_column=Column(Enum(StatusEnum))
+    )
 
-    # Cambiar campos geométricos por coordenadas simples
-    pickup_lat: Optional[float] = None
-    pickup_lng: Optional[float] = None
-    destination_lat: Optional[float] = None
-    destination_lng: Optional[float] = None
+    pickup_lat: Optional[float] = Field(default=None)
+    pickup_lng: Optional[float] = Field(default=None)
+    destination_lat: Optional[float] = Field(default=None)
+    destination_lng: Optional[float] = Field(default=None)
 
     created_at: datetime = Field(
-=======
-    pickup_position: Optional[str] = SQLField(
-        sa_column=Column(Geometry(geometry_type="POINT", srid=4326))
-    )
-    destination_position: Optional[str] = SQLField(
-        sa_column=Column(Geometry(geometry_type="POINT", srid=4326))
-    )
-    created_at: datetime = SQLField(
->>>>>>> origin/develop
         default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = SQLField(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
 
     # Relaciones explícitas
     client: Optional["User"] = Relationship(
-        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"})
+        back_populates="client_requests",
+        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"}
+    )
     driver_assigned: Optional["User"] = Relationship(
-        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_driver_assigned]"})
+        back_populates="assigned_requests",
+        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_driver_assigned]"}
+    )

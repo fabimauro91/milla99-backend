@@ -2,7 +2,6 @@ from sqlmodel import Session, select
 from datetime import datetime, timedelta, date
 from datetime import datetime
 from app.models.role import Role
-from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.driver_documents import DriverDocuments, DriverStatus

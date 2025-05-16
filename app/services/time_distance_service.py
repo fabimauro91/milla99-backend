@@ -91,8 +91,7 @@ class TimeDistanceValueService:
         Calcula el valor total basado en los datos de Google y retorna la información necesaria
         """
 
-        print("Payload enviado:", id)
-        print("Payload enviado:", google_data)
+        
         try:
             # Obtener el registro de tarifas
             time_distance_value = self.get_time_distance_value_by_id(id)
@@ -106,9 +105,12 @@ class TimeDistanceValueService:
             distance_km = element["distance"]["value"] / 1000.0
             time_minutes = element["duration"]["value"] / 60.00
 
+            # print("Payload enviado:", distance_km)
+            # print("Payload enviado:", time_minutes)
             # Calcular el costo
             distance_cost = distance_km * time_distance_value.km_value
             time_cost = time_minutes * time_distance_value.min_value
+          
             total_cost = distance_cost + time_cost
 
             # Aplicar tarifa mínima si existe
