@@ -194,7 +194,6 @@ def create_request(
     request_data: ClientRequestCreate = Body(
         ...,
         example={
-            "id_client": 1,
             "fare_offered": 20.0,
             "fare_assigned": 25.0,
             "pickup_description": "Suba Bogotá",
@@ -209,19 +208,8 @@ def create_request(
     ),
     session: Session = Depends(get_session)
 ):
-    """
-    Crea una nueva solicitud de viaje para un cliente.
-    Args:
-        request_data: Datos de la solicitud (pickup, destino, tarifa, etc.)
-        request: Objeto de la petición HTTP (usado para obtener el usuario autenticado)
-        session: Sesión de base de datos
-    Returns:
-        Objeto de la solicitud creada
-    """
     try:
         user_id = request.state.user_id
-
-        # Validación: El usuario debe tener el rol CLIENT y status APPROVED
         user_role = session.query(UserHasRole).filter(
             UserHasRole.id_user == user_id,
             UserHasRole.id_rol == "CLIENT"
@@ -231,10 +219,8 @@ def create_request(
                 status_code=400,
                 detail="El usuario no tiene el rol de cliente aprobado. No puede crear solicitudes."
             )
-
-        if hasattr(request_data, 'id_client'):
-            request_data.id_client = user_id
-        db_obj = create_client_request(session, request_data)
+        db_obj = create_client_request(
+            session, request_data, id_client=user_id)
         response = {
             "id": db_obj.id,
             "id_client": db_obj.id_client,
