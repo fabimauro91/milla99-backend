@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Configuración de la base de datos
-    DATABASE_URL: str = "sqlite:///./milla99.db"
-    #DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/drivers"
+    #DATABASE_URL: str = "sqlite:///./milla99.db"
+    DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/milla99"
 
     # Configuración CORS
     CORS_ORIGINS: List[str] = ["*"]
