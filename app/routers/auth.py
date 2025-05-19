@@ -7,50 +7,85 @@ from app.models.user import UserRead
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-   # Crear un router con prefijo '/whatsapp' y etiqueta para la documentación
+# Crear un router con prefijo '/whatsapp' y etiqueta para la documentación
 
-class VerificationRequest(BaseModel):   # Modelo para la solicitud de verificación (cuando el usuario envía el código)
+
+# Modelo para la solicitud de verificación (cuando el usuario envía el código)
+class VerificationRequest(BaseModel):
     code: str
 
-class VerifResponseCode(BaseModel):  # Endpoint para enviar el código de verificación
-     message: str
-     access_token: str | None = None
-     token_type: str | None = None
-     user: UserRead | None = None
 
-class VerificationResponse(BaseModel):  # Endpoint para enviar el código de verificación
-     message: str
+# Endpoint para enviar el código de verificación
+class VerifResponseCode(BaseModel):
+    message: str
+    access_token: str | None = None
+    token_type: str | None = None
+    user: UserRead | None = None
+
+
+# Endpoint para enviar el código de verificación
+class VerificationResponse(BaseModel):
+    message: str
+
 
 class SMSMessage(BaseModel):
     phone_number: str
     message: str
 
-@router.post(                                       # Decorador que indica que es una ruta POST
-    "/verify/{country_code}/{phone_number}/send",                       # Ruta con parámetro user_id
-    response_model=VerificationResponse,            # Modelo de respuesta
-    status_code=status.HTTP_201_CREATED             # Código de estado 201 (Created)
-)
 
-async def send_verification(country_code: str, phone_number: str, session: SessionDep): # ID del usuario que se va a verificar, Sesión de base de datos (inyectada automáticamente)
+@router.post(
+    "/verify/{country_code}/{phone_number}/send",
+    response_model=VerificationResponse,
+    status_code=status.HTTP_201_CREATED,
+    description="""
+Envía un código de verificación vía WhatsApp al número de teléfono proporcionado.
+
+**Parámetros:**
+- `country_code`: Código de país del usuario.
+- `phone_number`: Número de teléfono del usuario.
+
+**Respuesta:**
+Devuelve un mensaje indicando que el código de verificación fue enviado exitosamente.
+"""
+)
+# ID del usuario que se va a verificar, Sesión de base de datos (inyectada automáticamente)
+async def send_verification(country_code: str, phone_number: str, session: SessionDep):
     """Send verification code via WhatsApp"""
-    service = AuthService(session)                                          # Crear una instancia del servicio
-    verification, codigo = await service.create_verification(country_code,phone_number)                   # Llamar al método para crear y enviar la verificación
-    return VerificationResponse(message=f"Verification code sent successfully {codigo}")  # Retornar mensaje de éxito
+    service = AuthService(
+        session)                                          # Crear una instancia del servicio
+    # Llamar al método para crear y enviar la verificación
+    verification, codigo = await service.create_verification(country_code, phone_number)
+    # Retornar mensaje de éxito
+    return VerificationResponse(message=f"Verification code sent successfully {codigo}")
 
-@router.post(                                       # Endpoint para verificar el código recibido
-    "/verify/{country_code}/{phone_number}/code",                       # Ruta para verificar el código
-    response_model=VerifResponseCode             # Modelo de respuesta
+
+@router.post(
+    "/verify/{country_code}/{phone_number}/code",
+    response_model=VerifResponseCode,
+    description="""
+Verifica el código recibido vía WhatsApp para el número de teléfono proporcionado.
+
+**Parámetros:**
+- `country_code`: Código de país del usuario.
+- `phone_number`: Número de teléfono del usuario.
+- `code`: Código de verificación recibido por el usuario.
+
+**Respuesta:**
+Devuelve un mensaje indicando si la verificación fue exitosa, junto con el token de acceso y la información del usuario si aplica.
+"""
 )
-
 async def verify_code(
     country_code: str,
     phone_number: str,                                   # ID del usuario
-    verification: VerificationRequest,              # Datos de la solicitud (el código)
+    # Datos de la solicitud (el código)
+    verification: VerificationRequest,
     session: SessionDep                             # Sesión de base de datos
 ):
     """Verify the code sent via WhatsApp"""
-    service = AuthService(session)                                  # Crear instancia del servicio
-    result, access_token, user = service.verify_code(country_code, phone_number, verification.code)            # Verificar el código
+    service = AuthService(
+        session)                                  # Crear instancia del servicio
+    result, access_token, user = service.verify_code(
+        country_code, phone_number, verification.code)            # Verificar el código
     print(access_token)
     return VerifResponseCode(
         message="Code verified successfully",

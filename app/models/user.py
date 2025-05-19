@@ -15,7 +15,6 @@ CountryCode = Annotated[str, constr(pattern=r"^\+\d{1,3}$")]
 PhoneNumber = Annotated[str, constr(min_length=7, max_length=15)]
 
 
-
 class UserBase(SQLModel):
     full_name: Optional[str] = Field(default=None)
     country_code: CountryCode = Field(
@@ -51,20 +50,21 @@ class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
-    #driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
-    #driver: Optional["Driver"] = Relationship(back_populates="user")
+    # driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
+    # driver: Optional["Driver"] = Relationship(back_populates="user")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
-    driver_position: Optional["DriverPosition"] = Relationship(back_populates="user")
-    #driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
+    driver_position: Optional["DriverPosition"] = Relationship(
+        back_populates="user")
+    # driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
     client_requests: List["ClientRequest"] = Relationship(
         back_populates="client",
         sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"}
     )
     assigned_requests: List["ClientRequest"] = Relationship(
         back_populates="driver_assigned",
-        sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_driver_assigned]"}
+        sa_relationship_kwargs={
+            "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
-
 
 
 class UserCreate(SQLModel):
@@ -85,9 +85,11 @@ class UserCreate(SQLModel):
     def validate_full_name(cls, value: str) -> str:
         value = value.strip()
         if len(value) < 3:
-            raise ValueError("El nombre completo debe tener al menos 3 caracteres.")
+            raise ValueError(
+                "El nombre completo debe tener al menos 3 caracteres.")
         if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$", value):
-            raise ValueError("El nombre completo solo puede contener letras y espacios.")
+            raise ValueError(
+                "El nombre completo solo puede contener letras y espacios.")
         return value
 
 
@@ -121,10 +123,12 @@ class RoleRead(BaseModel):
     class Config:
         from_attributes = True
 
+
 class VehicleTypeRead(BaseModel):
     id: int
     name: str
     capacity: int
+
 
 class VehicleInfoRead(BaseModel):
     id: int
@@ -133,7 +137,8 @@ class VehicleInfoRead(BaseModel):
     model_year: int
     color: str
     plate: str
-    vehicle_type: VehicleTypeRead    
+    vehicle_type: VehicleTypeRead
+
 
 class DriverInfoRead(BaseModel):
     id: int
@@ -143,6 +148,7 @@ class DriverInfoRead(BaseModel):
     email: Optional[str]
     selfie_url: str
     vehicle_info: Optional[VehicleInfoRead] = None
+
 
 class UserRead(BaseModel):
     id: int

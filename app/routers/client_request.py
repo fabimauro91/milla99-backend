@@ -59,7 +59,18 @@ def wkb_to_coords(wkb):
     return {"lat": point.y, "lng": point.x}
 
 
-@router.get("/distance")
+@router.get("/distance", description="""
+Consulta la distancia y el tiempo estimado entre dos puntos usando Google Distance Matrix API.
+
+**Parámetros:**
+- `origin_lat`: Latitud de origen.
+- `origin_lng`: Longitud de origen.
+- `destination_lat`: Latitud de destino.
+- `destination_lng`: Longitud de destino.
+
+**Respuesta:**
+Devuelve la distancia y el tiempo estimado entre los puntos especificados.
+""")
 def get_time_and_distance(
     origin_lat: float = Query(..., example=4.718136,
                               description="Latitud de origen"),
@@ -86,8 +97,16 @@ def get_time_and_distance(
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
 
+@router.get("/nearby", description="""
+Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5 km, incluyendo información de distancia, tiempo y datos del cliente.
 
-@router.get("/nearby")
+**Parámetros:**
+- `driver_lat`: Latitud del conductor.
+- `driver_lng`: Longitud del conductor.
+
+**Respuesta:**
+Devuelve una lista de solicitudes cercanas con información de distancia, tiempo y datos del cliente.
+""")
 def get_nearby_client_requests(
     driver_lat: float = Query(..., example=4.708822,
                               description="Latitud del conductor"),
@@ -152,7 +171,24 @@ def get_nearby_client_requests(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
 
 
-@router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""
+Crea una nueva solicitud de viaje para un cliente.
+
+**Parámetros:**
+- `pickup_lat`: Latitud del punto de recogida.
+- `pickup_lng`: Longitud del punto de recogida.
+- `destination_lat`: Latitud del destino.
+- `destination_lng`: Longitud del destino.
+- `fare_offered`: Tarifa ofrecida (opcional).
+- `fare_assigned`: Tarifa asignada (opcional).
+- `pickup_description`: Descripción del punto de recogida (opcional).
+- `destination_description`: Descripción del destino (opcional).
+- `client_rating`: Calificación del cliente (opcional).
+- `driver_rating`: Calificación del conductor (opcional).
+
+**Respuesta:**
+Devuelve la solicitud de viaje creada con toda su información.
+""")
 def create_request(
     request: Request,
     request_data: ClientRequestCreate = Body(
@@ -222,7 +258,17 @@ def create_request(
         )
 
 
-@router.patch("/updateDriverAssigned")
+@router.patch("/updateDriverAssigned", description="""
+Asigna un conductor a una solicitud de viaje existente y actualiza el estado y la tarifa si se proporciona.
+
+**Parámetros:**
+- `id`: ID de la solicitud de viaje.
+- `id_driver_assigned`: ID del conductor asignado.
+- `fare_assigned`: Tarifa asignada (opcional).
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def assign_driver(
     id: int = Body(...,
                    description="ID de la solicitud de viaje (id_client_request)"),
@@ -255,7 +301,16 @@ def assign_driver(
             status_code=500, detail=f"Error al asignar conductor: {str(e)}")
 
 
-@router.patch("/updateStatus")
+@router.patch("/updateStatus", description="""
+Actualiza el estado de una solicitud de viaje existente.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `status`: Nuevo estado a asignar.
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def update_status(
     id_client_request: int = Body(...,
                                   description="ID de la solicitud de viaje"),
@@ -279,7 +334,15 @@ def update_status(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
 
 
-@router.get("/{client_request_id}")
+@router.get("/{client_request_id}", description="""
+Consulta el estado y la información detallada de una solicitud de viaje específica.
+
+**Parámetros:**
+- `client_request_id`: ID de la solicitud de viaje.
+
+**Respuesta:**
+Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
+""")
 def get_client_request_detail(
     client_request_id: int,
     session: Session = Depends(get_session)
@@ -290,7 +353,15 @@ def get_client_request_detail(
     return get_client_request_detail_service(session, client_request_id)
 
 
-@router.get("/by-status/{status}")
+@router.get("/by-status/{status}", description="""
+Devuelve una lista de solicitudes de viaje filtradas por el estado enviado en el parámetro.
+
+**Parámetros:**
+- `status`: Estado por el cual filtrar las solicitudes.
+
+**Respuesta:**
+Devuelve una lista de solicitudes de viaje con el estado especificado.
+""")
 def get_client_requests_by_status(
     status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
     session: Session = Depends(get_session)
@@ -307,7 +378,16 @@ def get_client_requests_by_status(
     return get_client_requests_by_status_service(session, status)
 
 
-@router.patch("/updateClientRating")
+@router.patch("/updateClientRating", description="""
+Actualiza la calificación del cliente para una solicitud de viaje. Solo el conductor asignado puede calificar al cliente.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `client_rating`: Nueva calificación del cliente.
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def update_client_rating(
     request: Request,
     id_client_request: int = Body(...,
@@ -324,7 +404,16 @@ def update_client_rating(
     return update_client_rating_service(session, id_client_request, client_rating, user_id)
 
 
-@router.patch("/updateDriverRating")
+@router.patch("/updateDriverRating", description="""
+Actualiza la calificación del conductor para una solicitud de viaje. Solo el cliente puede calificar al conductor.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `driver_rating`: Nueva calificación del conductor.
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def update_driver_rating(
     request: Request,
     id_client_request: int = Body(...,

@@ -22,7 +22,25 @@ from app.models.document_type import DocumentType
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
 
-@router.post("/", response_model=DriverFullResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=DriverFullResponse, status_code=status.HTTP_201_CREATED, description="""
+Crea un nuevo conductor con sus documentos.
+
+**Parámetros:**
+- `user`: Cadena JSON con los datos del usuario.
+- `driver_info`: Cadena JSON con los datos del conductor.
+- `vehicle_info`: Cadena JSON con los datos del vehículo.
+- `driver_documents`: Cadena JSON con las fechas de vencimiento de los documentos.
+- `selfie`: Archivo de la selfie del conductor (opcional).
+- `property_card_front`: Archivo del frente de la tarjeta de propiedad (opcional).
+- `property_card_back`: Archivo del reverso de la tarjeta de propiedad (opcional).
+- `license_front`: Archivo del frente de la licencia de conducir (opcional).
+- `license_back`: Archivo del reverso de la licencia de conducir (opcional).
+- `soat`: Archivo del SOAT (opcional).
+- `vehicle_technical_inspection`: Archivo de la revisión técnico mecánica (opcional).
+
+**Respuesta:**
+Devuelve la información registrada del conductor, usuario, vehículo y documentos.
+""")
 async def create_driver(
     user: str = Form(...),
     driver_info: str = Form(...),
@@ -141,7 +159,35 @@ async def create_driver(
         )
 
 
-@router.patch("/{driver_id}", response_model=DriverFullResponse, status_code=status.HTTP_200_OK)
+@router.patch("/{driver_id}", response_model=DriverFullResponse, status_code=status.HTTP_200_OK, description="""
+Actualiza la información de un conductor y sus documentos.
+
+**Parámetros:**
+- `driver_id`: ID único del conductor a actualizar.
+- `first_name`: Nombre del conductor (opcional).
+- `last_name`: Apellido del conductor (opcional).
+- `birth_date`: Fecha de nacimiento del conductor (opcional).
+- `email`: Correo electrónico del conductor (opcional).
+- `selfie`: Archivo de la selfie del conductor (opcional).
+- `brand`: Marca del vehículo (opcional).
+- `model`: Modelo del vehículo (opcional).
+- `model_year`: Año del modelo del vehículo (opcional).
+- `color`: Color del vehículo (opcional).
+- `plate`: Placa del vehículo (opcional).
+- `vehicle_type_id`: ID del tipo de vehículo (opcional).
+- `property_card_front`: Archivo del frente de la tarjeta de propiedad (opcional).
+- `property_card_back`: Archivo del reverso de la tarjeta de propiedad (opcional).
+- `license_front`: Archivo del frente de la licencia de conducir (opcional).
+- `license_back`: Archivo del reverso de la licencia de conducir (opcional).
+- `soat`: Archivo del SOAT (opcional).
+- `vehicle_technical_inspection`: Archivo de la revisión técnico mecánica (opcional).
+- `license_expiration_date`: Fecha de vencimiento de la licencia (opcional).
+- `soat_expiration_date`: Fecha de vencimiento del SOAT (opcional).
+- `vehicle_technical_inspection_expiration_date`: Fecha de vencimiento de la revisión técnico mecánica (opcional).
+
+**Respuesta:**
+Devuelve la información actualizada del conductor, usuario, vehículo y documentos.
+""")
 async def update_driver(
     driver_id: int,
     # Datos personales
@@ -379,7 +425,15 @@ async def update_driver(
     )
 
 
-@router.get("/{driver_id}")
+@router.get("/{driver_id}", description="""
+Devuelve la información personal, de usuario y del vehículo de un conductor dado su driver_id.
+
+**Parámetros:**
+- `driver_id`: ID único del conductor.
+
+**Respuesta:**
+Incluye la información personal, de usuario, del vehículo y documentos del conductor.
+""")
 def get_driver_detail(
     driver_id: int = Path(..., description="ID único del conductor"),
     session: Session = Depends(get_session)
