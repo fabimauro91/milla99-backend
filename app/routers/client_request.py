@@ -17,8 +17,16 @@ from sqlalchemy.orm import Session
 import traceback
 from pydantic import BaseModel
 from app.models.user_has_roles import UserHasRole, RoleStatus
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Security
 
-router = APIRouter(prefix="/client-request", tags=["client-request"])
+bearer_scheme = HTTPBearer()
+
+router = APIRouter(
+    prefix="/client-request",
+    tags=["client-request"],
+    dependencies=[Security(bearer_scheme)]
+)
 
 
 class Position(BaseModel):
@@ -179,12 +187,9 @@ Crea una nueva solicitud de viaje para un cliente.
 - `pickup_lng`: Longitud del punto de recogida.
 - `destination_lat`: Latitud del destino.
 - `destination_lng`: Longitud del destino.
-- `fare_offered`: Tarifa ofrecida (opcional).
-- `fare_assigned`: Tarifa asignada (opcional).
+- `fare_offered`: Tarifa ofrecida.
 - `pickup_description`: Descripción del punto de recogida (opcional).
 - `destination_description`: Descripción del destino (opcional).
-- `client_rating`: Calificación del cliente (opcional).
-- `driver_rating`: Calificación del conductor (opcional).
 
 **Respuesta:**
 Devuelve la solicitud de viaje creada con toda su información.
@@ -194,19 +199,17 @@ def create_request(
     request_data: ClientRequestCreate = Body(
         ...,
         example={
-            "fare_offered": 20.0,
-            "fare_assigned": 25.0,
+            "fare_offered": 20,
             "pickup_description": "Suba Bogotá",
             "destination_description": "Santa Rosita Engativa, Bogota",
-            "client_rating": 4.5,
-            "driver_rating": 4.8,
             "pickup_lat": 4.718136,
-            "pickup_lng": -74.07317,
+            "pickup_lng": -74.073170,
             "destination_lat": 4.702468,
             "destination_lng": -74.109776
         }
     ),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     try:
         user_id = request.state.user_id
@@ -256,12 +259,28 @@ Asigna un conductor a una solicitud de viaje existente y actualiza el estado y l
 Devuelve un mensaje de éxito o error.
 """)
 def assign_driver(
-    id: int = Body(...,
-                   description="ID de la solicitud de viaje (id_client_request)"),
-    id_driver_assigned: int = Body(...,
-                                   description="ID del conductor asignado"),
+    id: int = Body(
+        ...,
+        description="ID de la solicitud de viaje (id_client_request)",
+        examples={
+            "default": {
+                "summary": "Ejemplo de asignación de conductor",
+                "value": {
+                    "id": 1,
+                    "id_driver_assigned": 2,
+                    "fare_assigned": 25
+                }
+            }
+        }
+    ),
+    id_driver_assigned: int = Body(
+        ...,
+        description="ID del conductor asignado"
+    ),
     fare_assigned: float = Body(
-        None, description="Tarifa asignada (opcional)"),
+        None,
+        description="Tarifa asignada (opcional)"
+    ),
     session: Session = Depends(get_session)
 ):
     """
