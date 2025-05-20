@@ -16,13 +16,13 @@ from sqlalchemy.orm import selectinload
 import traceback
 
 
-def create_client_request(db: Session, data: ClientRequestCreate):
+def create_client_request(db: Session, data: ClientRequestCreate, id_client: int):
     pickup_point = from_shape(
         Point(data.pickup_lng, data.pickup_lat), srid=4326)
     destination_point = from_shape(
         Point(data.destination_lng, data.destination_lat), srid=4326)
     db_obj = ClientRequest(
-        id_client=data.id_client,
+        id_client=id_client,
         fare_offered=data.fare_offered,
         fare_assigned=data.fare_assigned,
         pickup_description=data.pickup_description,
@@ -55,7 +55,6 @@ def get_time_and_distance_service(origin_lat, origin_lng, destination_lat, desti
         raise HTTPException(status_code=status.HTTP_200_OK,
                             detail=f"Error en la respuesta del API de Google Distance Matrix: {data.get('status')}")
     return data
-
 
 
 def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session, wkb_to_coords):
