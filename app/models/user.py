@@ -8,6 +8,8 @@ from datetime import datetime, date
 from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
 from datetime import datetime
+from app.models.driver_payment import DriverPayment
+from app.models.driver_transaction import DriverTransaction
 
 
 # Custom validated types
@@ -65,6 +67,11 @@ class User(UserBase, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
+    # Nuevas relaciones de pago
+    driver_payment: Optional[DriverPayment] = Relationship(
+        back_populates="user")
+    driver_transactions: List[DriverTransaction] = Relationship(
+        back_populates="user")
 
 
 class UserCreate(SQLModel):

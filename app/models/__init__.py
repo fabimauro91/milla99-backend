@@ -16,3 +16,11 @@ from .client_request import ClientRequest, ClientRequestCreate
 from .driver_position import DriverPosition
 from .vehicle_type_configuration import VehicleTypeConfiguration, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 from .driver_trip_offer import DriverTripOfferCreate, DriverTripOffer
+from .driver_payment import (
+    DriverPayment, DriverPaymentCreate, DriverPaymentUpdate,
+    PaymentStatus
+)
+from .driver_transaction import (
+    DriverTransaction, DriverTransactionCreate, DriverTransactionUpdate,
+    TransactionType
+)
