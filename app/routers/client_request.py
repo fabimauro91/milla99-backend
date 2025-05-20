@@ -52,8 +52,10 @@ class ClientRequestResponse(BaseModel):
 
 class AssignDriverRequest(BaseModel):
     id: int = Field(..., description="ID de la solicitud de viaje")
-    id_driver_assigned: int = Field(..., description="ID del conductor asignado")
-    fare_assigned: float | None = Field(None, description="Tarifa asignada (opcional)")
+    id_driver_assigned: int = Field(...,
+                                    description="ID del conductor asignado")
+    fare_assigned: float | None = Field(
+        None, description="Tarifa asignada (opcional)")
 
 
 # Utilidad para convertir WKBElement a dict lat/lng
@@ -186,6 +188,50 @@ def get_nearby_client_requests(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
 
 
+@router.get("/{client_request_id}", description="""
+Consulta el estado y la información detallada de una solicitud de viaje específica.
+
+**Parámetros:**
+- `client_request_id`: ID de la solicitud de viaje.
+
+**Respuesta:**
+Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
+""")
+def get_client_request_detail(
+    client_request_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Consulta el estado y la información detallada de una Client Request específica.
+    """
+    return get_client_request_detail_service(session, client_request_id)
+
+
+@router.get("/by-status/{status}", description="""
+Devuelve una lista de solicitudes de viaje filtradas por el estado enviado en el parámetro.
+
+**Parámetros:**
+- `status`: Estado por el cual filtrar las solicitudes.
+
+**Respuesta:**
+Devuelve una lista de solicitudes de viaje con el estado especificado.
+""")
+def get_client_requests_by_status(
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
+    session: Session = Depends(get_session)
+):
+    """
+    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    """
+    # Validar que el status sea uno de los permitidos
+    if status not in StatusEnum.__members__:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
+        )
+    return get_client_requests_by_status_service(session, status)
+
+
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""
 Crea una nueva solicitud de viaje para un cliente.
 
@@ -289,9 +335,9 @@ def assign_driver(
     """
     try:
         return assign_driver_service(
-            session, 
-            request_data.id, 
-            request_data.id_driver_assigned, 
+            session,
+            request_data.id,
+            request_data.id_driver_assigned,
             request_data.fare_assigned
         )
     except HTTPException as e:
@@ -299,7 +345,7 @@ def assign_driver(
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Error al asignar el conductor: {str(e)}"
         )
 
@@ -335,50 +381,6 @@ def update_status(
         session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
-
-
-@router.get("/{client_request_id}", description="""
-Consulta el estado y la información detallada de una solicitud de viaje específica.
-
-**Parámetros:**
-- `client_request_id`: ID de la solicitud de viaje.
-
-**Respuesta:**
-Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
-""")
-def get_client_request_detail(
-    client_request_id: int,
-    session: Session = Depends(get_session)
-):
-    """
-    Consulta el estado y la información detallada de una Client Request específica.
-    """
-    return get_client_request_detail_service(session, client_request_id)
-
-
-@router.get("/by-status/{status}", description="""
-Devuelve una lista de solicitudes de viaje filtradas por el estado enviado en el parámetro.
-
-**Parámetros:**
-- `status`: Estado por el cual filtrar las solicitudes.
-
-**Respuesta:**
-Devuelve una lista de solicitudes de viaje con el estado especificado.
-""")
-def get_client_requests_by_status(
-    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
-    session: Session = Depends(get_session)
-):
-    """
-    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
-    """
-    # Validar que el status sea uno de los permitidos
-    if status not in StatusEnum.__members__:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
-        )
-    return get_client_requests_by_status_service(session, status)
 
 
 @router.patch("/updateClientRating", description="""
