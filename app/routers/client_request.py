@@ -15,7 +15,7 @@ from app.services.client_requests_service import (
 )
 from sqlalchemy.orm import Session
 import traceback
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Security
@@ -48,6 +48,13 @@ class ClientRequestResponse(BaseModel):
     destination_position: Position | None = None
     created_at: str
     updated_at: str
+
+
+class AssignDriverRequest(BaseModel):
+    id: int = Field(..., description="ID de la solicitud de viaje")
+    id_driver_assigned: int = Field(..., description="ID del conductor asignado")
+    fare_assigned: float | None = Field(None, description="Tarifa asignada (opcional)")
+
 
 # Utilidad para convertir WKBElement a dict lat/lng
 
@@ -259,27 +266,13 @@ Asigna un conductor a una solicitud de viaje existente y actualiza el estado y l
 Devuelve un mensaje de éxito o error.
 """)
 def assign_driver(
-    id: int = Body(
+    request_data: AssignDriverRequest = Body(
         ...,
-        description="ID de la solicitud de viaje (id_client_request)",
-        examples={
-            "default": {
-                "summary": "Ejemplo de asignación de conductor",
-                "value": {
-                    "id": 1,
-                    "id_driver_assigned": 2,
-                    "fare_assigned": 25
-                }
-            }
+        example={
+            "id": 1,
+            "id_driver_assigned": 2,
+            "fare_assigned": 25
         }
-    ),
-    id_driver_assigned: int = Body(
-        ...,
-        description="ID del conductor asignado"
-    ),
-    fare_assigned: float = Body(
-        None,
-        description="Tarifa asignada (opcional)"
     ),
     session: Session = Depends(get_session)
 ):
@@ -289,21 +282,26 @@ def assign_driver(
     y actualiza la tarifa si se proporciona.
 
     Args:
-        id: ID de la solicitud de viaje (id_client_request)
-        id_driver_assigned: ID del conductor asignado
-        fare_assigned: Tarifa asignada (opcional)
+        request_data: Datos de la solicitud de asignación
         session: Sesión de base de datos
     Returns:
         Mensaje de éxito o error
     """
     try:
-        return assign_driver_service(session, id, id_driver_assigned, fare_assigned)
+        return assign_driver_service(
+            session, 
+            request_data.id, 
+            request_data.id_driver_assigned, 
+            request_data.fare_assigned
+        )
     except HTTPException as e:
         raise e
     except Exception as e:
-        session.rollback()
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=500, detail=f"Error al asignar conductor: {str(e)}")
+            status_code=500, 
+            detail=f"Error al asignar el conductor: {str(e)}"
+        )
 
 
 @router.patch("/updateStatus", description="""
