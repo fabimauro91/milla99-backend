@@ -138,7 +138,7 @@ class AuthService:
             full_phone = f"{country_code}{phone_number}"
             message = f"code is: {verification_code}. "
 
-            await self.send_whatsapp_message(full_phone, message)
+            #await self.send_whatsapp_message(full_phone, message)
             # await self.generate_mns_verification(full_phone, message)
 
             return verif, verification_code

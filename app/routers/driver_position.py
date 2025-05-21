@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.models.driver_position import DriverPositionCreate, DriverPositionRead
 from app.core.db import get_session
 from app.services.driver_position_service import DriverPositionService
+from app.models.project_settings import ProjectSettings
 
 router = APIRouter(prefix="/drivers-position", tags=["drivers-position"])
 
@@ -99,8 +100,19 @@ Incluye la posición y la distancia (en kilómetros) de cada conductor respecto 
 def get_nearby_drivers(
     lat: float = Query(..., description="Latitud del punto de búsqueda"),
     lng: float = Query(..., description="Longitud del punto de búsqueda"),
-    max_distance: float = Query(5, description="Distancia máxima en kilómetros (por defecto 5)"),
+    max_distance: Optional[float] = Query(None, description="Distancia máxima en kilómetros (por defecto: valor de configuración)"),
     session: Session = Depends(get_session)
 ):
+    # Si no se especifica max_distance, obtener el valor de ProjectSettings id=1
+    if max_distance is None:
+        setting = session.get(ProjectSettings, 1)
+        if setting is not None:
+            try:
+                max_distance = float(setting.value)
+            except ValueError:
+                max_distance = 5  # fallback si el valor no es convertible
+        else:
+            max_distance = 5  # fallback si no existe el setting
+
     service = DriverPositionService(session)
-    return service.get_nearby_drivers(lat=lat, lng=lng, max_distance_km=max_distance) 
+    return service.get_nearby_drivers(lat=lat, lng=lng, max_distance_km=max_distance)

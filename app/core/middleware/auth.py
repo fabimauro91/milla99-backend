@@ -30,6 +30,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/static/uploads/drivers/", "GET"),
             ("/distance-value/","GET"),
             ("/vehicle-type-configuration/","GET"),
+            ("/finish-race/", "POST"),
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

@@ -8,7 +8,7 @@ from app.routers import vehicle_type_configuration_admin
 
 
 from .core.db import create_all_tables
-from .routers import  users, drivers, auth, verify_docs, driver_position,driver_trip_offer, client_request, vehicle_type_configuration
+from .routers import  users, drivers, auth, verify_docs, driver_position,driver_trip_offer, client_request, vehicle_type_configuration, finish_race
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
@@ -61,6 +61,7 @@ fastapi_app.include_router(vehicle_type_configuration.router)
 fastapi_app.include_router(driver_trip_offer.router)
 fastapi_app.include_router(verify_docs.router)
 fastapi_app.include_router(vehicle_type_configuration_admin.router)
+fastapi_app.include_router(finish_race.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
