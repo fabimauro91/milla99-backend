@@ -1,9 +1,10 @@
 from fastapi import APIRouter, status, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
-from app.services.vehicle_type_configuration_service import VehicleTypeConfigurationService  # Importación absoluta
+# Importación absoluta
+from app.services.vehicle_type_configuration_service import VehicleTypeConfigurationService
 from app.core.db import SessionDep  # Importación absoluta
-from app.models.vehicle_type_configuration import VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse,CalculateFareRequest,FareCalculationResponse
+from app.models.vehicle_type_configuration import VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse, CalculateFareRequest, FareCalculationResponse
 from app.core.config import settings
 
 router = APIRouter(prefix="/distance-value", tags=["distance-value"])
@@ -31,10 +32,21 @@ async def create_vehicle_type_configuration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    
 
 
-@router.get("/", response_model=FareCalculationResponse)
+@router.get("/", response_model=FareCalculationResponse, description="""
+Calcula la tarifa recomendada para un viaje según el tipo de vehículo y la distancia entre dos puntos.
+
+**Parámetros:**
+- `type_vehicle_id`: ID del tipo de vehículo.
+- `origin_lat`: Latitud de origen.
+- `origin_lng`: Longitud de origen.
+- `destination_lat`: Latitud de destino.
+- `destination_lng`: Longitud de destino.
+
+**Respuesta:**
+Devuelve la tarifa recomendada, las direcciones de origen y destino, la distancia y la duración estimada del viaje.
+""")
 async def calculate_fare_unique(
     session: SessionDep,
     type_vehicle_id: int = Query(..., description="ID del tipo de vehículo"),

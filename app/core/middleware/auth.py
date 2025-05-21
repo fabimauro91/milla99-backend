@@ -17,16 +17,15 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/openapi.json", "GET"),  # Esquema OpenAPI
             ("/drivers/", "POST"),  # Creación de drivers
             ("/openapi.json", "GET"),  # Esquema OpenAPI - AQUÍ FALTABA LA COMA
-            ("/verify-docs/","GET"), # Rutas de verify-docs
-            ("/verify-docs/","POST"),
-            ("/drivers-position/","POST"), # Rutas POST de drivers-position
-            ("/drivers-position/","GET"), # Rutas GET de drivers-position
-            ("/drivers-position/","DELETE"), # Rutas DELETE de drivers-position
-            ("/driver-trip-offers/","POST"), # Rutas POST de driver-trip-offers
-            ("/driver-trip-offers/", "GET"), # Rutas GET de driver-trip-offers
-            ("/client-request/", "GET"), # Rutas GET de client-request
-            ("/client-request/", "POST"), # Rutas POST de client-request
-            ("/client-request/","PATCH"), # Rutas GET de client-request/distance
+            ("/verify-docs/", "GET"),  # Rutas de verify-docs
+            ("/verify-docs/", "POST"),
+            ("/drivers-position/", "POST"),  # Rutas POST de drivers-position
+            ("/drivers-position/", "GET"),  # Rutas GET de drivers-position
+            # Rutas DELETE de drivers-position
+            ("/drivers-position/", "DELETE"),
+            # Rutas POST de driver-trip-offers
+            ("/driver-trip-offers/", "POST"),
+            ("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
             ("/static/uploads/drivers/", "GET"),
             ("/distance-value/","GET"),
             ("/vehicle-type-configuration/","GET"),

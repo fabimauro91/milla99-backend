@@ -15,10 +15,18 @@ from app.services.client_requests_service import (
 )
 from sqlalchemy.orm import Session
 import traceback
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.models.user_has_roles import UserHasRole, RoleStatus
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Security
 
-router = APIRouter(prefix="/client-request", tags=["client-request"])
+bearer_scheme = HTTPBearer()
+
+router = APIRouter(
+    prefix="/client-request",
+    tags=["client-request"],
+    dependencies=[Security(bearer_scheme)]
+)
 
 
 class Position(BaseModel):
@@ -41,6 +49,13 @@ class ClientRequestResponse(BaseModel):
     created_at: str
     updated_at: str
 
+
+class AssignDriverRequest(BaseModel):
+    id: int = Field(..., description="ID de la solicitud de viaje")
+    id_driver_assigned: int = Field(..., description="ID del conductor asignado")
+    fare_assigned: float | None = Field(None, description="Tarifa asignada (opcional)")
+
+
 # Utilidad para convertir WKBElement a dict lat/lng
 
 
@@ -59,7 +74,18 @@ def wkb_to_coords(wkb):
     return {"lat": point.y, "lng": point.x}
 
 
-@router.get("/distance")
+@router.get("/distance", description="""
+Consulta la distancia y el tiempo estimado entre dos puntos usando Google Distance Matrix API.
+
+**Parámetros:**
+- `origin_lat`: Latitud de origen.
+- `origin_lng`: Longitud de origen.
+- `destination_lat`: Latitud de destino.
+- `destination_lng`: Longitud de destino.
+
+**Respuesta:**
+Devuelve la distancia y el tiempo estimado entre los puntos especificados.
+""")
 def get_time_and_distance(
     origin_lat: float = Query(..., example=4.718136,
                               description="Latitud de origen"),
@@ -86,8 +112,16 @@ def get_time_and_distance(
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
 
+@router.get("/nearby", description="""
+Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5 km, incluyendo información de distancia, tiempo y datos del cliente.
 
-@router.get("/nearby")
+**Parámetros:**
+- `driver_lat`: Latitud del conductor.
+- `driver_lng`: Longitud del conductor.
+
+**Respuesta:**
+Devuelve una lista de solicitudes cercanas con información de distancia, tiempo y datos del cliente.
+""")
 def get_nearby_client_requests(
     driver_lat: float = Query(..., example=4.708822,
                               description="Latitud del conductor"),
@@ -152,40 +186,40 @@ def get_nearby_client_requests(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
 
 
-@router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""
+Crea una nueva solicitud de viaje para un cliente.
+
+**Parámetros:**
+- `pickup_lat`: Latitud del punto de recogida.
+- `pickup_lng`: Longitud del punto de recogida.
+- `destination_lat`: Latitud del destino.
+- `destination_lng`: Longitud del destino.
+- `fare_offered`: Tarifa ofrecida.
+- `pickup_description`: Descripción del punto de recogida (opcional).
+- `destination_description`: Descripción del destino (opcional).
+
+**Respuesta:**
+Devuelve la solicitud de viaje creada con toda su información.
+""")
 def create_request(
     request: Request,
     request_data: ClientRequestCreate = Body(
         ...,
         example={
-            "id_client": 1,
-            "fare_offered": 20.0,
-            "fare_assigned": 25.0,
+            "fare_offered": 20,
             "pickup_description": "Suba Bogotá",
             "destination_description": "Santa Rosita Engativa, Bogota",
-            "client_rating": 4.5,
-            "driver_rating": 4.8,
             "pickup_lat": 4.718136,
-            "pickup_lng": -74.07317,
+            "pickup_lng": -74.073170,
             "destination_lat": 4.702468,
             "destination_lng": -74.109776
         }
     ),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
-    """
-    Crea una nueva solicitud de viaje para un cliente.
-    Args:
-        request_data: Datos de la solicitud (pickup, destino, tarifa, etc.)
-        request: Objeto de la petición HTTP (usado para obtener el usuario autenticado)
-        session: Sesión de base de datos
-    Returns:
-        Objeto de la solicitud creada
-    """
     try:
         user_id = request.state.user_id
-
-        # Validación: El usuario debe tener el rol CLIENT y status APPROVED
         user_role = session.query(UserHasRole).filter(
             UserHasRole.id_user == user_id,
             UserHasRole.id_rol == "CLIENT"
@@ -195,10 +229,8 @@ def create_request(
                 status_code=400,
                 detail="El usuario no tiene el rol de cliente aprobado. No puede crear solicitudes."
             )
-
-        if hasattr(request_data, 'id_client'):
-            request_data.id_client = user_id
-        db_obj = create_client_request(session, request_data)
+        db_obj = create_client_request(
+            session, request_data, id_client=user_id)
         response = {
             "id": db_obj.id,
             "id_client": db_obj.id_client,
@@ -222,14 +254,26 @@ def create_request(
         )
 
 
-@router.patch("/updateDriverAssigned")
+@router.patch("/updateDriverAssigned", description="""
+Asigna un conductor a una solicitud de viaje existente y actualiza el estado y la tarifa si se proporciona.
+
+**Parámetros:**
+- `id`: ID de la solicitud de viaje.
+- `id_driver_assigned`: ID del conductor asignado.
+- `fare_assigned`: Tarifa asignada (opcional).
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def assign_driver(
-    id: int = Body(...,
-                   description="ID de la solicitud de viaje (id_client_request)"),
-    id_driver_assigned: int = Body(...,
-                                   description="ID del conductor asignado"),
-    fare_assigned: float = Body(
-        None, description="Tarifa asignada (opcional)"),
+    request_data: AssignDriverRequest = Body(
+        ...,
+        example={
+            "id": 1,
+            "id_driver_assigned": 2,
+            "fare_assigned": 25
+        }
+    ),
     session: Session = Depends(get_session)
 ):
     """
@@ -238,24 +282,38 @@ def assign_driver(
     y actualiza la tarifa si se proporciona.
 
     Args:
-        id: ID de la solicitud de viaje (id_client_request)
-        id_driver_assigned: ID del conductor asignado
-        fare_assigned: Tarifa asignada (opcional)
+        request_data: Datos de la solicitud de asignación
         session: Sesión de base de datos
     Returns:
         Mensaje de éxito o error
     """
     try:
-        return assign_driver_service(session, id, id_driver_assigned, fare_assigned)
+        return assign_driver_service(
+            session, 
+            request_data.id, 
+            request_data.id_driver_assigned, 
+            request_data.fare_assigned
+        )
     except HTTPException as e:
         raise e
     except Exception as e:
-        session.rollback()
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=500, detail=f"Error al asignar conductor: {str(e)}")
+            status_code=500, 
+            detail=f"Error al asignar el conductor: {str(e)}"
+        )
 
 
-@router.patch("/updateStatus")
+@router.patch("/updateStatus", description="""
+Actualiza el estado de una solicitud de viaje existente.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `status`: Nuevo estado a asignar.
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def update_status(
     id_client_request: int = Body(...,
                                   description="ID de la solicitud de viaje"),
@@ -279,7 +337,15 @@ def update_status(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
 
 
-@router.get("/{client_request_id}")
+@router.get("/{client_request_id}", description="""
+Consulta el estado y la información detallada de una solicitud de viaje específica.
+
+**Parámetros:**
+- `client_request_id`: ID de la solicitud de viaje.
+
+**Respuesta:**
+Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
+""")
 def get_client_request_detail(
     client_request_id: int,
     session: Session = Depends(get_session)
@@ -290,7 +356,15 @@ def get_client_request_detail(
     return get_client_request_detail_service(session, client_request_id)
 
 
-@router.get("/by-status/{status}")
+@router.get("/by-status/{status}", description="""
+Devuelve una lista de solicitudes de viaje filtradas por el estado enviado en el parámetro.
+
+**Parámetros:**
+- `status`: Estado por el cual filtrar las solicitudes.
+
+**Respuesta:**
+Devuelve una lista de solicitudes de viaje con el estado especificado.
+""")
 def get_client_requests_by_status(
     status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
     session: Session = Depends(get_session)
@@ -307,7 +381,16 @@ def get_client_requests_by_status(
     return get_client_requests_by_status_service(session, status)
 
 
-@router.patch("/updateClientRating")
+@router.patch("/updateClientRating", description="""
+Actualiza la calificación del cliente para una solicitud de viaje. Solo el conductor asignado puede calificar al cliente.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `client_rating`: Nueva calificación del cliente.
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def update_client_rating(
     request: Request,
     id_client_request: int = Body(...,
@@ -324,7 +407,16 @@ def update_client_rating(
     return update_client_rating_service(session, id_client_request, client_rating, user_id)
 
 
-@router.patch("/updateDriverRating")
+@router.patch("/updateDriverRating", description="""
+Actualiza la calificación del conductor para una solicitud de viaje. Solo el cliente puede calificar al conductor.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `driver_rating`: Nueva calificación del conductor.
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
 def update_driver_rating(
     request: Request,
     id_client_request: int = Body(...,
