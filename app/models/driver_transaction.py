@@ -116,3 +116,10 @@ class DriverTransactionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DriverTransactionCreateRequest(BaseModel):
+    transaction_type: TransactionType
+    amount: Decimal
+    description: Optional[str] = None
+    # Otros campos opcionales como reference_id, etc.

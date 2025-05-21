@@ -2,17 +2,19 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models.verify_mount import (
     VerifyMount,
     VerifyMountCreate,
+    VerifyMountCreateRequest,
     VerifyMountUpdate,
     VerifyMountStatus,
     PaymentMethod
 )
 from app.services.verify_mount_service import VerifyMountService
 from app.core.db import get_session as get_db
+from app.models.driver_payment import DriverPayment
 
 bearer_scheme = HTTPBearer()
 
@@ -26,12 +28,32 @@ router = APIRouter(
 @router.post("/", response_model=VerifyMount)
 async def create_verify_mount(
     request: Request,
-    verify_mount: VerifyMountCreate,
+    verify_mount: VerifyMountCreateRequest,
     db: Session = Depends(get_db)
 ):
     """Crea una nueva solicitud de verificación de monto."""
+    # Obtener el id_payment del usuario
+    payment = db.exec(
+        select(DriverPayment).where(
+            DriverPayment.id_user == request.state.user_id)
+    ).first()
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="No payment account found for this user. Only drivers can create verify mounts."
+        )
+
+    # Crear el objeto VerifyMountCreate con los datos del token
+    verify_mount_data = VerifyMountCreate(
+        id_payment=payment.id,
+        id_user=request.state.user_id,
+        amount=verify_mount.amount,
+        payment_method=verify_mount.payment_method,
+        payment_reference=verify_mount.payment_reference
+    )
+
     service = VerifyMountService(db)
-    return service.create_verify_mount(verify_mount, request.state.user_id)
+    return service.create_verify_mount(verify_mount_data, request.state.user_id)
 
 
 @router.get("/{verify_mount_id}", response_model=VerifyMount)

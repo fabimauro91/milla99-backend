@@ -20,12 +20,19 @@ class DriverTransactionService:
 
     def create_transaction(
         self,
-        transaction_data: DriverTransactionCreate,
-        current_user: User
+        id_payment: int,
+        id_user: int,
+        transaction_type: TransactionType,
+        amount: Decimal,
+        description: Optional[str] = None,
+        discount_amount: Decimal = Decimal("0"),
+        reference_id: Optional[str] = None,
+        id_verify_mount: Optional[int] = None,
+        transaction_date: Optional[datetime] = None
     ) -> DriverTransaction:
         """Crea una nueva transacción y actualiza los balances correspondientes."""
         # Verificar que el pago existe y está activo
-        payment = self.db.get(DriverPayment, transaction_data.id_payment)
+        payment = self.db.get(DriverPayment, id_payment)
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
         if payment.status != PaymentStatus.ACTIVE:
@@ -33,13 +40,35 @@ class DriverTransactionService:
                 status_code=400, detail="Payment account is not active")
 
         # Verificar que el usuario existe
-        user = self.db.get(User, transaction_data.id_user)
+        user = self.db.get(User, id_user)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Si es DEPOSIT y no se pasa id_verify_mount, buscar automáticamente la última verify_mount VERIFIED para ese usuario y monto
+        if transaction_type == TransactionType.DEPOSIT and not id_verify_mount:
+            verify_mount = self.db.exec(
+                select(VerifyMount)
+                .where(VerifyMount.id_user == id_user)
+                .where(VerifyMount.status == VerifyMountStatus.VERIFIED)
+                .where(VerifyMount.amount == amount)
+                .order_by(VerifyMount.created_at.desc())
+            ).first()
+            if not verify_mount:
+                raise HTTPException(
+                    status_code=404, detail="No verified verify_mount found for this user and amount")
+            id_verify_mount = verify_mount.id
+
         # Crear la transacción
         transaction = DriverTransaction(
-            **transaction_data.dict(),
+            id_payment=id_payment,
+            id_user=id_user,
+            transaction_type=transaction_type,
+            amount=amount,
+            discount_amount=discount_amount,
+            description=description or "",
+            reference_id=reference_id,
+            id_verify_mount=id_verify_mount,
+            transaction_date=transaction_date,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )

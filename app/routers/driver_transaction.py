@@ -3,7 +3,7 @@ from datetime import datetime
 import traceback
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models.driver_transaction import (
     DriverTransaction,
@@ -11,8 +11,11 @@ from app.models.driver_transaction import (
     DriverTransactionUpdate,
     DriverTransactionResponse,
     TransactionType,
-    TransactionStatus
+    TransactionStatus,
+    DriverTransactionCreateRequest
 )
+from app.models.driver_payment import DriverPayment
+from app.models.verify_mount import VerifyMount
 from app.services.driver_transaction_service import DriverTransactionService
 from app.core.db import get_session as get_db
 
@@ -28,12 +31,37 @@ router = APIRouter(
 @router.post("/", response_model=DriverTransactionResponse)
 async def create_transaction(
     request: Request,
-    transaction: DriverTransactionCreate,
+    transaction: DriverTransactionCreateRequest,
     db: Session = Depends(get_db)
 ):
     """Crea una nueva transacción para un conductor."""
+    user_id = request.state.user_id
+    # Buscar la cuenta de pago del usuario
+    payment = db.exec(
+        select(DriverPayment).where(DriverPayment.id_user == user_id)
+    ).first()
+    if not payment:
+        raise HTTPException(
+            status_code=404, detail="Payment account not found for this user.")
+
     service = DriverTransactionService(db)
-    return service.create_transaction(transaction, request.state.user_id)
+    transaction_obj = service.create_transaction(
+        id_payment=payment.id,
+        id_user=user_id,
+        transaction_type=transaction.transaction_type,
+        amount=transaction.amount,
+        description=transaction.description,
+        discount_amount=getattr(transaction, "discount_amount", 0),
+        reference_id=getattr(transaction, "reference_id", None),
+        id_verify_mount=getattr(transaction, "id_verify_mount", None),
+        transaction_date=getattr(transaction, "transaction_date", None)
+    )
+
+    # Buscar la verify_mount asociada si existe
+    verify_mount = None
+    if transaction_obj.id_verify_mount:
+        verify_mount = db.get(VerifyMount, transaction_obj.id_verify_mount)
+    return DriverTransactionResponse.from_transaction(transaction_obj, verify_mount)
 
 
 @router.get("/{transaction_id}", response_model=DriverTransactionResponse)

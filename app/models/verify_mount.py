@@ -56,6 +56,13 @@ class VerifyMountCreate(SQLModel):
     payment_reference: str = Field(max_length=100)
 
 
+class VerifyMountCreateRequest(SQLModel):
+    """Modelo para la creación de verificación de monto desde el endpoint."""
+    amount: Decimal = Field(max_digits=10, decimal_places=2)
+    payment_method: PaymentMethod
+    payment_reference: str = Field(max_length=100)
+
+
 class VerifyMountUpdate(SQLModel):
     status: Optional[VerifyMountStatus] = None
     verified_by: Optional[int] = None
