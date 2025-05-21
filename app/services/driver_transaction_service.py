@@ -96,16 +96,17 @@ class DriverTransactionService:
                 raise HTTPException(
                     status_code=400, detail="Mount not verified")
 
-            # Actualizar balances
+            # Recarga: suma a ambos saldos
             payment.available_balance += transaction.amount
             payment.withdrawable_balance += transaction.amount
             transaction.status = TransactionStatus.COMPLETED
 
         elif transaction.transaction_type == TransactionType.WITHDRAWAL:
-            if payment.withdrawable_balance < transaction.amount:
+            if payment.withdrawable_balance < transaction.amount or payment.available_balance < transaction.amount:
                 raise HTTPException(
-                    status_code=400, detail="Insufficient withdrawable balance")
+                    status_code=400, detail="Insufficient balance")
             payment.withdrawable_balance -= transaction.amount
+            payment.available_balance -= transaction.amount
             # La transacción queda en PENDING hasta que se verifique
 
         elif transaction.transaction_type == TransactionType.SERVICE_PAYMENT:
@@ -113,7 +114,6 @@ class DriverTransactionService:
                 raise HTTPException(
                     status_code=400, detail="Insufficient available balance")
             payment.available_balance -= transaction.amount
-            payment.withdrawable_balance += transaction.amount
             transaction.status = TransactionStatus.COMPLETED
 
         elif transaction.transaction_type == TransactionType.COMMISSION:
@@ -124,8 +124,8 @@ class DriverTransactionService:
             transaction.status = TransactionStatus.COMPLETED
 
         elif transaction.transaction_type == TransactionType.BONUS:
+            # El bono solo suma a available_balance, no a withdrawable_balance
             payment.available_balance += transaction.amount
-            payment.withdrawable_balance += transaction.amount
             transaction.status = TransactionStatus.COMPLETED
 
         elif transaction.transaction_type == TransactionType.REFUND:
@@ -139,6 +139,8 @@ class DriverTransactionService:
             payment.withdrawable_balance += transaction.amount
             transaction.status = TransactionStatus.COMPLETED
 
+        # Al final, total_balance es igual a available_balance (no sumar withdrawable_balance para evitar duplicidad)
+        payment.total_balance = payment.available_balance
         payment.updated_at = datetime.utcnow()
 
     def get_transaction(self, transaction_id: int) -> DriverTransaction:

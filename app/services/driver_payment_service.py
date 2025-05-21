@@ -222,6 +222,7 @@ class DriverPaymentService:
         # Actualizar balances: solo available_balance
         payment.available_balance += bonus_amount
         # payment.withdrawable_balance += bonus_amount  # Ya no se suma aquí
+        payment.total_balance = payment.available_balance
         payment.updated_at = datetime.utcnow()
 
         self.db.add(transaction)
