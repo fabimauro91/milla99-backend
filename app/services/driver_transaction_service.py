@@ -3,145 +3,288 @@ from typing import List, Optional
 from decimal import Decimal
 from app.models.driver_transaction import (
     DriverTransaction, DriverTransactionCreate,
-    DriverTransactionUpdate, TransactionType
+    DriverTransactionUpdate, TransactionType,
+    DriverTransactionResponse, TransactionStatus,
+    MovementType
 )
-from app.models.driver_payment import PaymentStatus
-from app.services.driver_payment_service import DriverPaymentService
+from app.models.driver_payment import PaymentStatus, DriverPayment
+from app.models.verify_mount import VerifyMount, VerifyMountStatus
+from app.models.user import User
+from fastapi import HTTPException
+from datetime import datetime
 
 
 class DriverTransactionService:
     def __init__(self, db: Session):
         self.db = db
-        self.payment_service = DriverPaymentService(db)
 
-    def create_transaction(self, transaction: DriverTransactionCreate) -> Optional[DriverTransaction]:
-        """Crear una nueva transacción y actualizar los balances correspondientes"""
-        # Verificar que existe la cuenta de pago
-        payment = self.payment_service.get_payment_by_id(
-            transaction.id_payment)
+    def create_transaction(
+        self,
+        transaction_data: DriverTransactionCreate,
+        current_user: User
+    ) -> DriverTransaction:
+        """Crea una nueva transacción y actualiza los balances correspondientes."""
+        # Verificar que el pago existe y está activo
+        payment = self.db.get(DriverPayment, transaction_data.id_payment)
         if not payment:
-            return None
+            raise HTTPException(status_code=404, detail="Payment not found")
+        if payment.status != PaymentStatus.ACTIVE:
+            raise HTTPException(
+                status_code=400, detail="Payment account is not active")
+
+        # Verificar que el usuario existe
+        user = self.db.get(User, transaction_data.id_user)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
         # Crear la transacción
-        db_transaction = DriverTransaction(**transaction.model_dump())
-        self.db.add(db_transaction)
+        transaction = DriverTransaction(
+            **transaction_data.dict(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+        # Actualizar balances según el tipo de transacción
+        self._update_balances(transaction, payment)
+
+        # Guardar la transacción
+        self.db.add(transaction)
         self.db.commit()
-        self.db.refresh(db_transaction)
+        self.db.refresh(transaction)
 
-        # Actualizar los balances según el tipo de transacción
-        net_amount = transaction.amount - transaction.discount_amount
+        return transaction
 
+    def _update_balances(self, transaction: DriverTransaction, payment: DriverPayment):
+        """Actualiza los balances según el tipo de transacción."""
         if transaction.transaction_type == TransactionType.DEPOSIT:
-            # Para depósitos, el monto va a pending_balance inicialmente
-            self.payment_service.update_balances(
-                payment_id=transaction.id_payment,
-                total_change=net_amount,
-                pending_change=net_amount
-            )
+            # Verificar que existe una verificación de monto
+            verify_mount = self.db.get(
+                VerifyMount, transaction.id_verify_mount)
+            if not verify_mount:
+                raise HTTPException(
+                    status_code=404, detail="Verify mount not found")
+            if verify_mount.status != VerifyMountStatus.VERIFIED:
+                raise HTTPException(
+                    status_code=400, detail="Mount not verified")
+
+            # Actualizar balances
+            payment.available_balance += transaction.amount
+            payment.withdrawable_balance += transaction.amount
+            transaction.status = TransactionStatus.COMPLETED
+
         elif transaction.transaction_type == TransactionType.WITHDRAWAL:
-            # Para retiros, se reduce el available_balance
-            self.payment_service.update_balances(
-                payment_id=transaction.id_payment,
-                available_change=-net_amount
-            )
+            if payment.withdrawable_balance < transaction.amount:
+                raise HTTPException(
+                    status_code=400, detail="Insufficient withdrawable balance")
+            payment.withdrawable_balance -= transaction.amount
+            # La transacción queda en PENDING hasta que se verifique
+
+        elif transaction.transaction_type == TransactionType.SERVICE_PAYMENT:
+            if payment.available_balance < transaction.amount:
+                raise HTTPException(
+                    status_code=400, detail="Insufficient available balance")
+            payment.available_balance -= transaction.amount
+            payment.withdrawable_balance += transaction.amount
+            transaction.status = TransactionStatus.COMPLETED
+
         elif transaction.transaction_type == TransactionType.COMMISSION:
-            # Para comisiones, se reduce el available_balance
-            self.payment_service.update_balances(
-                payment_id=transaction.id_payment,
-                available_change=-net_amount
-            )
+            if payment.available_balance < transaction.amount:
+                raise HTTPException(
+                    status_code=400, detail="Insufficient available balance")
+            payment.available_balance -= transaction.amount
+            transaction.status = TransactionStatus.COMPLETED
+
+        elif transaction.transaction_type == TransactionType.BONUS:
+            payment.available_balance += transaction.amount
+            payment.withdrawable_balance += transaction.amount
+            transaction.status = TransactionStatus.COMPLETED
+
         elif transaction.transaction_type == TransactionType.REFUND:
-            # Para reembolsos, se aumenta el available_balance
-            self.payment_service.update_balances(
-                payment_id=transaction.id_payment,
-                available_change=net_amount
+            payment.available_balance += transaction.amount
+            payment.withdrawable_balance += transaction.amount
+            transaction.status = TransactionStatus.COMPLETED
+
+        elif transaction.transaction_type == TransactionType.ADJUSTMENT:
+            # Los ajustes pueden ser positivos o negativos
+            payment.available_balance += transaction.amount
+            payment.withdrawable_balance += transaction.amount
+            transaction.status = TransactionStatus.COMPLETED
+
+        payment.updated_at = datetime.utcnow()
+
+    def get_transaction(self, transaction_id: int) -> DriverTransaction:
+        """Obtiene una transacción por su ID."""
+        transaction = self.db.get(DriverTransaction, transaction_id)
+        if not transaction:
+            raise HTTPException(
+                status_code=404, detail="Transaction not found")
+        return transaction
+
+    def get_transactions(
+        self,
+        user_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
+        transaction_type: Optional[TransactionType] = None,
+        status: Optional[TransactionStatus] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[DriverTransactionResponse]:
+        """Obtiene una lista de transacciones con filtros opcionales."""
+        query = select(DriverTransaction)
+
+        if user_id:
+            query = query.where(DriverTransaction.id_user == user_id)
+        if payment_id:
+            query = query.where(DriverTransaction.id_payment == payment_id)
+        if transaction_type:
+            query = query.where(
+                DriverTransaction.transaction_type == transaction_type)
+        if status:
+            query = query.where(DriverTransaction.status == status)
+        if start_date:
+            query = query.where(
+                DriverTransaction.transaction_date >= start_date)
+        if end_date:
+            query = query.where(DriverTransaction.transaction_date <= end_date)
+
+        query = query.order_by(DriverTransaction.transaction_date.desc())
+        query = query.offset(skip).limit(limit)
+
+        transactions = self.db.exec(query).all()
+
+        # Obtener las verificaciones de monto relacionadas
+        verify_mount_ids = [
+            t.id_verify_mount for t in transactions if t.id_verify_mount]
+        verify_mounts = {}
+        if verify_mount_ids:
+            verify_mount_query = select(VerifyMount).where(
+                VerifyMount.id.in_(verify_mount_ids))
+            verify_mounts = {vm.id: vm for vm in self.db.exec(
+                verify_mount_query).all()}
+
+        return [
+            DriverTransactionResponse.from_transaction(
+                transaction,
+                verify_mounts.get(transaction.id_verify_mount)
             )
+            for transaction in transactions
+        ]
 
-        return db_transaction
+    def update_transaction(
+        self,
+        transaction_id: int,
+        transaction_data: DriverTransactionUpdate,
+        current_user: User
+    ) -> DriverTransaction:
+        """Actualiza una transacción existente."""
+        transaction = self.get_transaction(transaction_id)
 
-    def get_transaction_by_id(self, transaction_id: int) -> Optional[DriverTransaction]:
-        """Obtener una transacción por su ID"""
-        return self.db.get(DriverTransaction, transaction_id)
+        # Solo permitir actualizar ciertos campos
+        update_data = transaction_data.dict(exclude_unset=True)
 
-    def get_transactions_by_payment_id(self, payment_id: int) -> List[DriverTransaction]:
-        """Obtener todas las transacciones de una cuenta de pago"""
-        statement = select(DriverTransaction).where(
-            DriverTransaction.id_payment == payment_id)
-        return list(self.db.exec(statement))
+        # Si se está actualizando el estado, verificar permisos y lógica de negocio
+        if "status" in update_data:
+            if not current_user.is_admin:
+                raise HTTPException(
+                    status_code=403, detail="Only admins can update transaction status")
 
-    def get_transactions_by_user_id(self, user_id: int) -> List[DriverTransaction]:
-        """Obtener todas las transacciones de un usuario"""
-        statement = select(DriverTransaction).where(
-            DriverTransaction.id_user == user_id)
-        return list(self.db.exec(statement))
+            new_status = update_data["status"]
+            if transaction.status == TransactionStatus.COMPLETED:
+                raise HTTPException(
+                    status_code=400, detail="Cannot update completed transaction")
 
-    def update_transaction_status(self, transaction_id: int, new_status: PaymentStatus) -> Optional[DriverTransaction]:
-        """Actualizar el estado de una transacción"""
-        db_transaction = self.get_transaction_by_id(transaction_id)
-        if not db_transaction:
-            return None
+            if new_status == TransactionStatus.COMPLETED:
+                # Si se está completando una transacción, actualizar balances
+                payment = self.db.get(DriverPayment, transaction.id_payment)
+                if not payment:
+                    raise HTTPException(
+                        status_code=404, detail="Payment not found")
 
-        # Si la transacción pasa a COMPLETED y es un DEPOSIT, mover de pending a available
-        if (new_status == PaymentStatus.COMPLETED and
-            db_transaction.status == PaymentStatus.PENDING and
-                db_transaction.transaction_type == TransactionType.DEPOSIT):
+                if transaction.transaction_type == TransactionType.WITHDRAWAL:
+                    # Verificar que el balance retirable sigue siendo suficiente
+                    if payment.withdrawable_balance < transaction.amount:
+                        raise HTTPException(
+                            status_code=400, detail="Insufficient withdrawable balance")
+                    payment.withdrawable_balance -= transaction.amount
+                elif transaction.transaction_type == TransactionType.DEPOSIT:
+                    # Verificar que existe una verificación de monto
+                    verify_mount = self.db.get(
+                        VerifyMount, transaction.id_verify_mount)
+                    if not verify_mount:
+                        raise HTTPException(
+                            status_code=404, detail="Verify mount not found")
+                    if verify_mount.status != VerifyMountStatus.VERIFIED:
+                        raise HTTPException(
+                            status_code=400, detail="Mount not verified")
 
-            net_amount = db_transaction.amount - db_transaction.discount_amount
-            self.payment_service.update_balances(
-                payment_id=db_transaction.id_payment,
-                pending_change=-net_amount,
-                available_change=net_amount
-            )
+                    payment.available_balance += transaction.amount
+                    payment.withdrawable_balance += transaction.amount
 
-        db_transaction.status = new_status
-        self.db.add(db_transaction)
+                payment.updated_at = datetime.utcnow()
+
+        # Actualizar la transacción
+        for key, value in update_data.items():
+            setattr(transaction, key, value)
+
+        transaction.updated_at = datetime.utcnow()
+
+        self.db.add(transaction)
         self.db.commit()
-        self.db.refresh(db_transaction)
-        return db_transaction
+        self.db.refresh(transaction)
 
-    def get_all_transactions(self) -> List[DriverTransaction]:
-        """Obtener todas las transacciones"""
-        statement = select(DriverTransaction)
-        return list(self.db.exec(statement))
+        return transaction
 
-    def delete_transaction(self, transaction_id: int) -> bool:
-        """Eliminar una transacción (solo para administradores)"""
-        db_transaction = self.get_transaction_by_id(transaction_id)
-        if not db_transaction:
-            return False
+    def get_transaction_summary(
+        self,
+        user_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> dict:
+        """Obtiene un resumen de las transacciones con totales por tipo."""
+        query = select(DriverTransaction)
 
-        # Revertir los cambios en los balances
-        net_amount = db_transaction.amount - db_transaction.discount_amount
+        if user_id:
+            query = query.where(DriverTransaction.id_user == user_id)
+        if payment_id:
+            query = query.where(DriverTransaction.id_payment == payment_id)
+        if start_date:
+            query = query.where(
+                DriverTransaction.transaction_date >= start_date)
+        if end_date:
+            query = query.where(DriverTransaction.transaction_date <= end_date)
 
-        if db_transaction.transaction_type == TransactionType.DEPOSIT:
-            if db_transaction.status == PaymentStatus.COMPLETED:
-                self.payment_service.update_balances(
-                    payment_id=db_transaction.id_payment,
-                    total_change=-net_amount,
-                    available_change=-net_amount
-                )
+        transactions = self.db.exec(query).all()
+
+        summary = {
+            "total_income": Decimal("0"),
+            "total_expense": Decimal("0"),
+            "by_type": {}
+        }
+
+        for transaction in transactions:
+            amount = transaction.amount
+            movement_type = (
+                MovementType.INCOME
+                if transaction.transaction_type in [TransactionType.BONUS, TransactionType.DEPOSIT, TransactionType.REFUND]
+                else MovementType.EXPENSE
+            )
+
+            if movement_type == MovementType.INCOME:
+                summary["total_income"] += amount
             else:
-                self.payment_service.update_balances(
-                    payment_id=db_transaction.id_payment,
-                    total_change=-net_amount,
-                    pending_change=-net_amount
-                )
-        elif db_transaction.transaction_type == TransactionType.WITHDRAWAL:
-            self.payment_service.update_balances(
-                payment_id=db_transaction.id_payment,
-                available_change=net_amount
-            )
-        elif db_transaction.transaction_type == TransactionType.COMMISSION:
-            self.payment_service.update_balances(
-                payment_id=db_transaction.id_payment,
-                available_change=net_amount
-            )
-        elif db_transaction.transaction_type == TransactionType.REFUND:
-            self.payment_service.update_balances(
-                payment_id=db_transaction.id_payment,
-                available_change=-net_amount
-            )
+                summary["total_expense"] += amount
 
-        self.db.delete(db_transaction)
-        self.db.commit()
-        return True
+            # Agrupar por tipo de transacción
+            if transaction.transaction_type not in summary["by_type"]:
+                summary["by_type"][transaction.transaction_type] = {
+                    "count": 0,
+                    "total": Decimal("0")
+                }
+
+            summary["by_type"][transaction.transaction_type]["count"] += 1
+            summary["by_type"][transaction.transaction_type]["total"] += amount
+
+        return summary

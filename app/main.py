@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import vehicle_type_configuration_admin
+from app.routers import vehicle_type_configuration_admin, driver_transaction, verify_mount, driver_payment
 
 
 from .core.db import create_all_tables
@@ -61,6 +61,9 @@ fastapi_app.include_router(vehicle_type_configuration.router)
 fastapi_app.include_router(driver_trip_offer.router)
 fastapi_app.include_router(verify_docs.router)
 fastapi_app.include_router(vehicle_type_configuration_admin.router)
+fastapi_app.include_router(driver_transaction.router)
+fastapi_app.include_router(verify_mount.router)
+fastapi_app.include_router(driver_payment.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

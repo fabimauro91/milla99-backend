@@ -17,6 +17,9 @@ from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
 from app.utils.uploads import uploader
+from app.services.driver_payment_service import DriverPaymentService
+from app.models.driver_payment import DriverPaymentCreate
+from decimal import Decimal
 import shutil
 import os
 from app.models.vehicle_type_configuration import VehicleTypeConfiguration
@@ -25,7 +28,8 @@ from app.models.vehicle_type_configuration import VehicleTypeConfiguration
 def init_roles():
     roles = [
         Role(id="CLIENT", name="pasajero", route="/client"),
-        Role(id="DRIVER", name="conductor", route="/driver")
+        Role(id="DRIVER", name="conductor", route="/driver"),
+        Role(id="ADMIN", name="administrador", route="/admin")
     ]
     with Session(engine) as session:
         for role in roles:
@@ -144,14 +148,16 @@ def init_time_distance_values(engine, vehicle_types):
                 min_value=150.0,
                 tarifa_value=6000.0,
                 weight_value=350.5,
-                vehicle_type_id=vehicle_types[0].id  # Asociar al primer VehicleType (car)
+                # Asociar al primer VehicleType (car)
+                vehicle_type_id=vehicle_types[0].id
             ),
             VehicleTypeConfiguration(
                 km_value=800.0,
                 min_value=100.0,
                 tarifa_value=3000.0,
                 weight_value=350.0,
-                vehicle_type_id=vehicle_types[1].id  # Asociar al segundo VehicleType (moto)
+                # Asociar al segundo VehicleType (moto)
+                vehicle_type_id=vehicle_types[1].id
             )
         ]
 
@@ -201,6 +207,25 @@ def init_test_driver():
                 user_has_role.verified_at = datetime.utcnow()
                 session.add(user_has_role)
                 session.commit()
+
+        # Crear cuenta de pago y bono de bienvenida si no existe
+        payment_service = DriverPaymentService(session)
+        existing_payment = payment_service.get_payment_by_user_id(driver.id)
+
+        if not existing_payment:
+            payment_data = DriverPaymentCreate(
+                id_user=driver.id,
+                total_balance=Decimal("0"),
+                available_balance=Decimal("0"),
+                withdrawable_balance=Decimal("0"),
+                pending_balance=Decimal("0")
+            )
+            payment = payment_service.create_payment(payment_data, driver)
+
+            # Agregar bono de bienvenida
+            welcome_bonus = Decimal("50000")  # 50,000 COP
+            payment_service.add_welcome_bonus(
+                payment.id, welcome_bonus, driver)
 
         return driver
 
@@ -389,6 +414,24 @@ def init_demo_driver():
             session.commit()
             session.refresh(user)
 
+        # Crear cuenta de pago y bono de bienvenida si no existe
+        payment_service = DriverPaymentService(session)
+        existing_payment = payment_service.get_payment_by_user_id(user.id)
+
+        if not existing_payment:
+            payment_data = DriverPaymentCreate(
+                id_user=user.id,
+                total_balance=Decimal("0"),
+                available_balance=Decimal("0"),
+                withdrawable_balance=Decimal("0"),
+                pending_balance=Decimal("0")
+            )
+            payment = payment_service.create_payment(payment_data, user)
+
+            # Agregar bono de bienvenida
+            welcome_bonus = Decimal("50000")  # 50,000 COP
+            payment_service.add_welcome_bonus(payment.id, welcome_bonus, user)
+
         # 3. Crear o buscar DriverInfo
         driver_info = session.exec(select(DriverInfo).where(
             DriverInfo.user_id == user.id)).first()
@@ -499,6 +542,7 @@ def init_demo_driver():
                         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                         shutil.copyfile("img/demo/back foto.jpg", dest_path)
         session.commit()
+
 
 def init_data():
     init_roles()

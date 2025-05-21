@@ -10,6 +10,7 @@ from app.models.driver_documents import DriverDocuments
 from datetime import datetime
 from app.models.driver_payment import DriverPayment
 from app.models.driver_transaction import DriverTransaction
+from app.models.verify_mount import VerifyMount
 
 
 # Custom validated types
@@ -48,16 +49,19 @@ class UserBase(SQLModel):
         return value
 
 
+class UserRole(str, Enum):
+    ADMIN = "ADMIN"
+    DRIVER = "DRIVER"
+    CLIENT = "CLIENT"
+
+
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
-    # driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
-    # driver: Optional["Driver"] = Relationship(back_populates="user")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
     driver_position: Optional["DriverPosition"] = Relationship(
         back_populates="user")
-    # driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
     client_requests: List["ClientRequest"] = Relationship(
         back_populates="client",
         sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"}
@@ -67,11 +71,17 @@ class User(UserBase, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
-    # Nuevas relaciones de pago
     driver_payment: Optional[DriverPayment] = Relationship(
         back_populates="user")
-    driver_transactions: List[DriverTransaction] = Relationship(
-        back_populates="user")
+    transactions: List[DriverTransaction] = Relationship(back_populates="user")
+    verify_mounts: List[VerifyMount] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"foreign_keys": "[VerifyMount.id_user]"}
+    )
+    verified_mounts: List[VerifyMount] = Relationship(
+        back_populates="verifier",
+        sa_relationship_kwargs={"foreign_keys": "[VerifyMount.verified_by]"}
+    )
 
 
 class UserCreate(SQLModel):

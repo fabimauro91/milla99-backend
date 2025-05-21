@@ -6,10 +6,9 @@ from decimal import Decimal
 
 
 class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-    FAILED = "failed"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    BLOCKED = "blocked"
 
 
 class DriverPayment(SQLModel, table=True):
@@ -18,16 +17,20 @@ class DriverPayment(SQLModel, table=True):
     total_balance: Decimal = Field(
         default=0, max_digits=10, decimal_places=2)  # Saldo total
     available_balance: Decimal = Field(
-        default=0, max_digits=10, decimal_places=2)  # Saldo disponible
+        default=0, max_digits=10, decimal_places=2)  # Saldo disponible para servicios
+    withdrawable_balance: Decimal = Field(
+        default=0, max_digits=10, decimal_places=2)  # Saldo disponible para retiro
     pending_balance: Decimal = Field(
         default=0, max_digits=10, decimal_places=2)  # Saldo pendiente
-    status: PaymentStatus = Field(default=PaymentStatus.PENDING)
+    status: PaymentStatus = Field(default=PaymentStatus.ACTIVE)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relaciones
     user: Optional["User"] = Relationship(back_populates="driver_payment")
     transactions: List["DriverTransaction"] = Relationship(
+        back_populates="payment")
+    verify_mounts: List["VerifyMount"] = Relationship(
         back_populates="payment")
 
 # Modelos Pydantic para operaciones
@@ -38,6 +41,8 @@ class DriverPaymentCreate(SQLModel):
     total_balance: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     available_balance: Decimal = Field(
         default=0, max_digits=10, decimal_places=2)
+    withdrawable_balance: Decimal = Field(
+        default=0, max_digits=10, decimal_places=2)
     pending_balance: Decimal = Field(
         default=0, max_digits=10, decimal_places=2)
 
@@ -45,5 +50,6 @@ class DriverPaymentCreate(SQLModel):
 class DriverPaymentUpdate(SQLModel):
     total_balance: Optional[Decimal] = None
     available_balance: Optional[Decimal] = None
+    withdrawable_balance: Optional[Decimal] = None
     pending_balance: Optional[Decimal] = None
     status: Optional[PaymentStatus] = None
