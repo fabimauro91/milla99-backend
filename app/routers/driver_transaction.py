@@ -19,7 +19,7 @@ from app.core.db import get_session as get_db
 bearer_scheme = HTTPBearer()
 
 router = APIRouter(
-    prefix="/api/driver-transactions",
+    prefix="/driver-transactions",
     tags=["driver-transactions"],
     dependencies=[Security(bearer_scheme)]
 )

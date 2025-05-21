@@ -17,7 +17,7 @@ from app.core.db import get_session as get_db
 bearer_scheme = HTTPBearer()
 
 router = APIRouter(
-    prefix="/api/verify-mounts",
+    prefix="/verify-mounts",
     tags=["verify-mounts"],
     dependencies=[Security(bearer_scheme)]
 )

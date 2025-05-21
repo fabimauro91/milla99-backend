@@ -33,54 +33,66 @@ class DriverService:
     ) -> DriverFullResponse:
         with Session(engine) as session:
             try:
-                # Buscar usuario por teléfono
+                # Buscar usuario por teléfono y país
                 existing_user = session.exec(
                     select(User).where(
-                        User.phone_number == user_data.phone_number)
+                        User.phone_number == user_data.phone_number,
+                        User.country_code == user_data.country_code
+                    )
                 ).first()
 
                 if existing_user:
-                    # Buscar si ya tiene un driver asociado
-                    existing_driver = session.exec(
-                        select(DriverInfo)
-                        .where(DriverInfo.user_id == existing_user.id)
-                    ).first()
-
-                    if existing_driver:
-                        # Buscar el vehicle_info asociado a ese driver_info y de tipo carro
-                        driver_info = session.exec(
-                            select(DriverInfo).where(DriverInfo.id ==
-                                                     existing_driver.id)
+                    # Verificar si ya tiene el rol DRIVER
+                    driver_role = session.exec(
+                        select(Role).where(Role.id == "DRIVER")).first()
+                    if not driver_role:
+                        raise HTTPException(
+                            status_code=500, detail="Rol DRIVER no existe")
+                    if driver_role in existing_user.roles:
+                        # Ya es conductor, puedes lanzar error o continuar
+                        existing_driver = session.exec(
+                            select(DriverInfo)
+                            .where(DriverInfo.user_id == existing_user.id)
                         ).first()
-                        vehicle_info = session.exec(
-                            select(VehicleInfo).where(
-                                VehicleInfo.driver_info_id == driver_info.id,
-                                VehicleInfo.vehicle_type_id == 1
-                            )
-                        ).first()
-                        if vehicle_info:
-                            raise HTTPException(
-                                status_code=400,
-                                detail="Ya existe un conductor de tipo carro para este usuario."
-                            )
-
-                # 1. Crear el Usuario
-                user = User(**user_data.dict())
-                session.add(user)
-                session.commit()
-                session.refresh(user)
-
-                # 2. Asignar el rol DRIVER
-                driver_role = session.exec(
-                    select(Role).where(Role.id == "DRIVER")).first()
-                if not driver_role:
-                    raise HTTPException(
-                        status_code=500, detail="Rol DRIVER no existe")
-
-                user.roles.append(driver_role)
-                session.add(user)
-                session.commit()
-                session.refresh(user)
+                        if existing_driver:
+                            driver_info = session.exec(
+                                select(DriverInfo).where(
+                                    DriverInfo.id == existing_driver.id)
+                            ).first()
+                            vehicle_info = session.exec(
+                                select(VehicleInfo).where(
+                                    VehicleInfo.driver_info_id == driver_info.id,
+                                    VehicleInfo.vehicle_type_id == 1
+                                )
+                            ).first()
+                            if vehicle_info:
+                                raise HTTPException(
+                                    status_code=400,
+                                    detail="Ya existe un conductor de tipo carro para este usuario.")
+                        user = existing_user
+                    else:
+                        # Asignar el rol DRIVER
+                        existing_user.roles.append(driver_role)
+                        session.add(existing_user)
+                        session.commit()
+                        session.refresh(existing_user)
+                        user = existing_user
+                else:
+                    # Crear el Usuario
+                    user = User(**user_data.dict())
+                    session.add(user)
+                    session.commit()
+                    session.refresh(user)
+                    # Asignar el rol DRIVER
+                    driver_role = session.exec(
+                        select(Role).where(Role.id == "DRIVER")).first()
+                    if not driver_role:
+                        raise HTTPException(
+                            status_code=500, detail="Rol DRIVER no existe")
+                    user.roles.append(driver_role)
+                    session.add(user)
+                    session.commit()
+                    session.refresh(user)
 
                 # 3. Crear la cuenta de pago automáticamente
                 payment_service = DriverPaymentService(session)
