@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
+from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from typing import List
+from typing import List, Optional
 
 from app.core.dependencies.auth import user_is_owner
 from app.models.user import User, UserCreate, UserUpdate, UserRead
@@ -25,7 +25,7 @@ Crea un nuevo usuario en el sistema.
 **Respuesta:**
 Devuelve el usuario creado con su información registrada.
 """)
-def create_user(user_data: UserCreate, session: SessionDep):
+def create_user(session: SessionDep, user_data: UserCreate ):
     service = UserService(session)
     return service.create_user(user_data)
 
