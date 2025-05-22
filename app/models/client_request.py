@@ -76,3 +76,5 @@ class ClientRequest(SQLModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
+    transactions: list["Transaction"] = Relationship(
+        back_populates="client_request")

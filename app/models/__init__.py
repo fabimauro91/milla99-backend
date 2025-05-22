@@ -16,3 +16,5 @@ from .client_request import ClientRequest, ClientRequestCreate
 from .driver_position import DriverPosition
 from .vehicle_type_configuration import VehicleTypeConfiguration, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 from .driver_trip_offer import DriverTripOfferCreate, DriverTripOffer
+from .transaction import Transaction, TransactionType
+from .verify_mount import VerifyMount

@@ -68,6 +68,8 @@ class User(UserBase, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
+    verify_mount: Optional["VerifyMount"] = Relationship(back_populates="user")
+    transactions: list["Transaction"] = Relationship(back_populates="user")
 
 
 class UserCreate(SQLModel):
@@ -151,7 +153,6 @@ class DriverInfoRead(BaseModel):
     last_name: str
     birth_date: date
     email: Optional[str]
-    selfie_url: str
     vehicle_info: Optional[VehicleInfoRead] = None
 
 

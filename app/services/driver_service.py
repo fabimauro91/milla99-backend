@@ -15,6 +15,8 @@ from app.models.driver_response import (
 from app.utils.uploads import uploader
 from decimal import Decimal
 import traceback
+from app.models.verify_mount import VerifyMount
+from app.models.transaction import Transaction, TransactionType
 
 
 class DriverService:
@@ -90,6 +92,12 @@ class DriverService:
                     session.add(user)
                     session.commit()
                     session.refresh(user)
+
+                # Crear VerifyMount con mount=0
+                verify_mount = VerifyMount(user_id=user.id, mount=0)
+                session.add(verify_mount)
+                session.commit()
+                session.refresh(verify_mount)
 
                 # 4. Crear el DriverInfo (ya no maneja selfie_url)
                 driver_info = DriverInfo(
@@ -243,19 +251,22 @@ class DriverService:
                     )
                 ).first()
 
+                session.refresh(user)
+                print(
+                    f"DEBUG selfie_url del usuario REFRESH: {user.selfie_url}")
                 response = DriverFullResponse(
                     user=UserResponse(
                         full_name=user.full_name,
                         country_code=user.country_code,
-                        phone_number=user.phone_number
+                        phone_number=user.phone_number,
+                        selfie_url=user.selfie_url
                     ),
                     driver_info=DriverInfoResponse(
                         first_name=driver_info.first_name,
                         last_name=driver_info.last_name,
                         birth_date=str(driver_info.birth_date),
                         email=driver_info.email,
-                        selfie_url=driver_info.user.selfie_url if hasattr(
-                            driver_info, 'user') and hasattr(driver_info.user, 'selfie_url') else None
+                        selfie_url=user.selfie_url
                     ),
                     vehicle_info=VehicleInfoResponse(
                         brand=vehicle_info.brand,
@@ -280,6 +291,22 @@ class DriverService:
                             vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
                     )
                 )
+
+                # Crear transacción de bono y actualizar mount
+                bonus_transaction = Transaction(
+                    user_id=user.id,
+                    income=50000,
+                    expense=0,
+                    type=TransactionType.BONUS,
+                    client_request_id=None
+                )
+                session.add(bonus_transaction)
+                session.commit()
+                # Actualizar el mount en VerifyMount
+                verify_mount.mount += 50000
+                session.add(verify_mount)
+                session.commit()
+
                 return response
 
             except Exception as e:
