@@ -17,8 +17,6 @@ from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
 from app.utils.uploads import uploader
-from app.services.driver_payment_service import DriverPaymentService
-from app.models.driver_payment import DriverPaymentCreate
 from decimal import Decimal
 import shutil
 import os
@@ -208,25 +206,6 @@ def init_test_driver():
                 session.add(user_has_role)
                 session.commit()
 
-        # Crear cuenta de pago y bono de bienvenida si no existe
-        payment_service = DriverPaymentService(session)
-        existing_payment = payment_service.get_payment_by_user_id(driver.id)
-
-        if not existing_payment:
-            payment_data = DriverPaymentCreate(
-                id_user=driver.id,
-                total_balance=Decimal("0"),
-                available_balance=Decimal("0"),
-                withdrawable_balance=Decimal("0"),
-                pending_balance=Decimal("0")
-            )
-            payment = payment_service.create_payment(payment_data, driver)
-
-            # Agregar bono de bienvenida
-            welcome_bonus = Decimal("50000")  # 50,000 COP
-            payment_service.add_welcome_bonus(
-                payment.id, welcome_bonus, driver)
-
         return driver
 
 
@@ -413,24 +392,6 @@ def init_demo_driver():
             session.add(user)
             session.commit()
             session.refresh(user)
-
-        # Crear cuenta de pago y bono de bienvenida si no existe
-        payment_service = DriverPaymentService(session)
-        existing_payment = payment_service.get_payment_by_user_id(user.id)
-
-        if not existing_payment:
-            payment_data = DriverPaymentCreate(
-                id_user=user.id,
-                total_balance=Decimal("0"),
-                available_balance=Decimal("0"),
-                withdrawable_balance=Decimal("0"),
-                pending_balance=Decimal("0")
-            )
-            payment = payment_service.create_payment(payment_data, user)
-
-            # Agregar bono de bienvenida
-            welcome_bonus = Decimal("50000")  # 50,000 COP
-            payment_service.add_welcome_bonus(payment.id, welcome_bonus, user)
 
         # 3. Crear o buscar DriverInfo
         driver_info = session.exec(select(DriverInfo).where(

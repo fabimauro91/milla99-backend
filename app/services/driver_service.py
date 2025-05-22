@@ -13,8 +13,6 @@ from app.models.driver_response import (
     DriverFullResponse, UserResponse, DriverInfoResponse, VehicleInfoResponse, DriverDocumentsResponse
 )
 from app.utils.uploads import uploader
-from app.services.driver_payment_service import DriverPaymentService
-from app.models.driver_payment import DriverPaymentCreate
 from decimal import Decimal
 import traceback
 
@@ -93,22 +91,6 @@ class DriverService:
                     session.add(user)
                     session.commit()
                     session.refresh(user)
-
-                # 3. Crear la cuenta de pago automáticamente
-                payment_service = DriverPaymentService(session)
-                payment_data = DriverPaymentCreate(
-                    id_user=user.id,
-                    total_balance=Decimal("0"),
-                    available_balance=Decimal("0"),
-                    withdrawable_balance=Decimal("0"),
-                    pending_balance=Decimal("0")
-                )
-                payment = payment_service.create_payment(payment_data, user)
-
-                # 4. Agregar el bono de bienvenida
-                welcome_bonus = Decimal("50000")  # 50,000 COP
-                payment_service.add_welcome_bonus(
-                    payment.id, welcome_bonus, user)
 
                 # 4. Crear el DriverInfo (sin selfie_url aún)
                 driver_info = DriverInfo(

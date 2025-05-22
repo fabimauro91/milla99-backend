@@ -7,10 +7,6 @@ import re
 from datetime import datetime, date
 from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
-from datetime import datetime
-from app.models.driver_payment import DriverPayment
-from app.models.driver_transaction import DriverTransaction
-from app.models.verify_mount import VerifyMount
 
 
 # Custom validated types
@@ -70,17 +66,6 @@ class User(UserBase, table=True):
         back_populates="driver_assigned",
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
-    )
-    driver_payment: Optional[DriverPayment] = Relationship(
-        back_populates="user")
-    transactions: List[DriverTransaction] = Relationship(back_populates="user")
-    verify_mounts: List[VerifyMount] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"foreign_keys": "[VerifyMount.id_user]"}
-    )
-    verified_mounts: List[VerifyMount] = Relationship(
-        back_populates="verifier",
-        sa_relationship_kwargs={"foreign_keys": "[VerifyMount.verified_by]"}
     )
 
 
