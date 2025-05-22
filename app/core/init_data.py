@@ -96,6 +96,15 @@ def init_test_user():
                 session.add(user_has_role)
                 session.commit()
 
+        # Guardar selfie demo en static/uploads/users/{user.id}/selfie.jpg y asignar url a user.selfie_url
+        selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+        os.makedirs(selfie_dir, exist_ok=True)
+        selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+        shutil.copyfile("img/demo/front foto.jpg", selfie_path)
+        user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
+        session.add(user)
+        session.commit()
+
         # Crear datos del documento del conductor
         driver_documents_data = DriverDocumentsInput(
             property_card_front_url="string",
@@ -397,23 +406,25 @@ def init_demo_driver():
         driver_info = session.exec(select(DriverInfo).where(
             DriverInfo.user_id == user.id)).first()
         if not driver_info:
-            selfie_rel = f"drivers/{user.id}/selfie/demo_selfie.jpg"
-            selfie_url = uploader.get_file_url(selfie_rel)
             driver_info = DriverInfo(
                 user_id=user.id,
                 first_name="John",
                 last_name="Doe",
                 birth_date=date(1990, 1, 1),
-                email="john@example.com",
-                selfie_url=selfie_url
+                email="john@example.com"
             )
             session.add(driver_info)
             session.commit()
             session.refresh(driver_info)
-            # Copiar selfie demo
-            selfie_dest = os.path.join("static/uploads", selfie_rel)
-            os.makedirs(os.path.dirname(selfie_dest), exist_ok=True)
-            shutil.copyfile("img/demo/front foto.jpg", selfie_dest)
+
+        # Guardar selfie demo en static/uploads/users/{user.id}/selfie.jpg y asignar url a user.selfie_url
+        selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+        os.makedirs(selfie_dir, exist_ok=True)
+        selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+        shutil.copyfile("img/demo/front foto.jpg", selfie_path)
+        user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
+        session.add(user)
+        session.commit()
 
         # 4. Crear o buscar VehicleInfo
         vehicle_type = session.exec(select(VehicleType).where(

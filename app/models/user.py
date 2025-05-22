@@ -53,6 +53,7 @@ class UserRole(str, Enum):
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    selfie_url: Optional[str] = None
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
@@ -81,6 +82,7 @@ class UserCreate(SQLModel):
         min_length=10,
         max_length=10
     )
+    selfie_url: Optional[str] = None
 
     @field_validator("full_name")
     @classmethod
@@ -101,6 +103,7 @@ class UserUpdate(SQLModel):
     phone_number: Optional[PhoneNumber] = None
     is_verified_phone: Optional[bool] = None
     is_active: Optional[bool] = None
+    selfie_url: Optional[str] = None
 
     @field_validator("full_name")
     @classmethod
@@ -159,6 +162,7 @@ class UserRead(BaseModel):
     is_verified_phone: bool
     is_active: bool
     full_name: Optional[str]
+    selfie_url: Optional[str] = None
     roles: List[RoleRead]
     driver_info: Optional[DriverInfoRead] = None
 
@@ -170,6 +174,7 @@ class UserInDB(UserBase):
     id: int
     is_active: bool
     is_verified_phone: bool
+    selfie_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -179,6 +184,7 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     is_verified_phone: bool
+    selfie_url: Optional[str] = None
 
     class Config:
         from_attributes = True

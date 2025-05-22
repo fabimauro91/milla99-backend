@@ -26,8 +26,7 @@ class DriverService:
         user_data: UserCreate,
         driver_info_data: DriverInfoCreate,
         vehicle_info_data: VehicleInfoCreate,
-        driver_documents_data: DriverDocumentsInput,
-        selfie: Optional[UploadFile] = None
+        driver_documents_data: DriverDocumentsInput
     ) -> DriverFullResponse:
         with Session(engine) as session:
             try:
@@ -92,34 +91,16 @@ class DriverService:
                     session.commit()
                     session.refresh(user)
 
-                # 4. Crear el DriverInfo (sin selfie_url aún)
+                # 4. Crear el DriverInfo (ya no maneja selfie_url)
                 driver_info = DriverInfo(
-                    **driver_info_data.dict(exclude={'selfie_url'}),
-                    user_id=user.id,
-                    selfie_url=None
+                    **driver_info_data.dict(),
+                    user_id=user.id
                 )
                 session.add(driver_info)
                 session.commit()
                 session.refresh(driver_info)
 
-                # 5. Manejar la selfie si se proporciona (usando driver_info.id)
-                if selfie:
-                    document_info = await upload_service.save_document_dbtype(
-                        file=selfie,
-                        driver_id=driver_info.id,
-                        document_type="selfie",
-                        description="Selfie del conductor"
-                    )
-                    driver_info.selfie_url = uploader.get_file_url(
-                        document_info["url"])
-                    session.add(driver_info)
-                    session.commit()
-                elif driver_info_data.selfie_url:
-                    driver_info.selfie_url = driver_info_data.selfie_url
-                    session.add(driver_info)
-                    session.commit()
-
-                # 6. Crear el VehicleInfo
+                # 5. Crear el VehicleInfo
                 vehicle_info = VehicleInfo(
                     **vehicle_info_data.dict(),
                     driver_info_id=driver_info.id
@@ -128,7 +109,7 @@ class DriverService:
                 session.commit()
                 session.refresh(vehicle_info)
 
-                # 7. Manejar los documentos
+                # 6. Manejar los documentos
                 docs = []
 
                 # Función auxiliar para manejar la subida de documentos
@@ -273,7 +254,8 @@ class DriverService:
                         last_name=driver_info.last_name,
                         birth_date=str(driver_info.birth_date),
                         email=driver_info.email,
-                        selfie_url=driver_info.selfie_url
+                        selfie_url=driver_info.user.selfie_url if hasattr(
+                            driver_info, 'user') and hasattr(driver_info.user, 'selfie_url') else None
                     ),
                     vehicle_info=VehicleInfoResponse(
                         brand=vehicle_info.brand,
@@ -354,7 +336,7 @@ class DriverService:
                 "first_name": driver_info.first_name,
                 "last_name": driver_info.last_name,
                 "email": driver_info.email,
-                "selfie_url": driver_info.selfie_url
+                "selfie_url": driver_info.user.selfie_url if hasattr(driver_info, 'user') and hasattr(driver_info.user, 'selfie_url') else None
             },
             "vehicle_info": vehicle_data
         }
