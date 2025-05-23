@@ -32,6 +32,7 @@ def create_client_request(db: Session, data: ClientRequestCreate, id_client: int
         driver_rating=data.driver_rating,
         pickup_position=pickup_point,
         destination_position=destination_point,
+        type_service_id=data.type_service_id
     )
     db.add(db_obj)
     db.commit()
@@ -58,7 +59,7 @@ def get_time_and_distance_service(origin_lat, origin_lng, destination_lat, desti
     return data
 
 
-def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session, wkb_to_coords):
+def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session, wkb_to_coords, type_service_ids=None):
     driver_point = func.ST_GeomFromText(
         f'POINT({driver_lng} {driver_lat})', 4326)
     time_limit = datetime.now(timezone.utc) - \
@@ -70,6 +71,7 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
             User.full_name,
             User.country_code,
             User.phone_number,
+            TypeService.name.label("type_service_name"),
             ST_Distance_Sphere(ClientRequest.pickup_position,
                                driver_point).label("distance"),
             func.timestampdiff(
@@ -79,16 +81,20 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
             ).label("time_difference")
         )
         .join(User, User.id == ClientRequest.id_client)
+        .join(TypeService, TypeService.id == ClientRequest.type_service_id)
         .filter(
             ClientRequest.status == "CREATED",
             ClientRequest.updated_at > time_limit
         )
-        .having(text(f"distance < {distance_limit}"))
     )
+    if type_service_ids:
+        base_query = base_query.filter(
+            ClientRequest.type_service_id.in_(type_service_ids))
+    base_query = base_query.having(text(f"distance < {distance_limit}"))
     results = []
     query_results = base_query.all()
     for row in query_results:
-        cr, full_name, country_code, phone_number, distance, time_difference = row
+        cr, full_name, country_code, phone_number, type_service_name, distance, time_difference = row
         result = {
             "id": cr.id,
             "id_client": cr.id_client,
@@ -101,6 +107,8 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
             "destination_position": wkb_to_coords(cr.destination_position),
             "distance": float(distance) if distance is not None else None,
             "time_difference": int(time_difference) if time_difference is not None else None,
+            "type_service_id": cr.type_service_id,
+            "type_service_name": type_service_name,
             "client": {
                 "full_name": full_name,
                 "country_code": country_code,

@@ -2,11 +2,12 @@ from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, B
 from fastapi.responses import JSONResponse
 from app.core.db import get_session
 from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
+from app.models.type_service import TypeService
 from app.services.client_requests_service import (
     create_client_request,
     get_time_and_distance_service,
     get_nearby_client_requests_service,
-    assign_driver_service, 
+    assign_driver_service,
     update_status_service,
     get_client_request_detail_service,
     get_client_requests_by_status_service,
@@ -46,6 +47,8 @@ class ClientRequestResponse(BaseModel):
     status: str
     pickup_position: Position | None = None
     destination_position: Position | None = None
+    type_service_id: int
+    type_service_name: str | None = None
     created_at: str
     updated_at: str
 
@@ -115,33 +118,64 @@ def get_time_and_distance(
 
 
 @router.get("/nearby", description="""
-Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5 km, incluyendo información de distancia, tiempo y datos del cliente.
-
-**Parámetros:**
-- `driver_lat`: Latitud del conductor.
-- `driver_lng`: Longitud del conductor.
-
-**Respuesta:**
-Devuelve una lista de solicitudes cercanas con información de distancia, tiempo y datos del cliente.
+Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5 km, filtrando por el tipo de servicio del vehículo del conductor.
 """)
 def get_nearby_client_requests(
+    request: Request,
     driver_lat: float = Query(..., example=4.708822,
                               description="Latitud del conductor"),
     driver_lng: float = Query(..., example=-74.076542,
                               description="Longitud del conductor"),
     session=Depends(get_session)
 ):
-    """
-    Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5km y los enriquece con la distancia y tiempo estimado usando Google Distance Matrix API.
-    Args:
-        driver_lat: Latitud del conductor
-        driver_lng: Longitud del conductor
-    Returns:
-        Lista de solicitudes cercanas con información de distancia, tiempo y datos del cliente
-    """
     try:
+        print("[DEBUG] Entrando a /nearby")
+        print(f"[DEBUG] Headers: {request.headers}")
+        print(f"[DEBUG] state: {request.state.__dict__}")
+        user_id = getattr(request.state, 'user_id', None)
+        print(f"[DEBUG] user_id extraído: {user_id}")
+        if user_id is None:
+            raise Exception("user_id no está presente en request.state")
+        # 1. Verificar que el usuario es DRIVER
+        from app.models.user_has_roles import UserHasRole, RoleStatus
+        user_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == user_id,
+            UserHasRole.id_rol == "DRIVER"
+        ).first()
+        print(f"[DEBUG] user_role: {user_role}")
+        if not user_role or user_role.status != RoleStatus.APPROVED:
+            raise HTTPException(
+                status_code=400, detail="El usuario no tiene el rol de conductor aprobado.")
+        # 2. Obtener el DriverInfo del conductor
+        from app.models.driver_info import DriverInfo
+        driver_info = session.query(DriverInfo).filter(
+            DriverInfo.user_id == user_id).first()
+        print(f"[DEBUG] driver_info: {driver_info}")
+        if not driver_info:
+            raise HTTPException(
+                status_code=400, detail="El conductor no tiene información de conductor registrada")
+        # 2b. Obtener el vehículo del conductor
+        from app.models.vehicle_info import VehicleInfo
+        driver_vehicle = session.query(VehicleInfo).filter(
+            VehicleInfo.driver_info_id == driver_info.id).first()
+        print(f"[DEBUG] driver_vehicle: {driver_vehicle}")
+        if not driver_vehicle:
+            raise HTTPException(
+                status_code=400, detail="El conductor no tiene un vehículo registrado")
+        # 3. Obtener los tipos de servicio para ese tipo de vehículo
+        from app.models.type_service import TypeService
+        type_services = session.query(TypeService).filter(
+            TypeService.vehicle_type_id == driver_vehicle.vehicle_type_id).all()
+        print(f"[DEBUG] type_services: {type_services}")
+        if not type_services:
+            raise HTTPException(
+                status_code=400, detail="No hay servicios disponibles para el tipo de vehículo del conductor")
+        type_service_ids = [ts.id for ts in type_services]
+        # 4. Buscar las solicitudes cercanas filtrando por esos type_service_ids
         results = get_nearby_client_requests_service(
-            driver_lat, driver_lng, session, wkb_to_coords)
+            driver_lat, driver_lng, session, wkb_to_coords, type_service_ids=type_service_ids
+        )
+        print(f"[DEBUG] results: {results}")
         if not results:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
@@ -184,6 +218,8 @@ def get_nearby_client_requests(
             results[index]['google_distance_matrix'] = element
         return JSONResponse(content=results, status_code=200)
     except Exception as e:
+        print("[ERROR] Exception en /nearby:")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
 
@@ -243,6 +279,7 @@ Crea una nueva solicitud de viaje para un cliente.
 - `fare_offered`: Tarifa ofrecida.
 - `pickup_description`: Descripción del punto de recogida (opcional).
 - `destination_description`: Descripción del destino (opcional).
+- `type_service_id`: ID del tipo de servicio (obligatorio, por ejemplo 1 para Car Ride, 2 para Motorcycle Ride)
 
 **Respuesta:**
 Devuelve la solicitud de viaje creada con toda su información.
@@ -258,7 +295,8 @@ def create_request(
             "pickup_lat": 4.718136,
             "pickup_lng": -74.073170,
             "destination_lat": 4.702468,
-            "destination_lng": -74.109776
+            "destination_lng": -74.109776,
+            "type_service_id": 1  # 1 Car or 2 Motorcycle
         }
     ),
     session: Session = Depends(get_session),
@@ -277,6 +315,10 @@ def create_request(
             )
         db_obj = create_client_request(
             session, request_data, id_client=user_id)
+        # Obtener el nombre del tipo de servicio
+        from app.models.type_service import TypeService
+        type_service = session.query(TypeService).filter(
+            TypeService.id == db_obj.type_service_id).first()
         response = {
             "id": db_obj.id,
             "id_client": db_obj.id_client,
@@ -291,6 +333,8 @@ def create_request(
             "destination_position": wkb_to_coords(db_obj.destination_position),
             "created_at": db_obj.created_at.isoformat(),
             "updated_at": db_obj.updated_at.isoformat(),
+            "type_service_id": db_obj.type_service_id,
+            "type_service_name": type_service.name if type_service else None
         }
         return response
     except Exception as e:

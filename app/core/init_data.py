@@ -525,6 +525,329 @@ def init_demo_driver():
         session.commit()
 
 
+def init_additional_clients():
+    """Inicializa 4 clientes adicionales con datos de prueba"""
+    with Session(engine) as session:
+        # Lista de clientes a crear
+        clients_data = [
+            {
+                "full_name": "María García",
+                "phone_number": "3001111111",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Juan Pérez",
+                "phone_number": "3002222222",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Ana Martínez",
+                "phone_number": "3003333333",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Carlos Rodríguez",
+                "phone_number": "3004444444",
+                "selfie_url": None
+            }
+        ]
+
+        # Obtener el rol CLIENT
+        client_role = session.exec(
+            select(Role).where(Role.id == "CLIENT")).first()
+
+        for client_data in clients_data:
+            # Verificar si el cliente ya existe
+            existing_user = session.exec(select(User).where(
+                User.phone_number == client_data["phone_number"]
+            )).first()
+
+            if not existing_user:
+                # Crear nuevo usuario
+                user = User(
+                    full_name=client_data["full_name"],
+                    country_code="+57",
+                    phone_number=client_data["phone_number"],
+                    is_verified_phone=True,
+                    is_active=True
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+
+                # Asignar rol CLIENT
+                if client_role and client_role not in user.roles:
+                    user.roles.append(client_role)
+                    session.add(user)
+                    session.commit()
+
+                    # Actualizar estado del rol
+                    user_has_role = session.exec(
+                        select(UserHasRole).where(
+                            UserHasRole.id_user == user.id,
+                            UserHasRole.id_rol == client_role.id
+                        )
+                    ).first()
+
+                    if user_has_role:
+                        user_has_role.is_verified = True
+                        user_has_role.status = RoleStatus.APPROVED
+                        user_has_role.verified_at = datetime.utcnow()
+                        session.add(user_has_role)
+                        session.commit()
+
+                # Guardar selfie demo
+                selfie_dir = os.path.join(
+                    "static", "uploads", "users", str(user.id))
+                os.makedirs(selfie_dir, exist_ok=True)
+                selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+                shutil.copyfile("img/demo/front foto.jpg", selfie_path)
+                user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
+                session.add(user)
+                session.commit()
+
+
+def init_additional_drivers():
+    """Inicializa 4 conductores adicionales (2 con carro y 2 con moto)"""
+    with Session(engine) as session:
+        # Datos de los conductores
+        drivers_data = [
+            # Conductores con carro
+            {
+                "user": {
+                    "full_name": "Roberto Sánchez",
+                    "phone_number": "3005555555"
+                },
+                "driver_info": {
+                    "first_name": "Roberto",
+                    "last_name": "Sánchez",
+                    "birth_date": date(1985, 5, 15),
+                    "email": "roberto.sanchez@example.com"
+                },
+                "vehicle_info": {
+                    "brand": "Chevrolet",
+                    "model": "Onix",
+                    "model_year": 2023,
+                    "color": "Blanco",
+                    "plate": "ABC123"
+                }
+            },
+            {
+                "user": {
+                    "full_name": "Laura Torres",
+                    "phone_number": "3006666666"
+                },
+                "driver_info": {
+                    "first_name": "Laura",
+                    "last_name": "Torres",
+                    "birth_date": date(1990, 8, 20),
+                    "email": "laura.torres@example.com"
+                },
+                "vehicle_info": {
+                    "brand": "Renault",
+                    "model": "Kwid",
+                    "model_year": 2022,
+                    "color": "Rojo",
+                    "plate": "DEF456"
+                }
+            },
+            # Conductores con moto
+            {
+                "user": {
+                    "full_name": "Pedro Gómez",
+                    "phone_number": "3007777777"
+                },
+                "driver_info": {
+                    "first_name": "Pedro",
+                    "last_name": "Gómez",
+                    "birth_date": date(1988, 3, 10),
+                    "email": "pedro.gomez@example.com"
+                },
+                "vehicle_info": {
+                    "brand": "Yamaha",
+                    "model": "FZ 2.0",
+                    "model_year": 2023,
+                    "color": "Negro",
+                    "plate": "GHI789"
+                }
+            },
+            {
+                "user": {
+                    "full_name": "Sofía Ramírez",
+                    "phone_number": "3008888888"
+                },
+                "driver_info": {
+                    "first_name": "Sofía",
+                    "last_name": "Ramírez",
+                    "birth_date": date(1992, 11, 25),
+                    "email": "sofia.ramirez@example.com"
+                },
+                "vehicle_info": {
+                    "brand": "Honda",
+                    "model": "CB 190R",
+                    "model_year": 2022,
+                    "color": "Azul",
+                    "plate": "JKL012"
+                }
+            }
+        ]
+
+        # Obtener roles y tipos necesarios
+        driver_role = session.exec(
+            select(Role).where(Role.id == "DRIVER")).first()
+        car_type = session.exec(select(VehicleType).where(
+            VehicleType.name == "Car")).first()
+        moto_type = session.exec(select(VehicleType).where(
+            VehicleType.name == "Motorcycle")).first()
+
+        # Obtener tipos de documentos
+        license_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "license")).first()
+        soat_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "soat")).first()
+        tech_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "technical_inspections")).first()
+        card_type = session.exec(select(DocumentType).where(
+            DocumentType.name == "property_card")).first()
+
+        for i, driver_data in enumerate(drivers_data):
+            # Verificar si el conductor ya existe
+            existing_user = session.exec(select(User).where(
+                User.phone_number == driver_data["user"]["phone_number"]
+            )).first()
+
+            if not existing_user:
+                # Crear usuario
+                user = User(
+                    full_name=driver_data["user"]["full_name"],
+                    country_code="+57",
+                    phone_number=driver_data["user"]["phone_number"],
+                    is_verified_phone=True,
+                    is_active=True
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+
+                # Asignar rol DRIVER
+                if driver_role and driver_role not in user.roles:
+                    user.roles.append(driver_role)
+                    session.add(user)
+                    session.commit()
+
+                    # Actualizar estado del rol a APPROVED
+                    user_has_role = session.exec(
+                        select(UserHasRole).where(
+                            UserHasRole.id_user == user.id,
+                            UserHasRole.id_rol == driver_role.id
+                        )
+                    ).first()
+
+                    if user_has_role:
+                        user_has_role.is_verified = True
+                        user_has_role.status = RoleStatus.APPROVED
+                        user_has_role.verified_at = datetime.utcnow()
+                        session.add(user_has_role)
+                        session.commit()
+
+                # Guardar selfie
+                selfie_dir = os.path.join(
+                    "static", "uploads", "users", str(user.id))
+                os.makedirs(selfie_dir, exist_ok=True)
+                selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+                shutil.copyfile("img/demo/front foto.jpg", selfie_path)
+                user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
+                session.add(user)
+                session.commit()
+
+                # Crear DriverInfo
+                driver_info = DriverInfo(
+                    user_id=user.id,
+                    first_name=driver_data["driver_info"]["first_name"],
+                    last_name=driver_data["driver_info"]["last_name"],
+                    birth_date=driver_data["driver_info"]["birth_date"],
+                    email=driver_data["driver_info"]["email"],
+                    selfie_url=user.selfie_url
+                )
+                session.add(driver_info)
+                session.commit()
+                session.refresh(driver_info)
+
+                # Crear VehicleInfo
+                vehicle_type_id = car_type.id if i < 2 else moto_type.id
+                vehicle_info = VehicleInfo(
+                    brand=driver_data["vehicle_info"]["brand"],
+                    model=driver_data["vehicle_info"]["model"],
+                    model_year=driver_data["vehicle_info"]["model_year"],
+                    color=driver_data["vehicle_info"]["color"],
+                    plate=driver_data["vehicle_info"]["plate"],
+                    vehicle_type_id=vehicle_type_id,
+                    driver_info_id=driver_info.id
+                )
+                session.add(vehicle_info)
+                session.commit()
+                session.refresh(vehicle_info)
+
+                # Crear documentos del conductor
+                demo_docs = [
+                    {
+                        "doc_type": license_type,
+                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/license/demo_license_front.jpg"),
+                        "back_url": uploader.get_file_url(f"drivers/{driver_info.id}/license/demo_license_back.jpg"),
+                        "expiration_date": date(2025, 1, 1)
+                    },
+                    {
+                        "doc_type": soat_type,
+                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/soat/demo_soat_front.jpg"),
+                        "back_url": None,
+                        "expiration_date": date(2024, 12, 31)
+                    },
+                    {
+                        "doc_type": tech_type,
+                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/technical_inspections/demo_tech_front.jpg"),
+                        "back_url": None,
+                        "expiration_date": date(2024, 12, 31)
+                    },
+                    {
+                        "doc_type": card_type,
+                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/property_card/demo_card_front.jpg"),
+                        "back_url": uploader.get_file_url(f"drivers/{driver_info.id}/property_card/demo_card_back.jpg"),
+                        "expiration_date": date(2025, 12, 31)
+                    }
+                ]
+
+                for doc in demo_docs:
+                    if doc["doc_type"]:
+                        new_doc = DriverDocuments(
+                            document_type_id=doc["doc_type"].id,
+                            document_front_url=doc["front_url"],
+                            document_back_url=doc["back_url"],
+                            status=DriverStatus.APPROVED,  # Establecer como APPROVED
+                            expiration_date=doc["expiration_date"],
+                            driver_info_id=driver_info.id,
+                            vehicle_info_id=vehicle_info.id
+                        )
+                        session.add(new_doc)
+
+                        # Copiar archivos demo
+                        if doc["front_url"]:
+                            dest_path = os.path.join(
+                                "static/uploads", doc["front_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
+                            os.makedirs(os.path.dirname(
+                                dest_path), exist_ok=True)
+                            shutil.copyfile(
+                                "img/demo/front foto.jpg", dest_path)
+                        if doc["back_url"]:
+                            dest_path = os.path.join(
+                                "static/uploads", doc["back_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
+                            os.makedirs(os.path.dirname(
+                                dest_path), exist_ok=True)
+                            shutil.copyfile(
+                                "img/demo/back foto.jpg", dest_path)
+
+                session.commit()
+
+
 def init_data():
     """Inicializa los datos por defecto de la aplicación"""
     session = Session(engine)
@@ -545,11 +868,13 @@ def init_data():
         type_service_service = TypeServiceService(session)
         type_service_service.init_default_types()
 
-        # Finalmente inicializar el resto de datos
+        # Inicializar usuarios de prueba
         init_test_user()
+        init_additional_clients()  # Agregar 4 clientes adicionales
         init_driver_documents()
         init_time_distance_values(engine, vehicle_types)
         init_demo_driver()
+        init_additional_drivers()  # Agregar 4 conductores adicionales
 
     except Exception as e:
         print(f"Error al inicializar datos: {str(e)}")

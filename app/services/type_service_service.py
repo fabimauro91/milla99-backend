@@ -37,11 +37,11 @@ class TypeServiceService:
         """Inicializa los tipos de servicio por defecto (car ride y motorcycle ride)"""
         # Verificar si ya existen los tipos por defecto
         car_service = self.session.query(TypeService).filter(
-            TypeService.name == "Car Ride"
+            TypeService.name == "Car_Ride"
         ).first()
 
         moto_service = self.session.query(TypeService).filter(
-            TypeService.name == "Motorcycle Ride"
+            TypeService.name == "Motorcycle_Ride"
         ).first()
 
         # Obtener los tipos de vehículo
