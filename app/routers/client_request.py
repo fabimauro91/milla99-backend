@@ -56,7 +56,7 @@ class ClientRequestResponse(BaseModel):
 class AssignDriverRequest(BaseModel):
     id: int = Field(..., description="ID de la solicitud de viaje")
     id_driver_assigned: int = Field(...,
-                                    description="ID del conductor asignado")
+                                    description="Id_user que tiene como rol Driver")
     fare_assigned: float | None = Field(
         None, description="Tarifa asignada (opcional)")
 
@@ -349,7 +349,7 @@ Asigna un conductor a una solicitud de viaje existente y actualiza el estado y l
 
 **Parámetros:**
 - `id`: ID de la solicitud de viaje.
-- `id_driver_assigned`: ID del conductor asignado.
+- `id_driver_assigned`: user_id que tiene como rol Driver.
 - `fare_assigned`: Tarifa asignada (opcional).
 
 **Respuesta:**
