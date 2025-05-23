@@ -14,6 +14,7 @@ from app.models.driver_info import DriverInfo
 from app.models.vehicle_info import VehicleInfo
 from sqlalchemy.orm import selectinload
 import traceback
+from app.utils.geo_utils import wkb_to_coords
 
 
 def create_client_request(db: Session, data: ClientRequestCreate, id_client: int):
@@ -216,6 +217,8 @@ def get_client_request_detail_service(session: Session, client_request_id: int):
         "updated_at": cr.updated_at.isoformat(),
         "client": client_data,
         "id_driver_assigned": cr.id_driver_assigned,
+        "pickup_position": wkb_to_coords(cr.pickup_position),
+        "destination_position": wkb_to_coords(cr.destination_position),
         "driver_info": driver_info,
         "vehicle_info": vehicle_info
     }
@@ -241,6 +244,8 @@ def get_client_requests_by_status_service(session: Session, status: str):
             "client_rating": cr.client_rating,
             "driver_rating": cr.driver_rating,
             "status": str(cr.status),
+            "pickup_position": wkb_to_coords(cr.pickup_position),
+            "destination_position": wkb_to_coords(cr.destination_position),
             "created_at": cr.created_at.isoformat(),
             "updated_at": cr.updated_at.isoformat()
         }

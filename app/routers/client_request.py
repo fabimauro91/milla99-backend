@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Security
+from app.utils.geo_utils import wkb_to_coords
 
 bearer_scheme = HTTPBearer()
 
@@ -59,19 +60,19 @@ class AssignDriverRequest(BaseModel):
 # Utilidad para convertir WKBElement a dict lat/lng
 
 
-def wkb_to_coords(wkb):
-    """
-    Convierte un campo WKBElement a un diccionario con latitud y longitud.
-    Args:
-        wkb: WKBElement de la base de datos
-    Returns:
-        dict con 'lat' y 'lng' o None si wkb es None
-    """
-    from geoalchemy2.shape import to_shape
-    if wkb is None:
-        return None
-    point = to_shape(wkb)
-    return {"lat": point.y, "lng": point.x}
+# def wkb_to_coords(wkb):
+#     """
+#     Convierte un campo WKBElement a un diccionario con latitud y longitud.
+#     Args:
+#         wkb: WKBElement de la base de datos
+#     Returns:
+#         dict con 'lat' y 'lng' o None si wkb es None
+#     """
+#     from geoalchemy2.shape import to_shape
+#     if wkb is None:
+#         return None
+#     point = to_shape(wkb)
+#     return {"lat": point.y, "lng": point.x}
 
 
 @router.get("/distance", description="""
