@@ -370,14 +370,60 @@ def assign_driver(
     Asigna un conductor a una solicitud de viaje existente, cambia el estado a cualquiera de los estados
     "CREATED", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "TRAVELLING", "FINISHED", "CANCELLED"
     y actualiza la tarifa si se proporciona.
-
-    Args:
-        request_data: Datos de la solicitud de asignación
-        session: Sesión de base de datos
-    Returns:
-        Mensaje de éxito o error
     """
     try:
+        import traceback as tb
+        print("[DEBUG] request_data:", request_data)
+        # 1. Obtener la solicitud
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == request_data.id).first()
+        print("[DEBUG] client_request:", client_request)
+        if not client_request:
+            print("[ERROR] Solicitud no encontrada")
+            raise HTTPException(
+                status_code=404, detail="Solicitud no encontrada")
+
+        # 2. Obtener el tipo de servicio de la solicitud
+        type_service = session.query(TypeService).filter(
+            TypeService.id == client_request.type_service_id).first()
+        print("[DEBUG] type_service:", type_service)
+        if not type_service:
+            print("[ERROR] Tipo de servicio no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Tipo de servicio no encontrado")
+
+        # 3. Obtener el vehículo del conductor
+        from app.models.driver_info import DriverInfo
+        from app.models.vehicle_info import VehicleInfo
+
+        driver_info = session.query(DriverInfo).filter(
+            DriverInfo.user_id == request_data.id_driver_assigned).first()
+        print("[DEBUG] driver_info:", driver_info)
+        if not driver_info:
+            print("[ERROR] El conductor no tiene información registrada")
+            raise HTTPException(
+                status_code=404, detail="El conductor no tiene información registrada")
+
+        vehicle = session.query(VehicleInfo).filter(
+            VehicleInfo.driver_info_id == driver_info.id).first()
+        print("[DEBUG] vehicle:", vehicle)
+        if not vehicle:
+            print("[ERROR] El conductor no tiene vehículo registrado")
+            raise HTTPException(
+                status_code=404, detail="El conductor no tiene vehículo registrado")
+
+        # 4. Validar compatibilidad de tipo de vehículo
+        print(
+            f"[DEBUG] vehicle.vehicle_type_id: {vehicle.vehicle_type_id}, type_service.vehicle_type_id: {type_service.vehicle_type_id}")
+        if vehicle.vehicle_type_id != type_service.vehicle_type_id:
+            print(
+                "[ERROR] El conductor no tiene un vehículo compatible con el tipo de servicio solicitado")
+            raise HTTPException(
+                status_code=400,
+                detail="El conductor no tiene un vehículo compatible con el tipo de servicio solicitado"
+            )
+
+        # Si pasa la validación, asignar el conductor
         return assign_driver_service(
             session,
             request_data.id,
@@ -385,9 +431,12 @@ def assign_driver(
             request_data.fare_assigned
         )
     except HTTPException as e:
+        print("[HTTPException]", e.detail)
+        print(tb.format_exc())
         raise e
     except Exception as e:
-        print(traceback.format_exc())
+        print("[ERROR] Exception en assign_driver:")
+        print(tb.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Error al asignar el conductor: {str(e)}"
