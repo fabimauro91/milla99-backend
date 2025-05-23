@@ -14,6 +14,7 @@ from app.models.driver_info import DriverInfo
 from app.models.vehicle_info import VehicleInfo
 from sqlalchemy.orm import selectinload
 import traceback
+from app.models.type_service import TypeService
 
 
 def create_client_request(db: Session, data: ClientRequestCreate, id_client: int):
@@ -274,3 +275,86 @@ def update_driver_rating_service(session: Session, id_client_request: int, drive
     client_request.updated_at = datetime.utcnow()
     session.commit()
     return {"success": True, "message": "Calificación del conductor actualizada correctamente"}
+
+
+def assign_driver(self, client_request_id: int, driver_id: int):
+    """Asigna un conductor a una solicitud de cliente"""
+    client_request = self.session.query(ClientRequest).filter(
+        ClientRequest.id == client_request_id
+    ).first()
+
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    if client_request.id_driver_assigned:
+        raise HTTPException(
+            status_code=400, detail="La solicitud ya tiene un conductor asignado")
+
+    # Verificar que el usuario es un conductor
+    driver = self.session.query(User).filter(
+        User.id == driver_id,
+        User.role == "DRIVER"
+    ).first()
+
+    if not driver:
+        raise HTTPException(
+            status_code=400, detail="El usuario no es un conductor")
+
+    # Verificar que el conductor tiene un vehículo del tipo correcto
+    driver_vehicle = self.session.query(VehicleInfo).filter(
+        VehicleInfo.user_id == driver_id,
+        VehicleInfo.vehicle_type_id == client_request.type_service.vehicle_type_id
+    ).first()
+
+    if not driver_vehicle:
+        raise HTTPException(
+            status_code=400,
+            detail="El conductor no tiene un vehículo del tipo requerido para este servicio"
+        )
+
+    client_request.id_driver_assigned = driver_id
+    client_request.status = StatusEnum.ACCEPTED
+    self.session.add(client_request)
+    self.session.commit()
+    self.session.refresh(client_request)
+    return client_request
+
+
+def get_nearby_requests(self, driver_id: int, lat: float, lng: float, max_distance: float = 5.0):
+    """Obtiene las solicitudes cercanas al conductor, filtrando por tipo de servicio"""
+    # Obtener el vehículo del conductor
+    driver_vehicle = self.session.query(VehicleInfo).filter(
+        VehicleInfo.user_id == driver_id
+    ).first()
+
+    if not driver_vehicle:
+        raise HTTPException(
+            status_code=400,
+            detail="El conductor no tiene un vehículo registrado"
+        )
+
+    # Obtener el tipo de servicio que puede manejar el conductor
+    type_services = self.session.query(TypeService).filter(
+        TypeService.vehicle_type_id == driver_vehicle.vehicle_type_id
+    ).all()
+
+    if not type_services:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay servicios disponibles para el tipo de vehículo del conductor"
+        )
+
+    type_service_ids = [ts.id for ts in type_services]
+
+    # Obtener las solicitudes cercanas del tipo de servicio correspondiente
+    nearby_requests = self.session.query(ClientRequest).filter(
+        ClientRequest.status == StatusEnum.CREATED,
+        ClientRequest.type_service_id.in_(type_service_ids),
+        func.ST_Distance(
+            func.ST_SetSRID(func.ST_MakePoint(
+                ClientRequest.pickup_lng, ClientRequest.pickup_lat), 4326),
+            func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326)
+        ) <= max_distance
+    ).all()
+
+    return nearby_requests

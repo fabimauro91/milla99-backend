@@ -20,6 +20,7 @@ class ClientRequestCreate(SQLModel):
     pickup_lng: float
     destination_lat: float
     destination_lng: float
+    type_service_id: int  # Nuevo campo
 
 
 class StatusEnum(str, enum.Enum):
@@ -39,6 +40,8 @@ class ClientRequest(SQLModel, table=True):
     id_client: int = Field(foreign_key="user.id")
     id_driver_assigned: Optional[int] = Field(
         default=None, foreign_key="user.id")
+    type_service_id: int = Field(
+        foreign_key="typeservice.id")  # Nueva relación
     fare_offered: Optional[float] = Field(default=None)
     fare_assigned: Optional[float] = Field(default=None)
     pickup_description: Optional[str] = Field(default=None, max_length=255)
@@ -78,3 +81,5 @@ class ClientRequest(SQLModel, table=True):
     )
     transactions: list["Transaction"] = Relationship(
         back_populates="client_request")
+    type_service: "TypeService" = Relationship(
+        back_populates="client_requests")  # Nueva relación

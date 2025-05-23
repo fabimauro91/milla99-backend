@@ -18,3 +18,4 @@ from .vehicle_type_configuration import VehicleTypeConfiguration, VehicleTypeCon
 from .driver_trip_offer import DriverTripOfferCreate, DriverTripOffer
 from .transaction import Transaction, TransactionType
 from .verify_mount import VerifyMount
+from .type_service import TypeService, TypeServiceCreate, TypeServiceRead

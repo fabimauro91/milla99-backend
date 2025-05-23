@@ -21,6 +21,7 @@ from decimal import Decimal
 import shutil
 import os
 from app.models.vehicle_type_configuration import VehicleTypeConfiguration
+from app.services.type_service_service import TypeServiceService
 
 
 def init_roles():
@@ -126,10 +127,18 @@ def init_vehicle_types(engine):
         if existing_types:
             return
 
-        # Crear tipos de vehículos
+        # Crear tipos de vehículos con sus capacidades
         vehicle_types = [
-            VehicleType(name="car", capacity=4),
-            VehicleType(name="moto", capacity=1)
+            VehicleType(
+                name="Car",
+                description="Four-wheeled vehicle for passenger transportation",
+                capacity=4
+            ),
+            VehicleType(
+                name="Motorcycle",
+                description="Two-wheeled vehicle for passenger transportation",
+                capacity=1
+            )
         ]
 
         for vehicle_type in vehicle_types:
@@ -517,14 +526,34 @@ def init_demo_driver():
 
 
 def init_data():
-    init_roles()
-    init_document_types()
-    init_test_user()
-    init_driver_documents()
-    vehicle_types = init_vehicle_types(engine)
-    if not vehicle_types:
-        # Si ya existen, obténlos de la base de datos
-        with Session(engine) as session:
-            vehicle_types = session.exec(select(VehicleType)).all()
-    init_time_distance_values(engine, vehicle_types)
-    init_demo_driver()
+    """Inicializa los datos por defecto de la aplicación"""
+    session = Session(engine)
+
+    try:
+        # Primero inicializar roles y tipos de documento
+        init_roles()
+        init_document_types()
+
+        # Luego inicializar tipos de vehículo
+        vehicle_types = init_vehicle_types(engine)
+        if not vehicle_types:
+            # Si ya existen, obténlos de la base de datos
+            with Session(engine) as session:
+                vehicle_types = session.exec(select(VehicleType)).all()
+
+        # Después inicializar tipos de servicio (que dependen de los tipos de vehículo)
+        type_service_service = TypeServiceService(session)
+        type_service_service.init_default_types()
+
+        # Finalmente inicializar el resto de datos
+        init_test_user()
+        init_driver_documents()
+        init_time_distance_values(engine, vehicle_types)
+        init_demo_driver()
+
+    except Exception as e:
+        print(f"Error al inicializar datos: {str(e)}")
+        session.rollback()
+        raise
+    finally:
+        session.close()
