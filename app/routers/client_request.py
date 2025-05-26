@@ -12,7 +12,8 @@ from app.services.client_requests_service import (
     get_client_request_detail_service,
     get_client_requests_by_status_service,
     update_client_rating_service,
-    update_driver_rating_service
+    update_driver_rating_service,
+    cancel_client_request_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Security
+from datetime import datetime
 
 bearer_scheme = HTTPBearer()
 
@@ -59,6 +61,13 @@ class AssignDriverRequest(BaseModel):
                                     description="Id_user que tiene como rol Driver")
     fare_assigned: float | None = Field(
         None, description="Tarifa asignada (opcional)")
+
+
+class CancelClientRequestRequest(BaseModel):
+    id_client_request: int = Field(...,
+                                   description="ID de la solicitud de viaje a cancelar")
+    reason: str | None = Field(
+        None, description="Razón de la cancelación (opcional)")
 
 
 # Utilidad para convertir WKBElement a dict lat/lng
@@ -526,3 +535,36 @@ def update_driver_rating(
     """
     user_id = request.state.user_id
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)
+
+
+@router.patch("/cancel", description="""
+Cancela una solicitud de viaje existente. Solo el cliente que creó la solicitud puede cancelarla.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje a cancelar.
+- `reason`: Razón de la cancelación (opcional).
+
+**Restricciones:**
+- Solo se puede cancelar si el estado es CREATED o ACCEPTED
+- Solo el cliente que creó la solicitud puede cancelarla
+- Si hay conductor asignado, se le notificará de la cancelación
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def cancel_client_request(
+    request: Request,
+    cancel_data: CancelClientRequestRequest = Body(...),
+    session: Session = Depends(get_session)
+):
+    """
+    Endpoint para cancelar una solicitud de viaje.
+    Delega la lógica de negocio al servicio cancel_client_request_service.
+    """
+    user_id = request.state.user_id
+    return cancel_client_request_service(
+        session=session,
+        client_request_id=cancel_data.id_client_request,
+        user_id=user_id,
+        reason=cancel_data.reason
+    )

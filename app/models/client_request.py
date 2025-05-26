@@ -30,6 +30,7 @@ class StatusEnum(str, enum.Enum):
     ARRIVED = "ARRIVED"
     TRAVELLING = "TRAVELLING"
     FINISHED = "FINISHED"
+    PAID = "PAID"
     CANCELLED = "CANCELLED"
 
 # Modelo de base de datos
