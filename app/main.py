@@ -9,11 +9,7 @@ from app.routers.transaction import router as transaction_router
 from app.routers.verify_mount import router as verify_mount_router
 
 from .core.db import create_all_tables
-<<<<<<< HEAD
-from .routers import  referrals, users, drivers, auth, verify_docs, driver_position,driver_trip_offer, client_request, vehicle_type_configuration
-=======
-from .routers import users, drivers, auth, verify_docs, driver_position, driver_trip_offer, client_request, vehicle_type_configuration
->>>>>>> origin/daniel
+from .routers import referrals, users, drivers, auth, verify_docs, driver_position, driver_trip_offer, client_request, vehicle_type_configuration
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
