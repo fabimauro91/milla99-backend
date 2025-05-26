@@ -13,7 +13,8 @@ from app.services.client_requests_service import (
     get_client_requests_by_status_service,
     update_client_rating_service,
     update_driver_rating_service,
-    cancel_client_request_service
+    cancel_client_request_service,
+    get_nearby_drivers_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -231,25 +232,6 @@ def get_nearby_client_requests(
         print(traceback.format_exc())
         raise HTTPException(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
-
-
-@router.get("/{client_request_id}", description="""
-Consulta el estado y la información detallada de una solicitud de viaje específica.
-
-**Parámetros:**
-- `client_request_id`: ID de la solicitud de viaje.
-
-**Respuesta:**
-Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
-""")
-def get_client_request_detail(
-    client_request_id: int,
-    session: Session = Depends(get_session)
-):
-    """
-    Consulta el estado y la información detallada de una Client Request específica.
-    """
-    return get_client_request_detail_service(session, client_request_id)
 
 
 @router.get("/by-status/{status}", description="""
@@ -568,3 +550,104 @@ def cancel_client_request(
         user_id=user_id,
         reason=cancel_data.reason
     )
+
+
+@router.get("/nearby-drivers", description="""
+Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
+
+**Parámetros:**
+- `client_lat`: Latitud del cliente.
+- `client_lng`: Longitud del cliente.
+- `type_service_id`: ID del tipo de servicio solicitado.
+
+**Respuesta:**
+Devuelve una lista de conductores cercanos con su información, incluyendo:
+- Información del conductor
+- Información del vehículo
+- Distancia al cliente
+- Calificación promedio
+- Tiempo estimado de llegada (usando Google Distance Matrix)
+""")
+def get_nearby_drivers(
+    request: Request,
+    client_lat: float = Query(..., example=4.708822,
+                              description="Latitud del cliente"),
+    client_lng: float = Query(..., example=-74.076542,
+                              description="Longitud del cliente"),
+    type_service_id: int = Query(..., example=1,
+                                 description="ID del tipo de servicio solicitado"),
+    session: Session = Depends(get_session)
+):
+    """
+    Endpoint para obtener conductores cercanos a un cliente.
+    """
+    import traceback as tb
+    try:
+        # Verificar que el usuario es CLIENT
+        user_id = request.state.user_id
+        print(f"[DEBUG] user_id: {user_id}")
+        user_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == user_id,
+            UserHasRole.id_rol == "CLIENT"
+        ).first()
+        print(f"[DEBUG] user_role: {user_role}")
+        if user_role:
+            print(f"[DEBUG] user_role.status: {user_role.status}")
+
+        if not user_role or user_role.status != RoleStatus.APPROVED:
+            print("[ERROR] El usuario no tiene el rol de cliente aprobado")
+            tb.print_stack()
+            raise HTTPException(
+                status_code=400,
+                detail="El usuario no tiene el rol de cliente aprobado"
+            )
+
+        results = get_nearby_drivers_service(
+            client_lat=client_lat,
+            client_lng=client_lng,
+            type_service_id=type_service_id,
+            session=session,
+            wkb_to_coords=wkb_to_coords
+        )
+
+        if not results:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "message": "No hay conductores disponibles en un radio de 5km",
+                    "data": []
+                }
+            )
+
+        return JSONResponse(content=results, status_code=200)
+
+    except HTTPException as e:
+        print(f"[HTTPException] {e.detail}")
+        print(tb.format_exc())
+        raise e
+    except Exception as e:
+        print(f"[ERROR] Exception en get_nearby_drivers: {str(e)}")
+        print(tb.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al buscar conductores cercanos: {str(e)}"
+        )
+
+
+@router.get("/{client_request_id}", description="""
+Consulta el estado y la información detallada de una solicitud de viaje específica.
+
+**Parámetros:**
+- `client_request_id`: ID de la solicitud de viaje.
+
+**Respuesta:**
+Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
+""")
+def get_client_request_detail(
+    client_request_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Consulta el estado y la información detallada de una Client Request específica.
+    """
+    return get_client_request_detail_service(session, client_request_id)
