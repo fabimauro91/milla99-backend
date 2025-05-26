@@ -31,6 +31,7 @@ class DriverInfoResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
+    id: int
     full_name: str
     country_code: str
     phone_number: str
