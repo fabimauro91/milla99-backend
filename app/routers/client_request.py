@@ -339,8 +339,8 @@ def create_request(
 Asigna un conductor a una solicitud de viaje existente y actualiza el estado y la tarifa si se proporciona.
 
 **Parámetros:**
-- `id`: ID de la solicitud de viaje.
-- `id_driver_assigned`: user_id que tiene como rol Driver.
+- `id_client_request`: ID de la solicitud de viaje.
+- `id_driver`: user_id que tiene como rol Driver.
 - `fare_assigned`: Tarifa asignada (opcional).
 
 **Respuesta:**
