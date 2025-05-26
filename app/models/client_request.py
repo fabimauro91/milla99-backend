@@ -55,11 +55,6 @@ class ClientRequest(SQLModel, table=True):
         sa_column=Column(Enum(StatusEnum))
     )
 
-    pickup_lat: Optional[float] = Field(default=None)
-    pickup_lng: Optional[float] = Field(default=None)
-    destination_lat: Optional[float] = Field(default=None)
-    destination_lng: Optional[float] = Field(default=None)
-
     pickup_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
     destination_position: Optional[object] = Field(
