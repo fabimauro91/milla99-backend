@@ -3,7 +3,6 @@ from app.models.user import User, UserCreate, UserUpdate
 from app.models.role import Role
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.referral_chain import Referral
-from app.services.earnings_service import validate_referral_token
 from fastapi import HTTPException, status
 from sqlalchemy.orm import selectinload
 from datetime import datetime
@@ -45,14 +44,15 @@ class UserService:
             user.roles.append(client_role)
             
              # Si hay un token de referido, validarlo y crear la relación de referido
-            if user_data.referral_token:
-                referrer_id = validate_referral_token(user_data.referral_token)
-
-                if referrer_id:
-                    # Crear la relación de referido
-                    referral = Referral(user_id=user.id, referred_by_id=referrer_id)
+            if user_data.referral_phone:
+                referral_user = self.session.exec(
+                select(User).where(
+                    User.phone_number == user_data.referral_phone
+                    )
+                ).first()
+                if referral_user:
+                    referral = Referral(user_id=user.id, referred_by_id=referral_user.id)
                     self.session.add(referral)
-
 
             # Actualizar el estado de la relación a través del link_model
             user_role = self.session.exec(

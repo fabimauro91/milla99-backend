@@ -29,7 +29,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/static/uploads/drivers/", "GET"),
             ("/distance-value/","GET"),
             ("/vehicle-type-configuration/","GET"),
-            ("/referrals/", "POST"),
+            #("/referrals/", "POST"),
             ("/referrals/", "GET"),
         ]
 

@@ -1,16 +1,14 @@
 # app/services/earnings_service.py
-from typing import List, Optional
+from typing import List, Optional 
 from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.client_request import ClientRequest, StatusEnum
 from app.models.referral_chain import Referral
-from app.models.profit_sharing_record import Earning
+from app.models.transaction import Transaction
+from app.models.project_settings import ProjectSettings
 from app.models.user import User
-import jwt
-from datetime import datetime, timedelta
-import base64
-import json
+from app.models.driver_savings import DriverSavings
+from app.models.company_account import CompanyAccount
 from app.core.config import settings
 
 # Id especial (o None) para la empresa
@@ -31,6 +29,17 @@ def _get_referral_chain(session, user_id: int, levels: int = 3) -> list[int]:
 
     return chain
 
+
+def get_config_percentages(session):
+    """
+    Devuelve un diccionario con los porcentajes configurados en la tabla de configuración.
+    """
+    config = session.query(ProjectSettings).all()  # Ajusta el nombre de tu modelo
+    config_dict = {row.description: Decimal(str(row.value)) for row in config}
+    return config_dict
+
+
+
 def distribute_earnings(session, request: ClientRequest) -> None:
     if request.status != StatusEnum.FINISHED:
         return
@@ -39,97 +48,144 @@ def distribute_earnings(session, request: ClientRequest) -> None:
     if fare <= 0:
         return
 
-    total_box = fare * Decimal("0.10")
-    driver_saving = fare * Decimal("0.01")
-    remaining_box = total_box - driver_saving
-    company_base_share = fare * Decimal("0.04")
-    referrals_total = fare * Decimal("0.05")
-    each_ref_share = (referrals_total / 3).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
+    # Obtener los porcentajes desde la tabla de configuración
+    # Sin valores por defecto - lanzará error si falta algún valor
+    config = get_config_percentages(session)
+    driver_saving_pct = config["driver_saving"]
+    company_pct = config["company"]
+    referral_pcts = [
+        config["referral_1"],
+        config["referral_2"],
+        config["referral_3"],
+        config["referral_4"],
+        config["referral_5"],
+    ]
 
-    chain_ids = _get_referral_chain(session, request.id_client, levels=3)
+    # Obtener la cadena de referidos
+    chain_ids = _get_referral_chain(session, request.id_client, levels=5)
 
     earnings = []
 
-    earnings.append(Earning(
-        client_request_id=request.id,
+    # Ganancia del conductor
+    driver_saving = (fare * driver_saving_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    earnings.append(DriverSavings(
         user_id=request.id_driver_assigned,
-        amount=float(driver_saving),
-        concept="driver_saving"
+        income=driver_saving, 
+        expense= 0,   
+        type="SERVICE",
+        client_request_id=request.id
     ))
 
-    company_share = company_base_share
-
-    for idx in range(3):
+    # Ganancias de referidos
+    company_share = (fare * company_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    earnings.append(CompanyAccount(
+        client_request_id=request.id,
+        income=company_share,
+        type="SERVICE"
+    ))
+    company_share = 0
+    for idx, pct in enumerate(referral_pcts):
         if idx < len(chain_ids):
-            earnings.append(Earning(
+            ref_amount = (fare * pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            earnings.append(Transaction(
                 client_request_id=request.id,
                 user_id=chain_ids[idx],
-                amount=float(each_ref_share),
-                concept=f"referral_{idx+1}"
+                income=ref_amount,
+                expense= 0,
+                type=f"REFERRAL_{idx+1}"
             ))
         else:
-            company_share += each_ref_share
+            # Si no hay referido, ese porcentaje se suma a la compañía
+            company_share += (fare * pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    earnings.append(Earning(
-        client_request_id=request.id,
-        user_id=COMPANY_ID,
-        amount=float(company_share),
-        concept="company"
-    ))
+    # Ganancia de la compañía
+    if company_share > 0:
+        earnings.append(CompanyAccount(
+            client_request_id=request.id,
+            income=company_share,
+            type="ADDITIONAL"
+        ))
 
     session.add_all(earnings)
     session.commit()
 
 
-def generate_referral_link(session, user_id: int) -> str:
-    """
-    Genera un enlace de referido para un usuario específico.
-    El enlace contiene información codificada sobre el usuario que refiere.
-    """
-    # Verificar que el usuario existe
-    user = session.exec(
+def get_referral_earnings_structured(session, user_id: int):
+
+    user = session.execute(
         select(User).where(User.id == user_id)
-    ).first()
-
+    ).scalar_one_or_none()
     if not user:
-        raise ValueError(f"Usuario con ID {user_id} no encontrado")
+        return None
 
-    # Crear payload con información del referente
-    payload = {
-        "referrer_id": user_id,
-        "exp": datetime.utcnow() + timedelta(days=30)  # El link expira en 30 días
+    stmt = select(Referral.user_id, Referral.referred_by_id)
+    rows = session.execute(stmt).all()
+    children_map = {}
+    for child_id, parent_id in rows:
+        if parent_id is not None:
+            children_map.setdefault(parent_id, []).append(child_id)
+
+    levels = 5
+    level_users = [[] for _ in range(levels)]
+    current_level = children_map.get(user_id, [])
+    for lvl in range(levels):
+        if not current_level:
+            break
+        level_users[lvl].extend(current_level)
+        next_level = []
+        for uid in current_level:
+            next_level.extend(children_map.get(uid, []))
+        current_level = next_level
+
+    if not any(level_users):
+        return {
+            "user_id": user.id,
+            "full_name": user.full_name,
+            "phone_number": user.phone_number,
+            "levels": [],
+            "message": "El usuario no tiene referidos."
+        }
+
+    config = get_config_percentages(session)
+    referral_pcts = [
+        config.get("referral_1", 0),
+        config.get("referral_2", 0),
+        config.get("referral_3", 0),
+        config.get("referral_4", 0),
+        config.get("referral_5", 0),
+    ]
+
+    user_info_map = {}
+    all_user_ids = [uid for level in level_users for uid in level]
+    if all_user_ids:
+        users = session.execute(
+            select(User).where(User.id.in_(all_user_ids))
+        ).scalars().all()
+        for u in users:
+            user_info_map[u.id] = u
+
+    levels_structured = []
+    for i, users_in_level in enumerate(level_users):
+        if not users_in_level:
+            continue
+        pct = referral_pcts[i] * 100
+        users_list = []
+        for uid in users_in_level:
+            u = user_info_map.get(uid)
+            users_list.append({
+                "id": uid,
+                "full_name": u.full_name if u else None,
+                "phone_number": u.phone_number if u else None
+            })
+        levels_structured.append({
+            "level": i + 1,
+            "percentage": pct,
+            "users": users_list
+        })
+
+    return {
+        "user_id": user.id,
+        "full_name": user.full_name,
+        "phone_number": user.phone_number,
+        "levels": levels_structured
     }
-
-    # Generar token firmado
-    token = jwt.encode(
-        payload,
-        settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM
-    )
-
-    # Crear el enlace completo
-    base_url = settings.APP_URL if hasattr(settings, 'APP_URL') else "https://milla99.com"
-    referral_link = f"{base_url}/register?ref={token}"
-
-    return referral_link
-
-def validate_referral_token(session, token: str) -> Optional[int]:
-        """
-        Valida un token de referido y devuelve el ID del usuario referente.
-        """
-        try:
-            # Decodificar el token
-            payload = jwt.decode(
-                token,
-                settings.SECRET_KEY,
-                algorithms=[settings.ALGORITHM]
-            )
-
-            # Verificar que el token no ha expirado
-            if datetime.fromtimestamp(payload["exp"]) < datetime.utcnow():
-                return None
-
-            # Devolver el ID del referente
-            return payload["referrer_id"]
-        except:
-            return None

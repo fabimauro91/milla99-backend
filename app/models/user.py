@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, Annotated, List
+from typing import Optional, Annotated, List,ClassVar
 from pydantic import constr, field_validator, ValidationInfo, BaseModel
 from enum import Enum
 import phonenumbers
@@ -8,6 +8,7 @@ from datetime import datetime, date
 from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
 from datetime import datetime
+from sqlalchemy.orm import relationship
 
 
 # Custom validated types
@@ -65,7 +66,8 @@ class User(UserBase, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
-
+    transactions: List["Transaction"] = Relationship(back_populates="user")
+    driver_savings: List["DriverSavings"] = Relationship(back_populates="user")
 
 class UserCreate(SQLModel):
     full_name: str = Field(
@@ -79,7 +81,10 @@ class UserCreate(SQLModel):
         min_length=10,
         max_length=10
     )
-
+    referral_phone: Optional[str] = Field(
+        default=None,
+        description="Token de referido (opcional)"
+    )
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, value: str) -> str:
