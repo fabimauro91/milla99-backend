@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # Deberías cambiar esto
     SECRET_KEY: str = "efdfd804e424be4cd3d4c94f7769da129c45ff2a4a7a1c365e8641715f621000"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
 
     CLICK_SEND_USERNAME: str
     CLICK_SEND_PASSWORD: str
@@ -48,6 +48,7 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=True
     )
+
 
 @lru_cache()
 def get_settings():

@@ -20,6 +20,7 @@ class ClientRequestCreate(SQLModel):
     pickup_lng: float
     destination_lat: float
     destination_lng: float
+    type_service_id: int  # Nuevo campo
 
 
 class StatusEnum(str, enum.Enum):
@@ -29,6 +30,7 @@ class StatusEnum(str, enum.Enum):
     ARRIVED = "ARRIVED"
     TRAVELLING = "TRAVELLING"
     FINISHED = "FINISHED"
+    PAID = "PAID"
     CANCELLED = "CANCELLED"
 
 # Modelo de base de datos
@@ -39,6 +41,8 @@ class ClientRequest(SQLModel, table=True):
     id_client: int = Field(foreign_key="user.id")
     id_driver_assigned: Optional[int] = Field(
         default=None, foreign_key="user.id")
+    type_service_id: int = Field(
+        foreign_key="typeservice.id")  # Nueva relación
     fare_offered: Optional[float] = Field(default=None)
     fare_assigned: Optional[float] = Field(default=None)
     pickup_description: Optional[str] = Field(default=None, max_length=255)
@@ -50,11 +54,6 @@ class ClientRequest(SQLModel, table=True):
         default=StatusEnum.CREATED,
         sa_column=Column(Enum(StatusEnum))
     )
-
-    pickup_lat: Optional[float] = Field(default=None)
-    pickup_lng: Optional[float] = Field(default=None)
-    destination_lat: Optional[float] = Field(default=None)
-    destination_lng: Optional[float] = Field(default=None)
 
     pickup_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
@@ -79,6 +78,9 @@ class ClientRequest(SQLModel, table=True):
     transactions: List["Transaction"] = Relationship(back_populates="client_request")
     driver_savings: List["DriverSavings"] = Relationship(back_populates="client_request")
     company_accounts: List["CompanyAccount"] = Relationship(back_populates="client_request")
+
+    type_service: "TypeService" = Relationship(back_populates="client_requests")  # Nueva relación
+
 
 # Definir el listener para el evento after_update
 def after_update_listener(mapper, connection, target):
@@ -109,3 +111,4 @@ def after_update_listener(mapper, connection, target):
 
 # Registrar el evento después de definir la clase
 event.listen(ClientRequest, 'after_update', after_update_listener)    
+   

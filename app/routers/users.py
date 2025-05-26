@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, Query
+
+from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, File, UploadFile, Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
 
@@ -21,13 +22,25 @@ Crea un nuevo usuario en el sistema.
 - `full_name`: Nombre completo del usuario.
 - `country_code`: Código de país.
 - `phone_number`: Número de teléfono móvil.
+- `selfie`: Archivo de selfie (opcional).
 
 **Respuesta:**
 Devuelve el usuario creado con su información registrada.
 """)
-def create_user(session: SessionDep, user_data: UserCreate ):
+def create_user(
+    session: SessionDep,
+    full_name: str = Form(...),
+    country_code: str = Form(...),
+    phone_number: str = Form(...),
+    selfie: UploadFile = File(None)
+):
+    user_data = UserCreate(
+        full_name=full_name,
+        country_code=country_code,
+        phone_number=phone_number
+    )
     service = UserService(session)
-    return service.create_user(user_data)
+    return service.create_user(user_data, selfie)
 
 # List users endpoint (protegida)
 
@@ -87,3 +100,22 @@ def delete_user(user_id: int, request: Request, session: SessionDep):
 async def verify_user(user_id: int, request: Request, session: SessionDep):
     service = UserService(session)
     return service.verify_user(user_id)
+
+
+@router.patch("/selfie", status_code=status.HTTP_200_OK)
+def update_selfie(
+    request: Request,
+    session: SessionDep,
+    selfie: UploadFile = File(...)
+):
+    user_id = request.state.user_id
+    service = UserService(session)
+    return service.update_selfie(user_id, selfie)
+
+
+@router.get("/{user_id}/balance", description="""
+Consulta el saldo total, el disponible para retiro y el mount de verify_mount para un usuario.
+""")
+def get_user_balance(user_id: int, session: SessionDep):
+    service = UserService(session)
+    return service.get_user_balance(user_id)

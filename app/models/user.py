@@ -47,16 +47,20 @@ class UserBase(SQLModel):
         return value
 
 
+class UserRole(str, Enum):
+    ADMIN = "ADMIN"
+    DRIVER = "DRIVER"
+    CLIENT = "CLIENT"
+
+
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    selfie_url: Optional[str] = None
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
-    # driver_documents: Optional["DriverDocuments"] = Relationship(back_populates="user")
-    # driver: Optional["Driver"] = Relationship(back_populates="user")
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")
     driver_position: Optional["DriverPosition"] = Relationship(
         back_populates="user")
-    # driver_documents: List["DriverDocuments"] = Relationship(back_populates="user")
     client_requests: List["ClientRequest"] = Relationship(
         back_populates="client",
         sa_relationship_kwargs={"foreign_keys": "[ClientRequest.id_client]"}
@@ -68,6 +72,8 @@ class User(UserBase, table=True):
     )
     transactions: List["Transaction"] = Relationship(back_populates="user")
     driver_savings: List["DriverSavings"] = Relationship(back_populates="user")
+    verify_mount: Optional["VerifyMount"] = Relationship(back_populates="user")
+
 
 class UserCreate(SQLModel):
     full_name: str = Field(
@@ -85,6 +91,8 @@ class UserCreate(SQLModel):
         default=None,
         description="Token de referido (opcional)"
     )
+    selfie_url: Optional[str] = None
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, value: str) -> str:
@@ -104,6 +112,7 @@ class UserUpdate(SQLModel):
     phone_number: Optional[PhoneNumber] = None
     is_verified_phone: Optional[bool] = None
     is_active: Optional[bool] = None
+    selfie_url: Optional[str] = None
 
     @field_validator("full_name")
     @classmethod
@@ -151,7 +160,6 @@ class DriverInfoRead(BaseModel):
     last_name: str
     birth_date: date
     email: Optional[str]
-    selfie_url: str
     vehicle_info: Optional[VehicleInfoRead] = None
 
 
@@ -162,6 +170,7 @@ class UserRead(BaseModel):
     is_verified_phone: bool
     is_active: bool
     full_name: Optional[str]
+    selfie_url: Optional[str] = None
     roles: List[RoleRead]
     driver_info: Optional[DriverInfoRead] = None
 
@@ -173,6 +182,7 @@ class UserInDB(UserBase):
     id: int
     is_active: bool
     is_verified_phone: bool
+    selfie_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -182,6 +192,7 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     is_verified_phone: bool
+    selfie_url: Optional[str] = None
 
     class Config:
         from_attributes = True

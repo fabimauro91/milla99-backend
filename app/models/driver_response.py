@@ -27,14 +27,14 @@ class DriverInfoResponse(BaseModel):
     first_name: str
     last_name: str
     birth_date: str
-    email: str
-    selfie_url: Optional[str]
+    email: Optional[str]
 
 
 class UserResponse(BaseModel):
     full_name: str
     country_code: str
     phone_number: str
+    selfie_url: Optional[str] = None
 
 
 class DriverFullResponse(BaseModel):

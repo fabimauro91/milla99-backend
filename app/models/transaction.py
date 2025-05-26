@@ -1,8 +1,9 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, TYPE_CHECKING, ClassVar,List
+from sqlalchemy.orm import relationship
 from enum import Enum
 from datetime import datetime
-from sqlalchemy.orm import relationship
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .user import User
@@ -29,8 +30,13 @@ class Transaction(SQLModel, table=True):
     client_request_id: Optional[int] = Field(
         default=None, foreign_key="clientrequest.id")
     date: datetime = Field(default_factory=datetime.utcnow)
-
-    # Relación con ClassVar
     user: Optional["User"] = Relationship(back_populates="transactions")
-    client_request: Optional["ClientRequest"] = Relationship(back_populates="transactions")
-   
+    client_request: Optional["ClientRequest"] = Relationship(
+        back_populates="transactions")
+
+
+class TransactionCreate(BaseModel):
+    income: Optional[int] = 0
+    expense: Optional[int] = 0
+    type: TransactionType
+    client_request_id: Optional[int] = None

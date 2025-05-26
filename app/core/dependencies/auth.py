@@ -1,5 +1,6 @@
 from fastapi import Request, HTTPException, status, Path
 
+
 def user_is_owner():
     def dependency(
         user_id: int = Path(...),  # FastAPI inyecta el parámetro de la ruta
@@ -10,4 +11,4 @@ def user_is_owner():
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permiso para acceder a este recurso"
             )
-    return dependency 
+    return dependency
