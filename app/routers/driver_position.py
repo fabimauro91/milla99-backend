@@ -8,6 +8,7 @@ from app.models.project_settings import ProjectSettings
 
 router = APIRouter(prefix="/drivers-position", tags=["drivers-position"])
 
+
 @router.post(
     "/",
     response_model=DriverPositionRead,
@@ -30,7 +31,8 @@ def create_driver_position(
 ):
     service = DriverPositionService(session)
     obj = service.create_driver_position(data)
-    return DriverPositionRead.from_orm_with_point(obj) 
+    return DriverPositionRead.from_orm_with_point(obj)
+
 
 @router.get(
     "/{id_driver}",
@@ -52,8 +54,10 @@ def get_driver_position(
     service = DriverPositionService(session)
     obj = service.get_driver_position(id_driver)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conductor no encontrado o sin posición registrada")
-    return DriverPositionRead.from_orm_with_point(obj) 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Conductor no encontrado o sin posición registrada")
+    return DriverPositionRead.from_orm_with_point(obj)
+
 
 @router.delete(
     "/{id_driver}",
@@ -75,7 +79,8 @@ def delete_driver_position(
     service = DriverPositionService(session)
     success = service.delete_driver_position(id_driver)
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conductor no encontrado o sin posición registrada") 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Conductor no encontrado o sin posición registrada")
 
 
 @router.get(
@@ -100,7 +105,8 @@ Incluye la posición y la distancia (en kilómetros) de cada conductor respecto 
 def get_nearby_drivers(
     lat: float = Query(..., description="Latitud del punto de búsqueda"),
     lng: float = Query(..., description="Longitud del punto de búsqueda"),
-    max_distance: Optional[float] = Query(None, description="Distancia máxima en kilómetros (por defecto: valor de configuración)"),
+    max_distance: Optional[float] = Query(
+        None, description="Distancia máxima en kilómetros (por defecto: valor de configuración)"),
     session: Session = Depends(get_session)
 ):
     # Si no se especifica max_distance, obtener el valor de ProjectSettings id=1
@@ -116,3 +122,17 @@ def get_nearby_drivers(
 
     service = DriverPositionService(session)
     return service.get_nearby_drivers(lat=lat, lng=lng, max_distance_km=max_distance)
+
+
+@router.get(
+    "/by-client-request/{id_client_request}",
+    description="""
+    Retorna los conductores cercanos según el tipo de client request.
+    """
+)
+def get_nearby_drivers_by_client_request(
+    id_client_request: int,
+    session: Session = Depends(get_session)
+):
+    service = DriverPositionService(session)
+    return service.get_nearby_drivers_by_client_request(id_client_request)
