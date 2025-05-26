@@ -206,3 +206,47 @@ class DriverPositionService:
             },
             "nearby_drivers": results
         }
+
+    def get_driver_position_by_client_request(self, id_client_request: int):
+        from app.models.client_request import ClientRequest
+        from app.models.driver_info import DriverInfo
+        from app.models.vehicle_info import VehicleInfo
+        from app.models.user import User
+        from app.services.client_requests_service import wkb_to_coords
+
+        # 1. Obtener la solicitud de viaje
+        client_request = self.session.query(ClientRequest).filter(
+            ClientRequest.id == id_client_request).first()
+        if not client_request:
+            raise HTTPException(
+                status_code=404, detail="Client request no encontrada")
+
+        # 2. Verificar que tenga conductor asignado
+        driver_id = client_request.id_driver_assigned
+        if not driver_id:
+            raise HTTPException(
+                status_code=404, detail="La solicitud no tiene conductor asignado")
+
+        # 3. Obtener info del conductor
+        user = self.session.query(User).filter(User.id == driver_id).first()
+        driver_info = self.session.query(DriverInfo).filter(
+            DriverInfo.user_id == driver_id).first()
+        vehicle_info = self.session.query(VehicleInfo).filter(
+            VehicleInfo.driver_info_id == driver_info.id).first() if driver_info else None
+
+        if not driver_info or not driver_info.current_position:
+            raise HTTPException(
+                status_code=404, detail="El conductor no tiene posición registrada")
+
+        driver_position = wkb_to_coords(driver_info.current_position)
+
+        return {
+            "driver_id": user.id,
+            "full_name": user.full_name,
+            "current_position": driver_position,
+            "vehicle": {
+                "brand": vehicle_info.brand if vehicle_info else None,
+                "model": vehicle_info.model if vehicle_info else None,
+                "plate": vehicle_info.plate if vehicle_info else None
+            } if vehicle_info else None
+        }

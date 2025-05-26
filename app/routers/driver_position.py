@@ -127,12 +127,12 @@ def get_nearby_drivers(
 @router.get(
     "/by-client-request/{id_client_request}",
     description="""
-    Retorna los conductores cercanos según el tipo de client request.
+    Devuelve la posición actual del conductor asignado a la solicitud de viaje.
     """
 )
-def get_nearby_drivers_by_client_request(
+def get_driver_position_by_client_request(
     id_client_request: int,
     session: Session = Depends(get_session)
 ):
     service = DriverPositionService(session)
-    return service.get_nearby_drivers_by_client_request(id_client_request)
+    return service.get_driver_position_by_client_request(id_client_request)
