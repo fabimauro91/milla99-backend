@@ -17,7 +17,6 @@ from .driver_position import DriverPosition
 from .vehicle_type_configuration import VehicleTypeConfiguration, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 from .driver_trip_offer import DriverTripOfferCreate, DriverTripOffer
 from .project_settings import ProjectSettings
-from .profit_sharing_record import Earning
 from .referral_chain import Referral
 from .transaction import Transaction
 from .company_account import CompanyAccount
