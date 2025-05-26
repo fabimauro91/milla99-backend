@@ -112,10 +112,3 @@ def update_selfie(
     service = UserService(session)
     return service.update_selfie(user_id, selfie)
 
-
-@router.get("/{user_id}/balance", description="""
-Consulta el saldo total, el disponible para retiro y el mount de verify_mount para un usuario.
-""")
-def get_user_balance(user_id: int, session: SessionDep):
-    service = UserService(session)
-    return service.get_user_balance(user_id)
