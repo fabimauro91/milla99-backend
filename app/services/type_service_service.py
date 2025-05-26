@@ -62,7 +62,7 @@ class TypeServiceService:
         # Crear car ride si no existe
         if not car_service:
             car_service = TypeService(
-                name="Car Ride",
+                name="Car_Ride",
                 description="Passenger transportation service by car",
                 vehicle_type_id=car_type.id,
                 allowed_role=AllowedRole.DRIVER
@@ -72,7 +72,7 @@ class TypeServiceService:
         # Crear motorcycle ride si no existe
         if not moto_service:
             moto_service = TypeService(
-                name="Motorcycle Ride",
+                name="Motorcycle_Ride",
                 description="Passenger transportation service by motorcycle",
                 vehicle_type_id=moto_type.id,
                 allowed_role=AllowedRole.DRIVER
