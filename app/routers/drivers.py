@@ -30,7 +30,6 @@ Crea un nuevo conductor con sus documentos.
 - `driver_info`: Cadena JSON con los datos del conductor.
 - `vehicle_info`: Cadena JSON con los datos del vehículo.
 - `driver_documents`: Cadena JSON con las fechas de vencimiento de los documentos.
-- `selfie`: Archivo de la selfie del conductor (opcional).
 - `property_card_front`: Archivo del frente de la tarjeta de propiedad (opcional).
 - `property_card_back`: Archivo del reverso de la tarjeta de propiedad (opcional).
 - `license_front`: Archivo del frente de la licencia de conducir (opcional).
@@ -46,7 +45,6 @@ async def create_driver(
     driver_info: str = Form(...),
     vehicle_info: str = Form(...),
     driver_documents: str = Form(...),
-    selfie: Optional[UploadFile] = File(None),
     property_card_front: Optional[UploadFile] = File(None),
     property_card_back: Optional[UploadFile] = File(None),
     license_front: Optional[UploadFile] = File(None),
@@ -67,7 +65,6 @@ async def create_driver(
         driver_info: JSON string con los datos del conductor
         vehicle_info: JSON string con los datos del vehículo
         driver_documents: JSON string con las fechas de vencimiento de los documentos
-        selfie: Archivo de la selfie del conductor
         property_card_front: Frente de la tarjeta de propiedad
         property_card_back: Reverso de la tarjeta de propiedad
         license_front: Frente de la licencia de conducir
@@ -109,8 +106,7 @@ async def create_driver(
             user=user_data,
             driver_info=driver_info_data,
             vehicle_info=vehicle_info_data,
-            driver_documents=driver_docs,
-            selfie=selfie
+            driver_documents=driver_docs
         )
 
         service = DriverService(session)
@@ -118,8 +114,7 @@ async def create_driver(
             user_data=driver_data.user,
             driver_info_data=driver_data.driver_info,
             vehicle_info_data=driver_data.vehicle_info,
-            driver_documents_data=driver_data.driver_documents,
-            selfie=driver_data.selfie
+            driver_documents_data=driver_data.driver_documents
         )
 
         return DriverFullResponse(
@@ -133,7 +128,8 @@ async def create_driver(
                 last_name=result.driver_info.last_name,
                 birth_date=str(result.driver_info.birth_date),
                 email=result.driver_info.email,
-                selfie_url=result.driver_info.selfie_url
+                selfie_url=result.user.selfie_url if hasattr(
+                    result, 'user') and hasattr(result.user, 'selfie_url') else None
             ),
             vehicle_info=VehicleInfoResponse(
                 brand=result.vehicle_info.brand,
@@ -195,7 +191,6 @@ async def update_driver(
     last_name: Optional[str] = Form(None),
     birth_date: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
-    selfie: Optional[UploadFile] = File(None),
     # Datos del vehículo
     brand: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
@@ -241,13 +236,6 @@ async def update_driver(
         driver_info.birth_date = birth_date
     if email is not None:
         driver_info.email = email
-    if selfie is not None:
-        selfie_url = await uploader.save_driver_document(
-            file=selfie,
-            driver_info_id=driver_info.id,
-            document_type="selfie"
-        )
-        driver_info.selfie_url = selfie_url
 
     # Actualizar datos del vehículo
     if brand is not None:
@@ -398,7 +386,8 @@ async def update_driver(
             last_name=driver_info.last_name,
             birth_date=str(driver_info.birth_date),
             email=driver_info.email,
-            selfie_url=driver_info.selfie_url
+            selfie_url=driver_info.user.selfie_url if hasattr(
+                driver_info, 'user') and hasattr(driver_info.user, 'selfie_url') else None
         ),
         vehicle_info=VehicleInfoResponse(
             brand=vehicle_info.brand,

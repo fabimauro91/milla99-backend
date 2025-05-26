@@ -2,16 +2,20 @@ from sqlmodel import Session, select
 from app.models.user import User, UserCreate, UserUpdate
 from app.models.role import Role
 from app.models.user_has_roles import UserHasRole, RoleStatus
-from fastapi import HTTPException, status
+from app.models.referral_chain import Referral
+from typing import List, Optional
+from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.orm import selectinload
 from datetime import datetime
+import os
+from app.core.config import settings
 
 
 class UserService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_user(self, user_data: UserCreate) -> User:
+    def create_user(self, user_data: UserCreate, selfie: UploadFile = None) -> User:
         with self.session.begin():
             # Check for existing phone (country_code + phone_number)
             existing_user = self.session.exec(
@@ -31,16 +35,35 @@ class UserService:
             self.session.add(user)
             self.session.flush()  # Para obtener el id antes del commit
 
+            # Subir selfie si se proporciona
+            if selfie:
+                from app.services.upload_service import UploadService
+                uploader = UploadService()
+                selfie_info = self._save_user_selfie(uploader, user.id, selfie)
+                user.selfie_url = selfie_info["url"]
+                self.session.add(user)
+
             # Asignar el rol CLIENT por defecto
             client_role = self.session.exec(
                 select(Role).where(Role.id == "CLIENT")).first()
             if not client_role:
                 raise HTTPException(
                     status_code=500, detail="Rol CLIENT no existe")
-            
+
             # La relación se crea automáticamente a través del link_model
             user.roles.append(client_role)
             
+             # Si hay un token de referido, validarlo y crear la relación de referido
+            if user_data.referral_phone:
+                referral_user = self.session.exec(
+                select(User).where(
+                    User.phone_number == user_data.referral_phone
+                    )
+                ).first()
+                if referral_user:
+                    referral = Referral(user_id=user.id, referred_by_id=referral_user.id)
+                    self.session.add(referral)
+
             # Actualizar el estado de la relación a través del link_model
             user_role = self.session.exec(
                 select(UserHasRole).where(
@@ -58,6 +81,16 @@ class UserService:
             # El commit se hace automáticamente al salir del with
 
         return user
+
+    def _save_user_selfie(self, uploader, user_id, selfie: UploadFile):
+        """Guarda la selfie en static/uploads/users/{user_id}/selfie.jpg"""
+        selfie_dir = os.path.join("static", "uploads", "users", str(user_id))
+        os.makedirs(selfie_dir, exist_ok=True)
+        selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+        with open(selfie_path, "wb") as f:
+            f.write(selfie.file.read())
+        url = f"{settings.STATIC_URL_PREFIX}/users/{user_id}/selfie.jpg"
+        return {"url": url}
 
     def get_users(self) -> list[User]:
         return self.session.exec(select(User)).all()
@@ -105,3 +138,12 @@ class UserService:
         self.session.commit()
         self.session.refresh(user)
         return user
+
+    def update_selfie(self, user_id: int, selfie: UploadFile):
+        user = self.get_user(user_id)
+        selfie_info = self._save_user_selfie(None, user.id, selfie)
+        user.selfie_url = selfie_info["url"]
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return {"selfie_url": user.selfie_url}

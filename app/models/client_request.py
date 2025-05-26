@@ -1,8 +1,8 @@
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum
+from sqlalchemy import Column, Enum, event
 import enum
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional,List
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
 
@@ -20,6 +20,7 @@ class ClientRequestCreate(SQLModel):
     pickup_lng: float
     destination_lat: float
     destination_lng: float
+    type_service_id: int  # Nuevo campo
 
 
 class StatusEnum(str, enum.Enum):
@@ -29,6 +30,7 @@ class StatusEnum(str, enum.Enum):
     ARRIVED = "ARRIVED"
     TRAVELLING = "TRAVELLING"
     FINISHED = "FINISHED"
+    PAID = "PAID"
     CANCELLED = "CANCELLED"
 
 # Modelo de base de datos
@@ -39,6 +41,8 @@ class ClientRequest(SQLModel, table=True):
     id_client: int = Field(foreign_key="user.id")
     id_driver_assigned: Optional[int] = Field(
         default=None, foreign_key="user.id")
+    type_service_id: int = Field(
+        foreign_key="typeservice.id")  # Nueva relación
     fare_offered: Optional[float] = Field(default=None)
     fare_assigned: Optional[float] = Field(default=None)
     pickup_description: Optional[str] = Field(default=None, max_length=255)
@@ -50,11 +54,6 @@ class ClientRequest(SQLModel, table=True):
         default=StatusEnum.CREATED,
         sa_column=Column(Enum(StatusEnum))
     )
-
-    pickup_lat: Optional[float] = Field(default=None)
-    pickup_lng: Optional[float] = Field(default=None)
-    destination_lat: Optional[float] = Field(default=None)
-    destination_lng: Optional[float] = Field(default=None)
 
     pickup_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
@@ -76,3 +75,40 @@ class ClientRequest(SQLModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
+    transactions: List["Transaction"] = Relationship(back_populates="client_request")
+    driver_savings: List["DriverSavings"] = Relationship(back_populates="client_request")
+    company_accounts: List["CompanyAccount"] = Relationship(back_populates="client_request")
+
+    type_service: "TypeService" = Relationship(back_populates="client_requests")  # Nueva relación
+
+
+# Definir el listener para el evento after_update
+def after_update_listener(mapper, connection, target):
+    from app.services.earnings_service import distribute_earnings  # Import aquí, no arriba
+    from sqlalchemy.orm import Session
+    from sqlalchemy import inspect
+    # Obtener el estado del objeto para verificar cambios
+    state = inspect(target)
+    attr = state.attrs.status
+
+    # Verificar si el status cambió y si el nuevo valor es FINISHED
+    if attr.history.has_changes():
+        old_value = attr.history.deleted[0] if attr.history.deleted else None
+        new_value = attr.value
+
+        if new_value == StatusEnum.FINISHED and old_value != StatusEnum.FINISHED:
+            # Crear una sesión para el proceso
+            session = Session(bind=connection)
+            try:
+                # Llamar a la función distribute_earnings
+                distribute_earnings(session, target)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                print(f"Error en distribute_earnings: {e}")
+            finally:
+                session.close()
+
+# Registrar el evento después de definir la clase
+event.listen(ClientRequest, 'after_update', after_update_listener)    
+   

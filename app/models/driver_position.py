@@ -4,11 +4,12 @@ from sqlalchemy import Column
 from geoalchemy2 import Geometry
 from pydantic import BaseModel
 
+
 class DriverPosition(SQLModel, table=True):
     id_driver: int = Field(foreign_key="user.id", primary_key=True)
     position: Optional[Any] = Field(
         sa_column=Column(
-            Geometry(geometry_type="POINT", srid=4326, spatial_index=True),
+            Geometry(geometry_type="POINT"),  # Solo esto, sin srid
             nullable=False
         )
     )

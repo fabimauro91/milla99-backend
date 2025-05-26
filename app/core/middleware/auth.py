@@ -16,7 +16,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/docs", "GET"),  # Documentación
             ("/openapi.json", "GET"),  # Esquema OpenAPI
             ("/drivers/", "POST"),  # Creación de drivers
-            ("/openapi.json", "GET"),  # Esquema OpenAPI - AQUÍ FALTABA LA COMA
+            ("/openapi.json", "GET"),  # Esquema OpenAPI 
             ("/verify-docs/", "GET"),  # Rutas de verify-docs
             ("/verify-docs/", "POST"),
             ("/drivers-position/", "POST"),  # Rutas POST de drivers-position
@@ -27,8 +27,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/driver-trip-offers/", "POST"),
             ("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
             ("/static/uploads/drivers/", "GET"),
-            ("/distance-value/", "GET"),
-            ("/vehicle-type-configuration/", "PATCH"),
+            ("/distance-value/","GET"),
+            ("/vehicle-type-configuration/","GET"),
+            #("/referrals/", "POST"),
+            ("/referrals/", "GET"),
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

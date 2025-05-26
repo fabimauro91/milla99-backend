@@ -15,6 +15,7 @@ from app.models.vehicle_info import VehicleInfo
 from sqlalchemy.orm import selectinload
 import traceback
 from app.utils.geo_utils import wkb_to_coords
+from app.models.type_service import TypeService
 
 
 def create_client_request(db: Session, data: ClientRequestCreate, id_client: int):
@@ -32,6 +33,7 @@ def create_client_request(db: Session, data: ClientRequestCreate, id_client: int
         driver_rating=data.driver_rating,
         pickup_position=pickup_point,
         destination_position=destination_point,
+        type_service_id=data.type_service_id
     )
     db.add(db_obj)
     db.commit()
@@ -58,7 +60,7 @@ def get_time_and_distance_service(origin_lat, origin_lng, destination_lat, desti
     return data
 
 
-def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session, wkb_to_coords):
+def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session, wkb_to_coords, type_service_ids=None):
     driver_point = func.ST_GeomFromText(
         f'POINT({driver_lng} {driver_lat})', 4326)
     time_limit = datetime.now(timezone.utc) - \
@@ -70,6 +72,7 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
             User.full_name,
             User.country_code,
             User.phone_number,
+            TypeService.name.label("type_service_name"),
             ST_Distance_Sphere(ClientRequest.pickup_position,
                                driver_point).label("distance"),
             func.timestampdiff(
@@ -79,16 +82,20 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
             ).label("time_difference")
         )
         .join(User, User.id == ClientRequest.id_client)
+        .join(TypeService, TypeService.id == ClientRequest.type_service_id)
         .filter(
             ClientRequest.status == "CREATED",
             ClientRequest.updated_at > time_limit
         )
-        .having(text(f"distance < {distance_limit}"))
     )
+    if type_service_ids:
+        base_query = base_query.filter(
+            ClientRequest.type_service_id.in_(type_service_ids))
+    base_query = base_query.having(text(f"distance < {distance_limit}"))
     results = []
     query_results = base_query.all()
     for row in query_results:
-        cr, full_name, country_code, phone_number, distance, time_difference = row
+        cr, full_name, country_code, phone_number, type_service_name, distance, time_difference = row
         result = {
             "id": cr.id,
             "id_client": cr.id_client,
@@ -101,6 +108,8 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
             "destination_position": wkb_to_coords(cr.destination_position),
             "distance": float(distance) if distance is not None else None,
             "time_difference": int(time_difference) if time_difference is not None else None,
+            "type_service_id": cr.type_service_id,
+            "type_service_name": type_service_name,
             "client": {
                 "full_name": full_name,
                 "country_code": country_code,
@@ -279,3 +288,315 @@ def update_driver_rating_service(session: Session, id_client_request: int, drive
     client_request.updated_at = datetime.utcnow()
     session.commit()
     return {"success": True, "message": "Calificación del conductor actualizada correctamente"}
+
+
+def assign_driver(self, client_request_id: int, driver_id: int):
+    """Asigna un conductor a una solicitud de cliente"""
+    client_request = self.session.query(ClientRequest).filter(
+        ClientRequest.id == client_request_id
+    ).first()
+
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    if client_request.id_driver_assigned:
+        raise HTTPException(
+            status_code=400, detail="La solicitud ya tiene un conductor asignado")
+
+    # Verificar que el usuario es un conductor
+    driver = self.session.query(User).filter(
+        User.id == driver_id,
+        User.role == "DRIVER"
+    ).first()
+
+    if not driver:
+        raise HTTPException(
+            status_code=400, detail="El usuario no es un conductor")
+
+    # Verificar que el conductor tiene un vehículo del tipo correcto
+    driver_vehicle = self.session.query(VehicleInfo).filter(
+        VehicleInfo.user_id == driver_id,
+        VehicleInfo.vehicle_type_id == client_request.type_service.vehicle_type_id
+    ).first()
+
+    if not driver_vehicle:
+        raise HTTPException(
+            status_code=400,
+            detail="El conductor no tiene un vehículo del tipo requerido para este servicio"
+        )
+
+    client_request.id_driver_assigned = driver_id
+    client_request.status = StatusEnum.ACCEPTED
+    self.session.add(client_request)
+    self.session.commit()
+    self.session.refresh(client_request)
+    return client_request
+
+
+def get_nearby_requests(self, driver_id: int, lat: float, lng: float, max_distance: float = 5.0):
+    """Obtiene las solicitudes cercanas al conductor, filtrando por tipo de servicio"""
+    # Obtener el vehículo del conductor
+    driver_vehicle = self.session.query(VehicleInfo).filter(
+        VehicleInfo.user_id == driver_id
+    ).first()
+
+    if not driver_vehicle:
+        raise HTTPException(
+            status_code=400,
+            detail="El conductor no tiene un vehículo registrado"
+        )
+
+    # Obtener el tipo de servicio que puede manejar el conductor
+    type_services = self.session.query(TypeService).filter(
+        TypeService.vehicle_type_id == driver_vehicle.vehicle_type_id
+    ).all()
+
+    if not type_services:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay servicios disponibles para el tipo de vehículo del conductor"
+        )
+
+    type_service_ids = [ts.id for ts in type_services]
+
+    # Obtener las solicitudes cercanas del tipo de servicio correspondiente
+    nearby_requests = self.session.query(ClientRequest).filter(
+        ClientRequest.status == StatusEnum.CREATED,
+        ClientRequest.type_service_id.in_(type_service_ids),
+        func.ST_Distance(
+            func.ST_SetSRID(func.ST_MakePoint(
+                ClientRequest.pickup_lng, ClientRequest.pickup_lat), 4326),
+            func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326)
+        ) <= max_distance
+    ).all()
+
+    return nearby_requests
+
+
+def cancel_client_request_service(
+    session: Session,
+    client_request_id: int,
+    user_id: int,
+    reason: str | None = None
+) -> dict:
+    """
+    Cancela una solicitud de viaje existente.
+
+    Args:
+        session: Sesión de base de datos
+        client_request_id: ID de la solicitud a cancelar
+        user_id: ID del usuario que intenta cancelar
+        reason: Razón opcional de la cancelación
+
+    Returns:
+        dict: Información de la solicitud cancelada
+
+    Raises:
+        HTTPException: Si hay algún error en la validación o el proceso
+    """
+    try:
+        # 1. Obtener la solicitud
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == client_request_id
+        ).first()
+
+        if not client_request:
+            raise HTTPException(
+                status_code=404,
+                detail="Solicitud de viaje no encontrada"
+            )
+
+        # 2. Verificar que el usuario que intenta cancelar es el cliente
+        if client_request.id_client != user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo el cliente que creó la solicitud puede cancelarla"
+            )
+
+        # 3. Verificar que el estado actual permite la cancelación
+        if client_request.status not in [StatusEnum.CREATED, StatusEnum.ACCEPTED]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede cancelar una solicitud en estado {client_request.status}. "
+                f"Solo se pueden cancelar solicitudes en estado CREATED o ACCEPTED"
+            )
+
+        # 4. Si hay conductor asignado, verificar si hay penalización
+        if client_request.id_driver_assigned:
+            # Aquí podrías implementar la lógica de penalización
+            # Por ejemplo, verificar si el conductor ya está en camino
+            pass
+
+        # 5. Actualizar el estado a CANCELLED
+        client_request.status = StatusEnum.CANCELLED
+        client_request.updated_at = datetime.utcnow()
+
+        # 6. Si hay conductor asignado, notificar al conductor
+        if client_request.id_driver_assigned:
+            # Aquí implementarías la notificación al conductor
+            # Por ejemplo, usando Socket.IO o un servicio de notificaciones push
+            pass
+
+        # 7. Guardar los cambios
+        session.commit()
+
+        return {
+            "message": "Solicitud cancelada exitosamente",
+            "client_request_id": client_request.id,
+            "status": "CANCELLED",
+            "reason": reason
+        }
+
+    except HTTPException as e:
+        session.rollback()
+        raise e
+    except Exception as e:
+        session.rollback()
+        print(f"[ERROR] Exception en cancel_client_request_service: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cancelar la solicitud: {str(e)}"
+        )
+
+
+def get_nearby_drivers_service(
+    client_lat: float,
+    client_lng: float,
+    type_service_id: int,
+    session: Session,
+    wkb_to_coords
+) -> list:
+    """
+    Obtiene los conductores cercanos a un cliente en un radio de 5km.
+
+    Args:
+        client_lat: Latitud del cliente
+        client_lng: Longitud del cliente
+        type_service_id: ID del tipo de servicio solicitado
+        session: Sesión de base de datos
+        wkb_to_coords: Función para convertir WKB a coordenadas
+
+    Returns:
+        Lista de conductores cercanos con su información
+    """
+    try:
+        # 1. Obtener el tipo de servicio para validar el tipo de vehículo
+        type_service = session.query(TypeService).filter(
+            TypeService.id == type_service_id
+        ).first()
+
+        if not type_service:
+            raise HTTPException(
+                status_code=404,
+                detail="Tipo de servicio no encontrado"
+            )
+
+        # 2. Crear punto del cliente
+        client_point = func.ST_GeomFromText(
+            f'POINT({client_lng} {client_lat})', 4326)
+
+        # 3. Consulta base para obtener conductores cercanos
+        base_query = (
+            session.query(
+                User,
+                DriverInfo,
+                VehicleInfo,
+                ST_Distance_Sphere(DriverInfo.current_position,
+                                   client_point).label("distance")
+            )
+            .join(UserHasRole, UserHasRole.id_user == User.id)
+            .join(DriverInfo, DriverInfo.user_id == User.id)
+            .join(VehicleInfo, VehicleInfo.driver_info_id == DriverInfo.id)
+            .filter(
+                UserHasRole.id_rol == "DRIVER",
+                UserHasRole.status == RoleStatus.APPROVED,
+                DriverInfo.is_active == True,
+                DriverInfo.current_position.isnot(None),
+                VehicleInfo.vehicle_type_id == type_service.vehicle_type_id
+            )
+        )
+
+        # 4. Filtrar por distancia (5km)
+        distance_limit = 5000  # 5km en metros
+        base_query = base_query.having(text(f"distance < {distance_limit}"))
+
+        # 5. Ejecutar consulta
+        results = []
+        query_results = base_query.all()
+
+        for row in query_results:
+            user, driver_info, vehicle_info, distance = row
+
+            # Calcular calificación promedio del conductor
+            avg_rating = session.query(
+                func.avg(ClientRequest.driver_rating)
+            ).filter(
+                ClientRequest.id_driver_assigned == user.id,
+                ClientRequest.driver_rating.isnot(None)
+            ).scalar() or 0.0
+
+            result = {
+                "id": user.id,
+                "driver_info": {
+                    "id": driver_info.id,
+                    "first_name": driver_info.first_name,
+                    "last_name": driver_info.last_name,
+                    "email": driver_info.email,
+                    "selfie_url": driver_info.selfie_url,
+                    "current_position": wkb_to_coords(driver_info.current_position)
+                },
+                "vehicle_info": {
+                    "id": vehicle_info.id,
+                    "brand": vehicle_info.brand,
+                    "model": vehicle_info.model,
+                    "model_year": vehicle_info.model_year,
+                    "color": vehicle_info.color,
+                    "plate": vehicle_info.plate,
+                    "vehicle_type_id": vehicle_info.vehicle_type_id
+                },
+                "distance": float(distance) if distance is not None else None,
+                "rating": float(avg_rating),
+                "phone_number": user.phone_number,
+                "country_code": user.country_code
+            }
+            results.append(result)
+
+        # 6. Obtener tiempos estimados de Google Distance Matrix
+        if results:
+            driver_positions = [
+                f"{r['driver_info']['current_position']['lat']},{r['driver_info']['current_position']['lng']}"
+                for r in results
+            ]
+            origins = '|'.join(driver_positions)
+            destination = f"{client_lat},{client_lng}"
+
+            url = 'https://maps.googleapis.com/maps/api/distancematrix/json'
+            params = {
+                'origins': origins,
+                'destinations': destination,
+                'units': 'metric',
+                'key': settings.GOOGLE_API_KEY,
+                'mode': 'driving'
+            }
+
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                google_data = response.json()
+                if google_data.get('status') == 'OK':
+                    elements = google_data['rows']
+                    for i, element in enumerate(elements):
+                        if i < len(results):
+                            results[i]['google_distance_matrix'] = element['elements'][0]
+
+        return results
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"[ERROR] Exception en get_nearby_drivers_service: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al buscar conductores cercanos: {str(e)}"
+        )
