@@ -22,6 +22,11 @@ import shutil
 import os
 from app.models.vehicle_type_configuration import VehicleTypeConfiguration
 from app.services.type_service_service import TypeServiceService
+from app.models.type_service import TypeService
+from app.models.client_request import ClientRequest, StatusEnum
+from app.models.driver_position import DriverPosition
+from geoalchemy2.shape import from_shape
+from shapely.geometry import Point
 
 
 def init_roles():
@@ -848,6 +853,237 @@ def init_additional_drivers():
                 session.commit()
 
 
+def init_client_requests_and_driver_positions():
+    """Inicializa solicitudes de viaje y posiciones de conductores"""
+    # Primero crear las solicitudes de clientes
+    with Session(engine) as session:
+        try:
+            # Importar modelos necesarios
+            from app.models.type_service import TypeService
+            from app.models.client_request import ClientRequest, StatusEnum
+            from app.models.driver_position import DriverPosition
+            from geoalchemy2.shape import from_shape
+            from shapely.geometry import Point
+
+            # Coordenadas de prueba en Bogotá
+            TEST_COORDINATES = {
+                # Conductores
+                "drivers": {
+                    "roberto_sanchez": {  # Conductor de carro
+                        "lat": 4.708822,
+                        "lng": -74.076542
+                    },
+                    "laura_torres": {  # Conductor de carro
+                        "lat": 4.712345,
+                        "lng": -74.078901
+                    },
+                    "pedro_gomez": {  # Conductor de moto
+                        "lat": 4.715678,
+                        "lng": -74.081234
+                    },
+                    "sofia_ramirez": {  # Conductor de moto
+                        "lat": 4.719012,
+                        "lng": -74.083567
+                    }
+                },
+                # Puntos de recogida
+                "pickup_points": {
+                    "suba": {
+                        "lat": 4.718136,
+                        "lng": -74.073170,
+                        "description": "Suba Bogotá"
+                    },
+                    "engativa": {
+                        "lat": 4.702468,
+                        "lng": -74.109776,
+                        "description": "Santa Rosita Engativa"
+                    },
+                    "chapinero": {
+                        "lat": 4.648270,
+                        "lng": -74.061890,
+                        "description": "Chapinero Centro"
+                    },
+                    "kennedy": {
+                        "lat": 4.609710,
+                        "lng": -74.151750,
+                        "description": "Kennedy Central"
+                    }
+                },
+                # Destinos
+                "destinations": {
+                    "centro": {
+                        "lat": 4.598100,
+                        "lng": -74.076100,
+                        "description": "Centro Internacional"
+                    },
+                    "norte": {
+                        "lat": 4.798100,
+                        "lng": -74.046100,
+                        "description": "Centro Comercial Andino"
+                    },
+                    "occidente": {
+                        "lat": 4.698100,
+                        "lng": -74.126100,
+                        "description": "Centro Comercial Metrópolis"
+                    },
+                    "sur": {
+                        "lat": 4.558100,
+                        "lng": -74.146100,
+                        "description": "Portal Sur"
+                    }
+                }
+            }
+
+            # Obtener IDs de tipos de servicio
+            car_service = session.exec(
+                select(TypeService)
+                .join(VehicleType)
+                .where(VehicleType.name == "Car")
+            ).first()
+            moto_service = session.exec(
+                select(TypeService)
+                .join(VehicleType)
+                .where(VehicleType.name == "Motorcycle")
+            ).first()
+
+            if not car_service or not moto_service:
+                raise Exception("No se encontraron los tipos de servicio")
+
+            # Obtener usuarios (clientes)
+            clients = {}
+            for phone in ["3001111111", "3002222222", "3003333333", "3004444444"]:
+                client = session.exec(select(User).where(
+                    User.phone_number == phone)).first()
+                if not client:
+                    continue
+                clients[phone] = client
+
+            if not clients:
+                raise Exception(
+                    "No se encontraron clientes para crear solicitudes")
+
+            # Crear solicitudes de viaje solo para los clientes encontrados
+            requests_data = []
+            if "3001111111" in clients:  # María García (carro)
+                requests_data.extend([
+                    {"client": clients["3001111111"], "type": car_service.id,
+                        "pickup": "suba", "destination": "centro"},
+                    {"client": clients["3001111111"], "type": car_service.id,
+                        "pickup": "engativa", "destination": "norte"}
+                ])
+            if "3002222222" in clients:  # Juan Pérez (carro)
+                requests_data.extend([
+                    {"client": clients["3002222222"], "type": car_service.id,
+                        "pickup": "chapinero", "destination": "occidente"},
+                    {"client": clients["3002222222"], "type": car_service.id,
+                        "pickup": "kennedy", "destination": "sur"}
+                ])
+            if "3003333333" in clients:  # Ana Martínez (moto)
+                requests_data.extend([
+                    {"client": clients["3003333333"], "type": moto_service.id,
+                        "pickup": "suba", "destination": "norte"},
+                    {"client": clients["3003333333"], "type": moto_service.id,
+                        "pickup": "engativa", "destination": "centro"}
+                ])
+            if "3004444444" in clients:  # Carlos Rodríguez (moto)
+                requests_data.extend([
+                    {"client": clients["3004444444"], "type": moto_service.id,
+                        "pickup": "chapinero", "destination": "sur"},
+                    {"client": clients["3004444444"], "type": moto_service.id,
+                        "pickup": "kennedy", "destination": "occidente"}
+                ])
+
+            # Crear las solicitudes
+            created_requests = []  # Lista para almacenar las solicitudes creadas
+            for req_data in requests_data:
+                if not req_data["client"] or not req_data["client"].id:
+                    continue
+
+                pickup = TEST_COORDINATES["pickup_points"][req_data["pickup"]]
+                dest = TEST_COORDINATES["destinations"][req_data["destination"]]
+
+                try:
+                    id_client = req_data["client"].id
+
+                    # Crear solicitud con validación explícita
+                    request = ClientRequest(
+                        id_client=id_client,
+                        type_service_id=req_data["type"],
+                        fare_offered=20000,
+                        pickup_description=pickup["description"],
+                        destination_description=dest["description"],
+                        pickup_position=from_shape(
+                            Point(pickup["lng"], pickup["lat"]), srid=4326),
+                        destination_position=from_shape(
+                            Point(dest["lng"], dest["lat"]), srid=4326),
+                        status=StatusEnum.CREATED
+                    )
+
+                    # Validar que el id_client se mantuvo
+                    if request.id_client != id_client:
+                        continue
+
+                    session.add(request)
+                    created_requests.append(request)
+                except Exception as e:
+                    continue
+
+            # Commit de las solicitudes
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise
+
+    # Luego actualizar las posiciones de los conductores en una transacción separada
+    with Session(engine) as session:
+        try:
+            # Obtener conductores
+            drivers = {}
+            for phone in ["3005555555", "3006666666", "3007777777", "3008888888"]:
+                driver = session.exec(select(User).where(
+                    User.phone_number == phone)).first()
+                if not driver:
+                    continue
+                drivers[phone] = driver
+
+            if not drivers:
+                raise Exception(
+                    "No se encontraron conductores para actualizar posiciones")
+
+            # Actualizar posiciones de conductores
+            for phone, driver in drivers.items():
+                if not driver or not driver.id:
+                    continue
+
+                driver_coords = None
+                if phone == "3005555555":
+                    driver_coords = TEST_COORDINATES["drivers"]["roberto_sanchez"]
+                elif phone == "3006666666":
+                    driver_coords = TEST_COORDINATES["drivers"]["laura_torres"]
+                elif phone == "3007777777":
+                    driver_coords = TEST_COORDINATES["drivers"]["pedro_gomez"]
+                elif phone == "3008888888":
+                    driver_coords = TEST_COORDINATES["drivers"]["sofia_ramirez"]
+
+                if driver_coords:
+                    try:
+                        with session.no_autoflush:
+                            position = DriverPosition(
+                                id_driver=driver.id,
+                                position=from_shape(
+                                    Point(driver_coords["lng"], driver_coords["lat"]), srid=4326)
+                            )
+                            session.merge(position)
+                    except Exception as e:
+                        continue
+
+            # Commit de las posiciones
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise
+
+
 def init_data():
     """Inicializa los datos por defecto de la aplicación"""
     session = Session(engine)
@@ -875,9 +1111,10 @@ def init_data():
         init_time_distance_values(engine, vehicle_types)
         init_demo_driver()
         init_additional_drivers()  # Agregar 4 conductores adicionales
+        # Agregar solicitudes y posiciones de conductores
+        init_client_requests_and_driver_positions()
 
     except Exception as e:
-        print(f"Error al inicializar datos: {str(e)}")
         session.rollback()
         raise
     finally:

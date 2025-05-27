@@ -31,6 +31,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/vehicle-type-configuration/","GET"),
             #("/referrals/", "POST"),
             ("/referrals/", "GET"),
+            
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas
