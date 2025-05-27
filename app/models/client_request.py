@@ -59,7 +59,6 @@ class ClientRequest(SQLModel, table=True):
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
     destination_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
-
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(
