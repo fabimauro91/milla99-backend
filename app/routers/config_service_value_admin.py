@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status, HTTPException, Query
 from typing import Optional
-from app.services.config_service_value import ConfigServiceValueService  # Importación absoluta
+from app.services.config_service_value_service import ConfigServiceValueService  # Importación absoluta
 from app.core.db import SessionDep  # Importación absoluta
 from app.models.config_service_value import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 

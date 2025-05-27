@@ -89,13 +89,13 @@ def after_update_listener(mapper, connection, target):
     # Obtener el estado del objeto para verificar cambios
     state = inspect(target)
     attr = state.attrs.status
-
-    # Verificar si el status cambió y si el nuevo valor es FINISHED
+    print("entro al listener")
+    # Verificar si el status cambió y si el nuevo valor es PAID
     if attr.history.has_changes():
         old_value = attr.history.deleted[0] if attr.history.deleted else None
         new_value = attr.value
 
-        if new_value == StatusEnum.FINISHED and old_value != StatusEnum.FINISHED:
+        if new_value == StatusEnum.PAID and old_value != StatusEnum.PAID:
             # Crear una sesión para el proceso
             session = Session(bind=connection)
             try:

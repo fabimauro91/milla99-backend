@@ -2,7 +2,7 @@ from fastapi import APIRouter, status, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
 # Importación absoluta
-from app.services.config_service_value import ConfigServiceValueService
+from app.services.config_service_value_service import ConfigServiceValueService
 from app.core.db import SessionDep  # Importación absoluta
 from app.models.config_service_value import VehicleTypeConfigurationCreate, FareCalculationResponse
 from app.core.config import settings
