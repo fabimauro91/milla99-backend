@@ -9,7 +9,7 @@ class DriverPosition(SQLModel, table=True):
     id_driver: int = Field(foreign_key="user.id", primary_key=True)
     position: Optional[Any] = Field(
         sa_column=Column(
-            Geometry(geometry_type="POINT"),  # Solo esto, sin srid
+            Geometry(geometry_type="POINT", srid=4326),  # Agregado SRID 4326
             nullable=False
         )
     )
