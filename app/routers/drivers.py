@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 import json
 from sqlalchemy import select
 import traceback
+import os
 
 from app.models.driver import DriverCreate, DriverDocumentsInput, DriverFullCreate, DriverFullRead
 from app.core.db import get_session
@@ -18,6 +19,7 @@ from app.models.vehicle_info import VehicleInfo
 from app.models.driver_documents import DriverDocuments
 from app.models.user import User
 from app.models.document_type import DocumentType
+from app.core.config import settings
 
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
@@ -30,6 +32,7 @@ Crea un nuevo conductor con sus documentos.
 - `driver_info`: Cadena JSON con los datos del conductor.
 - `vehicle_info`: Cadena JSON con los datos del vehículo.
 - `driver_documents`: Cadena JSON con las fechas de vencimiento de los documentos.
+- `selfie`: Archivo de la selfie del conductor (OBLIGATORIO).
 - `property_card_front`: Archivo del frente de la tarjeta de propiedad (opcional).
 - `property_card_back`: Archivo del reverso de la tarjeta de propiedad (opcional).
 - `license_front`: Archivo del frente de la licencia de conducir (opcional).
@@ -45,6 +48,7 @@ async def create_driver(
     driver_info: str = Form(...),
     vehicle_info: str = Form(...),
     driver_documents: str = Form(...),
+    selfie: UploadFile = File(...),
     property_card_front: Optional[UploadFile] = File(None),
     property_card_back: Optional[UploadFile] = File(None),
     license_front: Optional[UploadFile] = File(None),
@@ -65,6 +69,7 @@ async def create_driver(
         driver_info: JSON string con los datos del conductor
         vehicle_info: JSON string con los datos del vehículo
         driver_documents: JSON string con las fechas de vencimiento de los documentos
+        selfie: Foto de selfie del conductor
         property_card_front: Frente de la tarjeta de propiedad
         property_card_back: Reverso de la tarjeta de propiedad
         license_front: Frente de la licencia de conducir
@@ -106,7 +111,8 @@ async def create_driver(
             user=user_data,
             driver_info=driver_info_data,
             vehicle_info=vehicle_info_data,
-            driver_documents=driver_docs
+            driver_documents=driver_docs,
+            selfie=selfie
         )
 
         service = DriverService(session)
@@ -114,14 +120,17 @@ async def create_driver(
             user_data=driver_data.user,
             driver_info_data=driver_data.driver_info,
             vehicle_info_data=driver_data.vehicle_info,
-            driver_documents_data=driver_data.driver_documents
+            driver_documents_data=driver_data.driver_documents,
+            selfie=selfie
         )
 
         return DriverFullResponse(
             user=UserResponse(
                 full_name=result.user.full_name,
                 country_code=result.user.country_code,
-                phone_number=result.user.phone_number
+                phone_number=result.user.phone_number,
+                selfie_url=result.user.selfie_url if hasattr(
+                    result.user, 'selfie_url') else None
             ),
             driver_info=DriverInfoResponse(
                 first_name=result.driver_info.first_name,
@@ -129,7 +138,7 @@ async def create_driver(
                 birth_date=str(result.driver_info.birth_date),
                 email=result.driver_info.email,
                 selfie_url=result.user.selfie_url if hasattr(
-                    result, 'user') and hasattr(result.user, 'selfie_url') else None
+                    result.user, 'selfie_url') else None
             ),
             vehicle_info=VehicleInfoResponse(
                 brand=result.vehicle_info.brand,
