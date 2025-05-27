@@ -17,6 +17,9 @@ from decimal import Decimal
 import traceback
 from app.models.verify_mount import VerifyMount
 from app.models.transaction import Transaction, TransactionType
+import uuid
+from app.core.config import settings
+import os
 
 
 class DriverService:
@@ -28,7 +31,8 @@ class DriverService:
         user_data: UserCreate,
         driver_info_data: DriverInfoCreate,
         vehicle_info_data: VehicleInfoCreate,
-        driver_documents_data: DriverDocumentsInput
+        driver_documents_data: DriverDocumentsInput,
+        selfie: UploadFile = None
     ) -> DriverFullResponse:
         with Session(engine) as session:
             try:
@@ -92,6 +96,30 @@ class DriverService:
                     session.add(user)
                     session.commit()
                     session.refresh(user)
+
+                # --- SELFIE OBLIGATORIA Y GUARDADO ---
+                if not selfie:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="El campo 'selfie' es obligatorio para crear un conductor."
+                    )
+                selfie_dir = os.path.join("static", "uploads", "users")
+                os.makedirs(selfie_dir, exist_ok=True)
+                selfie_ext = os.path.splitext(selfie.filename)[-1] or ".jpg"
+                selfie_filename = f"selfie_{user.phone_number}_{uuid.uuid4().hex}{selfie_ext}"
+                selfie_path = os.path.join(selfie_dir, selfie_filename)
+                # Evitar sobrescribir
+                while os.path.exists(selfie_path):
+                    selfie_filename = f"selfie_{user.phone_number}_{uuid.uuid4().hex}{selfie_ext}"
+                    selfie_path = os.path.join(selfie_dir, selfie_filename)
+                with open(selfie_path, "wb") as f:
+                    f.write(await selfie.read())
+                selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{selfie_filename}"
+                user.selfie_url = selfie_url
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+                # --- FIN SELFIE ---
 
                 # Crear VerifyMount con mount=0
                 verify_mount = VerifyMount(user_id=user.id, mount=0)

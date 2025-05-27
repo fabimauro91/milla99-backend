@@ -53,7 +53,7 @@ class DriverFullCreate(SQLModel):
     driver_info: DriverInfoCreate
     vehicle_info: VehicleInfoCreate
     driver_documents: DriverDocumentsInput
-    selfie: Optional[UploadFile] = None  # Selfie del conductor
+    selfie: UploadFile  # Selfie del conductor, ahora obligatorio
 
 
 class DriverFullRead(BaseModel):
