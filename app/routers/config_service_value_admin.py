@@ -1,14 +1,14 @@
 from fastapi import APIRouter, status, HTTPException, Query
 from typing import Optional
-from app.services.vehicle_type_configuration_service import VehicleTypeConfigurationService  # Importación absoluta
+from app.services.config_service_value import ConfigServiceValueService  # Importación absoluta
 from app.core.db import SessionDep  # Importación absoluta
-from app.models.vehicle_type_configuration import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
+from app.models.config_service_value import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 
-router = APIRouter(prefix="/vehicle-type-configuration", tags=["ADMIN: vehicle-type-configuration"])
+router = APIRouter(prefix="/config-service-value", tags=["ADMIN: config-service-value"])
 
 
 @router.get("/{vehicle_type_id}", response_model=VehicleTypeConfigurationResponse)
-async def update_vehicle_type_configuration(
+async def update_config_service_value(
     db: SessionDep,
     vehicle_type_id: int,
     km_value: Optional[float] = Query(None, description="Valor por kilómetro"),
@@ -31,7 +31,7 @@ async def update_vehicle_type_configuration(
     Devuelve el vehicle type configuration modificado.
     """
     try:
-        service = VehicleTypeConfigurationService(db)
+        service = ConfigServiceValueService(db)
 
         # Crear diccionario con los parámetros no nulos
         update_data = {}

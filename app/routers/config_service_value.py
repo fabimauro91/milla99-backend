@@ -2,16 +2,16 @@ from fastapi import APIRouter, status, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
 # Importación absoluta
-from app.services.vehicle_type_configuration_service import VehicleTypeConfigurationService
+from app.services.config_service_value import ConfigServiceValueService
 from app.core.db import SessionDep  # Importación absoluta
-from app.models.vehicle_type_configuration import VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse, CalculateFareRequest, FareCalculationResponse
+from app.models.config_service_value import VehicleTypeConfigurationCreate, FareCalculationResponse
 from app.core.config import settings
 
 router = APIRouter(prefix="/distance-value", tags=["distance-value"])
 
 
 # @router.post("/", response_model=VehicleTypeConfigurationResponse, status_code=status.HTTP_201_CREATED)
-async def create_vehicle_type_configuration(
+async def create_config_service_value(
     data: VehicleTypeConfigurationCreate,
     db: SessionDep
 ):
@@ -19,8 +19,8 @@ async def create_vehicle_type_configuration(
     Crea un nuevo registro de configuración de tipo de vehículo
     """
     try:
-        service = VehicleTypeConfigurationService(db)
-        result = service.create_vehicle_type_configuration(
+        service = ConfigServiceValueService(db)
+        result = service.create_config_service_value(
             km_value=data.km_value,
             min_value=data.min_value,
             tarifa_value=data.tarifa_value,
@@ -38,7 +38,7 @@ async def create_vehicle_type_configuration(
 Calcula la tarifa recomendada para un viaje según el tipo de vehículo y la distancia entre dos puntos.
 
 **Parámetros:**
-- `type_vehicle_id`: ID del tipo de vehículo.
+- `type_service_id`: ID del tipo de vehículo.
 - `origin_lat`: Latitud de origen.
 - `origin_lng`: Longitud de origen.
 - `destination_lat`: Latitud de destino.
@@ -49,14 +49,14 @@ Devuelve la tarifa recomendada, las direcciones de origen y destino, la distanci
 """)
 async def calculate_fare_unique(
     session: SessionDep,
-    type_vehicle_id: int = Query(..., description="ID del tipo de vehículo"),
+    type_service_id: int = Query(..., description="ID del tipo de servicio"),
     origin_lat: float = Query(..., description="Latitud de origen"),
     origin_lng: float = Query(..., description="Longitud de origen"),
-    destination_lat: float = Query(..., description="Latitud de destino"),
+    destination_lat: float = Query(..., description="Latitud de destino"), 
     destination_lng: float = Query(..., description="Longitud de destino"),
 ):
     try:
-        service = VehicleTypeConfigurationService(session)
+        service = ConfigServiceValueService(session)
         # 1. Llama a Google Distance Matrix
         google_data = service.get_google_distance_data(
             origin_lat,
@@ -66,7 +66,7 @@ async def calculate_fare_unique(
             settings.GOOGLE_API_KEY
         )
         # 2. Calcula la tarifa
-        result = await service.calculate_total_value(type_vehicle_id, google_data)
+        result = await service.calculate_total_value(type_service_id, google_data)
 
         if result is None:
             return JSONResponse(

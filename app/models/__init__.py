@@ -14,7 +14,6 @@ from .user import User, UserCreate, UserUpdate, UserRead
 from .driver_documents import DriverDocuments, DriverDocumentsCreate, DriverDocumentsUpdate
 from .client_request import ClientRequest, ClientRequestCreate
 from .driver_position import DriverPosition
-from .vehicle_type_configuration import VehicleTypeConfiguration, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
 from .driver_trip_offer import DriverTripOfferCreate, DriverTripOffer
 from .project_settings import ProjectSettings
 from .referral_chain import Referral
@@ -23,3 +22,5 @@ from .driver_savings import DriverSavings
 from .transaction import Transaction, TransactionType
 from .verify_mount import VerifyMount
 from .type_service import TypeService, TypeServiceCreate, TypeServiceRead
+from .config_service_value import ConfigServiceValue, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
+

@@ -1,11 +1,10 @@
-from typing import Optional,Dict, Any, List
-from datetime import datetime 
+from typing import Optional, Dict, Any, List
+from datetime import datetime
 from sqlmodel import SQLModel, Field
 from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Relationship, Column, Integer, ForeignKey
 
-
-class VehicleTypeConfiguration(SQLModel, table=True):
+class ConfigServiceValue(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     km_value: float = Field(..., nullable=False)
     min_value: float = Field(..., nullable=False)
@@ -17,16 +16,17 @@ class VehicleTypeConfiguration(SQLModel, table=True):
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.utcnow}
     )
-    # Llave foránea única a VehicleType
-    vehicle_type_id: int = Field(
+    # Llave foránea única a TypeService
+    service_type_id: int = Field(
         sa_column=Column(
             Integer,
-            ForeignKey("vehicletype.id", ondelete="CASCADE"),
+            ForeignKey("typeservice.id", ondelete="CASCADE"),
             unique=True,
             nullable=False
         )
     )
-    vehicle_type: Optional["VehicleType"] = Relationship(back_populates="vehicle_type_configuration")
+    
+    type_service: Optional["TypeService"] = Relationship(back_populates="config_service_value")
 
 class CalculateFareRequest(BaseModel):
     type_vehicle_id: int

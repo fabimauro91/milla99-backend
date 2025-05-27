@@ -16,11 +16,12 @@ from app.models.driver import DriverDocumentsInput
 from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
+from app.models.referral_chain import Referral
 from app.utils.uploads import uploader
 from decimal import Decimal
 import shutil
 import os
-from app.models.vehicle_type_configuration import VehicleTypeConfiguration
+from app.models.config_service_value import ConfigServiceValue
 from app.services.type_service_service import TypeServiceService
 
 
@@ -55,71 +56,6 @@ def init_document_types():
         session.commit()
 
 
-def init_test_user():
-    with Session(engine) as session:
-        # Buscar si ya existe el usuario de prueba
-        user = session.exec(select(User).where(
-            User.full_name == "prueba_cliente")).first()
-        if not user:
-            user = User(
-                full_name="prueba_cliente",
-                country_code="+57",
-                phone_number=settings.TEST_CLIENT_PHONE,
-                is_verified_phone=True,
-                is_active=True
-            )
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-
-        # Asignar el rol CLIENT si no lo tiene y verificarlo
-
-        # Asignar el rol CLIENT si no lo tiene y verificarlo
-        client_role = session.exec(
-            select(Role).where(Role.id == "CLIENT")).first()
-        if client_role and client_role not in user.roles:
-            user.roles.append(client_role)
-            session.add(user)
-            session.commit()
-
-            # Actualizar el estado del rol a verificado
-            user_has_role = session.exec(
-                select(UserHasRole).where(
-                    UserHasRole.id_user == user.id,
-                    UserHasRole.id_rol == client_role.id
-                )
-            ).first()
-
-            if user_has_role:
-                user_has_role.is_verified = True
-                user_has_role.status = RoleStatus.APPROVED
-                user_has_role.verified_at = datetime.utcnow()
-                session.add(user_has_role)
-                session.commit()
-
-        # Guardar selfie demo en static/uploads/users/{user.id}/selfie.jpg y asignar url a user.selfie_url
-        selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
-        os.makedirs(selfie_dir, exist_ok=True)
-        selfie_path = os.path.join(selfie_dir, "selfie.jpg")
-        shutil.copyfile("img/demo/front foto.jpg", selfie_path)
-        user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
-        session.add(user)
-        session.commit()
-
-        # Crear datos del documento del conductor
-        driver_documents_data = DriverDocumentsInput(
-            property_card_front_url="string",
-            property_card_back_url="string",
-            license_front_url="string",
-            license_back_url="string",
-            license_expiration_date="2025-05-12",
-            soat_url="string",
-            soat_expiration_date="2025-05-12",
-            vehicle_technical_inspection_url="string",
-            vehicle_technical_inspection_expiration_date="2025-05-12"
-        )
-
-
 def init_vehicle_types(engine):
     with Session(engine) as session:
         # Verificar si ya existen tipos de vehículos
@@ -150,30 +86,30 @@ def init_vehicle_types(engine):
         return vehicle_types  # Retornar los tipos de vehículos creados
 
 
-def init_time_distance_values(engine, vehicle_types):
+def init_time_distance_values(engine):
     with Session(engine) as session:
         # Verificar si ya existen registros
-        existing_values = session.exec(select(VehicleTypeConfiguration)).all()
+        existing_values = session.exec(select(ConfigServiceValue)).all()
         if existing_values:
             return
 
         # Crear valores iniciales y asociarlos a VehicleType
         time_distance_values = [
-            VehicleTypeConfiguration(
+            ConfigServiceValue(
                 km_value=1200.0,
                 min_value=150.0,
                 tarifa_value=6000.0,
                 weight_value=350.5,
                 # Asociar al primer VehicleType (car)
-                vehicle_type_id=vehicle_types[0].id
+                service_type_id=1,
             ),
-            VehicleTypeConfiguration(
+            ConfigServiceValue(
                 km_value=800.0,
                 min_value=100.0,
                 tarifa_value=3000.0,
                 weight_value=350.0,
                 # Asociar al segundo VehicleType (moto)
-                vehicle_type_id=vehicle_types[1].id
+                service_type_id=2,
             )
         ]
 
@@ -181,50 +117,6 @@ def init_time_distance_values(engine, vehicle_types):
             session.add(value)
 
         session.commit()
-
-
-def init_test_driver():
-    with Session(engine) as session:
-        # Buscar si ya existe el conductor de prueba
-        driver = session.exec(select(User).where(
-            User.full_name == "prueba_conductor")).first()
-
-        if not driver:
-            driver = User(
-                full_name="prueba_conductor",
-                country_code="+57",
-                phone_number="3001234567",
-                is_verified_phone=True,
-                is_active=True
-            )
-            session.add(driver)
-            session.commit()
-            session.refresh(driver)
-
-        # Asignar el rol DRIVER si no lo tiene y verificarlo
-        driver_role = session.exec(
-            select(Role).where(Role.id == "DRIVER")).first()
-        if driver_role and driver_role not in driver.roles:
-            driver.roles.append(driver_role)
-            session.add(driver)
-            session.commit()
-
-            # Actualizar el estado del rol a verificado
-            user_has_role = session.exec(
-                select(UserHasRole).where(
-                    UserHasRole.id_user == driver.id,
-                    UserHasRole.id_rol == driver_role.id
-                )
-            ).first()
-
-            if user_has_role:
-                user_has_role.is_verified = True
-                user_has_role.status = RoleStatus.PENDING
-                user_has_role.verified_at = datetime.utcnow()
-                session.add(user_has_role)
-                session.commit()
-
-        return driver
 
 
 def init_driver_documents():
@@ -549,6 +441,116 @@ def init_additional_clients():
                 "full_name": "Carlos Rodríguez",
                 "phone_number": "3004444444",
                 "selfie_url": None
+            },
+            {
+                "full_name": "Jhonatan Restrepo",
+                "phone_number": "3004442444",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Maricela Muños",
+                "phone_number": "3004444445",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Daniel Carrascal",
+                "phone_number": "3004444446",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Carlos Valderrama",
+                "phone_number": "3004444447",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Carmenza Coyazos",
+                "phone_number": "3004444448",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Marcela Jimenez",
+                "phone_number": "3004444449",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Pedro Fernandez",
+                "phone_number": "3004444450",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Maritza Rodrigez",
+                "phone_number": "3004444451",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Estephany Pelaez",
+                "phone_number": "3004444452",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Angela ceballos",
+                "phone_number": "3004444452",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Diego Mojica",
+                "phone_number": "3004444453",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Diana Leane",
+                "phone_number": "3004444454",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Taliana Vega",
+                "phone_number": "3004444455",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Paulina Vargas",
+                "phone_number": "3004444456",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Angelina Fernandez",
+                "phone_number": "3004444457",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Cecilia Castrillon",
+                "phone_number": "3004444458",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Paulo Coelo",
+                "phone_number": "3004444459",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Cabriel Garcia",
+                "phone_number": "3004444460",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Ana Estupiñan",
+                "phone_number": "3004444461",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Cabriel Garcia",
+                "phone_number": "3004444462",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Emilio Escobar",
+                "phone_number": "3004444463",
+                "selfie_url": None
+            },
+            {
+                "full_name": "Nahia Diaz",
+                "phone_number": "3004444464",
+                "selfie_url": None
             }
         ]
 
@@ -848,6 +850,57 @@ def init_additional_drivers():
                 session.commit()
 
 
+def init_referral_data():
+    """Inicializa los datos por defecto para la tabla Referral"""
+    with Session(engine) as session:
+        # Datos de referidos según la tabla proporcionada
+        referral_data = [
+            {"user_id": 3, "referred_by_id": 2},
+            {"user_id": 4, "referred_by_id": 1},
+            {"user_id": 6, "referred_by_id": 1},
+            {"user_id": 7, "referred_by_id": 3},
+            {"user_id": 8, "referred_by_id": 7},
+            {"user_id": 9, "referred_by_id": 5},
+            {"user_id": 11, "referred_by_id": 5},
+            {"user_id": 14, "referred_by_id": 19},
+            {"user_id": 15, "referred_by_id": 14},
+            {"user_id": 16, "referred_by_id": 15},
+            {"user_id": 17, "referred_by_id": 16},
+            {"user_id": 18, "referred_by_id": 7},
+            {"user_id": 19, "referred_by_id": 11},
+            {"user_id": 20, "referred_by_id": 18},
+            {"user_id": 21, "referred_by_id": 8},
+            {"user_id": 22, "referred_by_id": 9},
+            {"user_id": 23, "referred_by_id": 1},
+            {"user_id": 24, "referred_by_id": 22},
+            {"user_id": 25, "referred_by_id": 11}
+        ]
+
+        # Verificar si ya existen registros en la tabla Referral
+        existing_referrals = session.exec(select(Referral)).all()
+        if existing_referrals:
+            print("Ya existen datos en la tabla Referral, omitiendo inicialización.")
+            return
+
+        # Crear los registros de referidos
+        for data in referral_data:
+            # Verificar que ambos usuarios existen
+            user = session.exec(select(User).where(User.id == data["user_id"])).first()
+            referrer = session.exec(select(User).where(User.id == data["referred_by_id"])).first()
+
+            if user and referrer:
+                referral = Referral(
+                    user_id=data["user_id"],
+                    referred_by_id=data["referred_by_id"]
+                )
+                session.add(referral)
+            else:
+                print(f"No se pudo crear referido: usuario {data['user_id']} o referente {data['referred_by_id']} no existe.")
+
+        session.commit()
+        print("Datos de referidos inicializados correctamente.")
+
+
 def init_data():
     """Inicializa los datos por defecto de la aplicación"""
     session = Session(engine)
@@ -869,12 +922,13 @@ def init_data():
         type_service_service.init_default_types()
 
         # Inicializar usuarios de prueba
-        init_test_user()
-        init_additional_clients()  # Agregar 4 clientes adicionales
+        
+        init_additional_clients()  # Agregar 25 clientes a
         init_driver_documents()
-        init_time_distance_values(engine, vehicle_types)
+        init_time_distance_values(engine)
         init_demo_driver()
         init_additional_drivers()  # Agregar 4 conductores adicionales
+        init_referral_data()    #agrega 19 referidos
 
     except Exception as e:
         print(f"Error al inicializar datos: {str(e)}")
