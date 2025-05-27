@@ -58,9 +58,10 @@ class ClientRequestResponse(BaseModel):
 
 
 class AssignDriverRequest(BaseModel):
-    id: int = Field(..., description="ID de la solicitud de viaje")
-    id_driver_assigned: int = Field(...,
-                                    description="Id_user que tiene como rol Driver")
+    id_client_request: int = Field(...,
+                                   description="ID de la solicitud de viaje")
+    id_driver: int = Field(...,
+                           description="user_id que tiene como rol Driver")
     fare_assigned: float | None = Field(
         None, description="Tarifa asignada (opcional)")
 
@@ -333,24 +334,19 @@ def assign_driver(
     request_data: AssignDriverRequest = Body(
         ...,
         example={
-            "id": 1,
-            "id_driver_assigned": 2,
+            "id_client_request": 1,
+            "id_driver": 2,
             "fare_assigned": 25
         }
     ),
     session: Session = Depends(get_session)
 ):
-    """
-    Asigna un conductor a una solicitud de viaje existente, cambia el estado a cualquiera de los estados
-    "CREATED", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "TRAVELLING", "FINISHED", "CANCELLED"
-    y actualiza la tarifa si se proporciona.
-    """
     try:
         import traceback as tb
         print("[DEBUG] request_data:", request_data)
         # 1. Obtener la solicitud
         client_request = session.query(ClientRequest).filter(
-            ClientRequest.id == request_data.id).first()
+            ClientRequest.id == request_data.id_client_request).first()
         print("[DEBUG] client_request:", client_request)
         if not client_request:
             print("[ERROR] Solicitud no encontrada")
@@ -371,7 +367,7 @@ def assign_driver(
         from app.models.vehicle_info import VehicleInfo
 
         driver_info = session.query(DriverInfo).filter(
-            DriverInfo.user_id == request_data.id_driver_assigned).first()
+            DriverInfo.user_id == request_data.id_driver).first()
         print("[DEBUG] driver_info:", driver_info)
         if not driver_info:
             print("[ERROR] El conductor no tiene información registrada")
@@ -400,8 +396,8 @@ def assign_driver(
         # Si pasa la validación, asignar el conductor
         return assign_driver_service(
             session,
-            request_data.id,
-            request_data.id_driver_assigned,
+            request_data.id_client_request,
+            request_data.id_driver,
             request_data.fare_assigned
         )
     except HTTPException as e:

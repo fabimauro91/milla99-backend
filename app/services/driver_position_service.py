@@ -117,12 +117,18 @@ class DriverPositionService:
 
         # 4. Buscar todos los conductores con vehículo compatible y posición actual
         # Usar DriverPosition para obtener la posición
+        allowed_role = type_service.allowed_role
         results = (
             self.session.query(User, DriverInfo, VehicleInfo, DriverPosition)
             .join(DriverInfo, DriverInfo.user_id == User.id)
             .join(VehicleInfo, VehicleInfo.driver_info_id == DriverInfo.id)
             .join(DriverPosition, DriverPosition.id_driver == User.id)
-            .filter(VehicleInfo.vehicle_type_id == vehicle_type_id)
+            .join(UserHasRole, UserHasRole.id_user == User.id)
+            .filter(
+                VehicleInfo.vehicle_type_id == vehicle_type_id,
+                UserHasRole.id_rol == allowed_role,
+                UserHasRole.status == RoleStatus.APPROVED
+            )
             .all()
         )
 
