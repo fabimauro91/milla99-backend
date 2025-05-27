@@ -22,6 +22,7 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Security
 from datetime import datetime
+from app.utils.geo import wkb_to_coords
 
 bearer_scheme = HTTPBearer()
 
@@ -68,24 +69,6 @@ class CancelClientRequestRequest(BaseModel):
                                    description="ID de la solicitud de viaje a cancelar")
     reason: str | None = Field(
         None, description="Razón de la cancelación (opcional)")
-
-
-# Utilidad para convertir WKBElement a dict lat/lng
-
-
-def wkb_to_coords(wkb):
-    """
-    Convierte un campo WKBElement a un diccionario con latitud y longitud.
-    Args:
-        wkb: WKBElement de la base de datos
-    Returns:
-        dict con 'lat' y 'lng' o None si wkb es None
-    """
-    from geoalchemy2.shape import to_shape
-    if wkb is None:
-        return None
-    point = to_shape(wkb)
-    return {"lat": point.y, "lng": point.x}
 
 
 @router.get("/distance", description="""

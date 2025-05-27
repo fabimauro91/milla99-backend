@@ -7,6 +7,7 @@ from shapely.geometry import Point
 from sqlalchemy import select, text, func
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.role import Role
+from app.utils.geo import wkb_to_coords
 
 
 class DriverPositionService:
@@ -94,9 +95,8 @@ class DriverPositionService:
         from app.models.vehicle_info import VehicleInfo
         from app.models.driver_info import DriverInfo
         from app.models.user import User
-        from app.services.client_requests_service import wkb_to_coords
-        import requests
-        from app.core.config import settings
+        from app.models.driver_position import DriverPosition
+        from sqlalchemy import select
 
         # 1. Obtener la solicitud de viaje
         client_request = self.session.query(ClientRequest).filter(
@@ -114,39 +114,24 @@ class DriverPositionService:
 
         # 3. Obtener el tipo de vehículo requerido
         vehicle_type_id = type_service.vehicle_type_id
-        allowed_role = type_service.allowed_role
 
-        # 4. Buscar conductores activos, aprobados, con vehículo compatible y posición actual
-        pickup_coords = wkb_to_coords(client_request.pickup_position)
-        if not pickup_coords:
-            raise HTTPException(
-                status_code=400, detail="La solicitud no tiene posición de recogida válida")
-        pickup_point = func.ST_GeomFromText(
-            f'POINT({pickup_coords["lng"]} {pickup_coords["lat"]})', 4326)
-
-        base_query = (
-            self.session.query(User, DriverInfo, VehicleInfo, func.ST_Distance_Sphere(
-                DriverInfo.current_position, pickup_point).label("distance"))
-            .join(UserHasRole, UserHasRole.id_user == User.id)
+        # 4. Buscar todos los conductores con vehículo compatible y posición actual
+        # Usar DriverPosition para obtener la posición
+        results = (
+            self.session.query(User, DriverInfo, VehicleInfo, DriverPosition)
             .join(DriverInfo, DriverInfo.user_id == User.id)
             .join(VehicleInfo, VehicleInfo.driver_info_id == DriverInfo.id)
-            .filter(
-                UserHasRole.id_rol == allowed_role,
-                UserHasRole.status == RoleStatus.APPROVED,
-                DriverInfo.current_position.isnot(None),
-                VehicleInfo.vehicle_type_id == vehicle_type_id
-            )
+            .join(DriverPosition, DriverPosition.id_driver == User.id)
+            .filter(VehicleInfo.vehicle_type_id == vehicle_type_id)
+            .all()
         )
-        distance_limit = 5000  # 5km
-        base_query = base_query.having(text(f"distance < {distance_limit}"))
-        results = []
-        query_results = base_query.all()
-        for row in query_results:
-            user, driver_info, vehicle_info, distance = row
-            avg_rating = self.session.query(func.avg(ClientRequest.driver_rating)).filter(
-                ClientRequest.id_driver_assigned == user.id, ClientRequest.driver_rating.isnot(None)).scalar() or 0.0
-            driver_position = wkb_to_coords(driver_info.current_position)
-            result = {
+
+        drivers = []
+        for user, driver_info, vehicle_info, driver_position in results:
+            coords = None
+            if driver_position and driver_position.position:
+                coords = wkb_to_coords(driver_position.position)
+            drivers.append({
                 "user_id": user.id,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
@@ -155,7 +140,7 @@ class DriverPositionService:
                     "first_name": driver_info.first_name,
                     "last_name": driver_info.last_name,
                     "email": driver_info.email,
-                    "selfie_url": getattr(driver_info, "selfie_url", None)
+                    "selfie_url": user.selfie_url
                 },
                 "vehicle_info": {
                     "id": vehicle_info.id,
@@ -166,45 +151,17 @@ class DriverPositionService:
                     "plate": vehicle_info.plate,
                     "vehicle_type_id": vehicle_info.vehicle_type_id
                 },
-                "current_position": driver_position,
-                "distance_meters": float(distance) if distance is not None else None,
-                "rating": float(avg_rating)
-            }
-            results.append(result)
-
-        # Google Distance Matrix (opcional)
-        if results:
-            driver_positions = [
-                f"{r['current_position']['lat']},{r['current_position']['lng']}" for r in results if r['current_position']]
-            origins = '|'.join(driver_positions)
-            destination = f"{pickup_coords['lat']},{pickup_coords['lng']}"
-            url = 'https://maps.googleapis.com/maps/api/distancematrix/json'
-            params = {
-                'origins': origins,
-                'destinations': destination,
-                'units': 'metric',
-                'key': settings.GOOGLE_API_KEY,
-                'mode': 'driving'
-            }
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                google_data = response.json()
-                if google_data.get('status') == 'OK':
-                    elements = google_data['rows']
-                    for i, element in enumerate(elements):
-                        if i < len(results):
-                            results[i]['google_distance_matrix'] = element['elements'][0]
+                "current_position": coords
+            })
 
         return {
             "client_request_id": client_request.id,
-            "pickup_position": pickup_coords,
             "type_service": {
                 "id": type_service.id,
                 "name": type_service.name,
-                "vehicle_type_id": type_service.vehicle_type_id,
-                "allowed_role": type_service.allowed_role
+                "vehicle_type_id": type_service.vehicle_type_id
             },
-            "nearby_drivers": results
+            "drivers": drivers
         }
 
     def get_driver_position_by_client_request(self, id_client_request: int):
