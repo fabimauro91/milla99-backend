@@ -17,6 +17,7 @@ from app.services.driver_service import DriverService
 from app.models.driver_info import DriverInfoCreate
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
 from app.models.referral_chain import Referral
+from app.models.project_settings import ProjectSettings
 from app.utils.uploads import uploader
 from decimal import Decimal
 import shutil
@@ -901,6 +902,91 @@ def init_referral_data():
         print("Datos de referidos inicializados correctamente.")
 
 
+def init_project_settings():
+    """Inicializa los datos por defecto para la tabla ProjectSettings"""
+    from datetime import datetime
+
+    with Session(engine) as session:
+        # Verificar si ya existen registros
+        existing_settings = session.exec(select(ProjectSettings)).all()
+        if existing_settings:
+            print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
+            return
+
+        # Datos por defecto
+        settings_data = [
+            {
+                "id": 1,
+                "value": "2",
+                "description": "distancia maxima del conductor",
+                "created_at": datetime(2025, 5, 20, 15, 35, 26),
+                "updated_at": datetime(2025, 5, 20, 15, 35, 26)
+            },
+            {
+                "id": 2,
+                "value": "0.02",
+                "description": "referral_1",
+                "created_at": datetime(2025, 5, 22, 14, 50, 43),
+                "updated_at": datetime(2025, 5, 22, 14, 50, 43)
+            },
+            {
+                "id": 3,
+                "value": "0.0125",
+                "description": "referral_2",
+                "created_at": datetime(2025, 5, 22, 14, 51, 44),
+                "updated_at": datetime(2025, 5, 22, 14, 51, 44)
+            },
+            {
+                "id": 4,
+                "value": "0.0075",
+                "description": "referral_3",
+                "created_at": datetime(2025, 5, 22, 14, 51, 44),
+                "updated_at": datetime(2025, 5, 22, 14, 51, 44)
+            },
+            {
+                "id": 5,
+                "value": "0.005",
+                "description": "referral_4",
+                "created_at": datetime(2025, 5, 22, 14, 54, 27),
+                "updated_at": datetime(2025, 5, 22, 14, 54, 27)
+            },
+            {
+                "id": 6,
+                "value": "0.005",
+                "description": "referral_5",
+                "created_at": datetime(2025, 5, 22, 14, 54, 27),
+                "updated_at": datetime(2025, 5, 22, 14, 54, 27)
+            },
+            {
+                "id": 7,
+                "value": "0.01",
+                "description": "driver_saving",
+                "created_at": datetime(2025, 5, 23, 21, 42, 27),
+                "updated_at": datetime(2025, 5, 23, 21, 42, 27)
+            },
+            {
+                "id": 8,
+                "value": "0.04",
+                "description": "company",
+                "created_at": datetime(2025, 5, 23, 21, 42, 27),
+                "updated_at": datetime(2025, 5, 23, 21, 42, 27)
+            }
+        ]
+
+        for setting in settings_data:
+            project_setting = ProjectSettings(
+                id=setting["id"],
+                value=setting["value"],
+                description=setting["description"],
+                created_at=setting["created_at"],
+                updated_at=setting["updated_at"]
+            )
+            session.add(project_setting)
+
+        session.commit()
+        print("Datos de ProjectSettings inicializados correctamente.")        
+
+
 def init_data():
     """Inicializa los datos por defecto de la aplicación"""
     session = Session(engine)
@@ -929,6 +1015,7 @@ def init_data():
         init_demo_driver()
         init_additional_drivers()  # Agregar 4 conductores adicionales
         init_referral_data()    #agrega 19 referidos
+        init_project_settings() #anexa congiguraciones de porcentajes de negocio
 
     except Exception as e:
         print(f"Error al inicializar datos: {str(e)}")
