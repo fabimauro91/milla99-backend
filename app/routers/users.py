@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, File, UploadFile, Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
@@ -101,14 +100,13 @@ async def verify_user(user_id: int, request: Request, session: SessionDep):
     service = UserService(session)
     return service.verify_user(user_id)
 
+# Update selfie endpoint (protegida) – toma el user_id desde el token (request.state.user_id)
 
-@router.patch("/selfie", status_code=status.HTTP_200_OK)
-def update_selfie(
-    request: Request,
-    session: SessionDep,
-    selfie: UploadFile = File(...)
-):
+
+@router.patch("/selfie", status_code=status.HTTP_200_OK, description="""
+Actualiza la selfie del usuario autenticado (se toma el user_id desde el token).
+""")
+def update_selfie(request: Request, session: SessionDep, selfie: UploadFile = File(...), credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
     user_id = request.state.user_id
     service = UserService(session)
     return service.update_selfie(user_id, selfie)
-

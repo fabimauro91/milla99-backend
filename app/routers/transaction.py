@@ -8,6 +8,8 @@ bearer_scheme = HTTPBearer()
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
+bearer_scheme = HTTPBearer()
+
 
 
 @router.get("/balance/me", description="Consulta el saldo (available, withdrawable y mount) del usuario autenticado.")

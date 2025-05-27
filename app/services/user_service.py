@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime
 import os
 from app.core.config import settings
+import uuid
 
 
 class UserService:
@@ -52,16 +53,17 @@ class UserService:
 
             # La relación se crea automáticamente a través del link_model
             user.roles.append(client_role)
-            
-             # Si hay un token de referido, validarlo y crear la relación de referido
+
+            # Si hay un token de referido, validarlo y crear la relación de referido
             if user_data.referral_phone:
                 referral_user = self.session.exec(
-                select(User).where(
-                    User.phone_number == user_data.referral_phone
+                    select(User).where(
+                        User.phone_number == user_data.referral_phone
                     )
                 ).first()
                 if referral_user:
-                    referral = Referral(user_id=user.id, referred_by_id=referral_user.id)
+                    referral = Referral(
+                        user_id=user.id, referred_by_id=referral_user.id)
                     self.session.add(referral)
 
             # Actualizar el estado de la relación a través del link_model
@@ -83,13 +85,15 @@ class UserService:
         return user
 
     def _save_user_selfie(self, uploader, user_id, selfie: UploadFile):
-        """Guarda la selfie en static/uploads/users/{user_id}/selfie.jpg"""
+        """Guarda la selfie en static/uploads/users/{user_id}/selfie_<uuid>.jpg"""
         selfie_dir = os.path.join("static", "uploads", "users", str(user_id))
         os.makedirs(selfie_dir, exist_ok=True)
-        selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+        ext = os.path.splitext(selfie.filename)[1] or ".jpg"
+        unique_name = f"selfie_{uuid.uuid4().hex}{ext}"
+        selfie_path = os.path.join(selfie_dir, unique_name)
         with open(selfie_path, "wb") as f:
             f.write(selfie.file.read())
-        url = f"{settings.STATIC_URL_PREFIX}/users/{user_id}/selfie.jpg"
+        url = f"{settings.STATIC_URL_PREFIX}/users/{user_id}/{unique_name}"
         return {"url": url}
 
     def get_users(self) -> list[User]:

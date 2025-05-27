@@ -13,7 +13,6 @@ from app.services.client_requests_service import (
     get_client_requests_by_status_service,
     update_client_rating_service,
     update_driver_rating_service,
-    cancel_client_request_service,
     get_nearby_drivers_service
 )
 from sqlalchemy.orm import Session
@@ -340,8 +339,8 @@ def create_request(
 Asigna un conductor a una solicitud de viaje existente y actualiza el estado y la tarifa si se proporciona.
 
 **Parámetros:**
-- `id`: ID de la solicitud de viaje.
-- `id_driver_assigned`: user_id que tiene como rol Driver.
+- `id_client_request`: ID de la solicitud de viaje.
+- `id_driver`: user_id que tiene como rol Driver.
 - `fare_assigned`: Tarifa asignada (opcional).
 
 **Respuesta:**
@@ -518,39 +517,6 @@ def update_driver_rating(
     """
     user_id = request.state.user_id
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)
-
-
-@router.patch("/cancel", description="""
-Cancela una solicitud de viaje existente. Solo el cliente que creó la solicitud puede cancelarla.
-
-**Parámetros:**
-- `id_client_request`: ID de la solicitud de viaje a cancelar.
-- `reason`: Razón de la cancelación (opcional).
-
-**Restricciones:**
-- Solo se puede cancelar si el estado es CREATED o ACCEPTED
-- Solo el cliente que creó la solicitud puede cancelarla
-- Si hay conductor asignado, se le notificará de la cancelación
-
-**Respuesta:**
-Devuelve un mensaje de éxito o error.
-""")
-def cancel_client_request(
-    request: Request,
-    cancel_data: CancelClientRequestRequest = Body(...),
-    session: Session = Depends(get_session)
-):
-    """
-    Endpoint para cancelar una solicitud de viaje.
-    Delega la lógica de negocio al servicio cancel_client_request_service.
-    """
-    user_id = request.state.user_id
-    return cancel_client_request_service(
-        session=session,
-        client_request_id=cancel_data.id_client_request,
-        user_id=user_id,
-        reason=cancel_data.reason
-    )
 
 
 @router.get("/nearby-drivers", description="""
