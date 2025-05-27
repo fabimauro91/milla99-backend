@@ -12,8 +12,7 @@ class Settings(BaseSettings):
 
     # Configuración de la base de datos
     #DATABASE_URL: str = "sqlite:///./milla99.db"
-    DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/milla99"
-
+    DATABASE_URL: str = "mysql+pymysql://root:juandiego@localhost:3307/milla99"
     # Configuración CORS
     CORS_ORIGINS: List[str] = ["*"]
     CORS_CREDENTIALS: bool = True

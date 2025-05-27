@@ -15,9 +15,6 @@ class VehicleType(SQLModel, table=True):
     capacity: int = Field(nullable=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    # Relación uno a uno con VehicleTypeConfiguration
-    vehicle_type_configuration: Optional["VehicleTypeConfiguration"] = Relationship(
-        back_populates="vehicle_type")
     # Relaciones
     type_services: List["TypeService"] = Relationship(
         back_populates="vehicle_type")

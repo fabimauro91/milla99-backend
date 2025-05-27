@@ -23,6 +23,8 @@ class TypeService(SQLModel, table=True):
     vehicle_type: "VehicleType" = Relationship(back_populates="type_services")
     client_requests: List["ClientRequest"] = Relationship(
         back_populates="type_service")
+    config_service_value: Optional["ConfigServiceValue"] = Relationship(
+        back_populates="type_service")
 
 
 class TypeServiceCreate(SQLModel):
