@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, Path
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, Path, Request, Security
 from sqlmodel import Session
 from typing import List, Optional
 from fastapi.responses import JSONResponse
@@ -6,6 +6,7 @@ import json
 from sqlalchemy import select
 import traceback
 import os
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.models.driver import DriverCreate, DriverDocumentsInput, DriverFullCreate, DriverFullRead
 from app.core.db import get_session
@@ -22,6 +23,8 @@ from app.models.document_type import DocumentType
 from app.core.config import settings
 
 router = APIRouter(prefix="/drivers", tags=["drivers"])
+
+bearer_scheme = HTTPBearer()
 
 
 @router.post("/", response_model=DriverFullResponse, status_code=status.HTTP_201_CREATED, description="""
@@ -164,11 +167,10 @@ async def create_driver(
         )
 
 
-@router.patch("/{driver_id}", response_model=DriverFullResponse, status_code=status.HTTP_200_OK, description="""
-Actualiza la información de un conductor y sus documentos.
+@router.patch("/me", response_model=DriverFullResponse, status_code=status.HTTP_200_OK, description="""
+Actualiza la información de un conductor y sus documentos, (toma el user_id desde el token).
 
 **Parámetros:**
-- `driver_id`: ID único del conductor a actualizar.
 - `first_name`: Nombre del conductor (opcional).
 - `last_name`: Apellido del conductor (opcional).
 - `birth_date`: Fecha de nacimiento del conductor (opcional).
@@ -194,49 +196,48 @@ Actualiza la información de un conductor y sus documentos.
 Devuelve la información actualizada del conductor, usuario, vehículo y documentos.
 """)
 async def update_driver(
-    driver_id: int,
-    # Datos personales
+    request: Request,
     first_name: Optional[str] = Form(None),
     last_name: Optional[str] = Form(None),
     birth_date: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
-    # Datos del vehículo
     brand: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
     model_year: Optional[int] = Form(None),
     color: Optional[str] = Form(None),
     plate: Optional[str] = Form(None),
     vehicle_type_id: Optional[int] = Form(None),
-    # Documentos
     property_card_front: Optional[UploadFile] = File(None),
     property_card_back: Optional[UploadFile] = File(None),
     license_front: Optional[UploadFile] = File(None),
     license_back: Optional[UploadFile] = File(None),
     soat: Optional[UploadFile] = File(None),
     vehicle_technical_inspection: Optional[UploadFile] = File(None),
-    # Fechas de vencimiento
     license_expiration_date: Optional[str] = Form(None),
     soat_expiration_date: Optional[str] = Form(None),
     vehicle_technical_inspection_expiration_date: Optional[str] = Form(None),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
-    driver_info = session.get(DriverInfo, driver_id)
+    # Obtener el user_id desde el token
+    user_id = request.state.user_id
+    # Buscar el driver_info correspondiente a este usuario
+    driver_info = session.exec(select(DriverInfo).where(
+        DriverInfo.user_id == user_id)).first()
     if not driver_info:
-        raise HTTPException(status_code=404, detail="DriverInfo no encontrado")
+        raise HTTPException(
+            status_code=404, detail="No se encontró información de conductor para este usuario.")
+    driver_id = driver_info.id
 
-    print(f"PATCH driver_id: {driver_id}, driver_info.id: {driver_info.id}")
-
+    # Buscar la información del vehículo asociada al conductor
     vehicle_info = session.exec(
         select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)
     ).scalars().first()
-
-    print(f"vehicle info: ${vehicle_info}", type(vehicle_info))
-
     if not vehicle_info:
         raise HTTPException(
             status_code=404, detail="VehicleInfo no encontrado para este driver")
 
-    # Actualizar datos personales
+    # Actualizar datos personales del conductor
     if first_name is not None:
         driver_info.first_name = first_name
     if last_name is not None:
@@ -265,24 +266,21 @@ async def update_driver(
         select(DocumentType).where(DocumentType.name == "property_card")
     ).scalars().first()
     property_card_type_id = property_card_type.id if property_card_type else None
-
     license_type = session.exec(
         select(DocumentType).where(DocumentType.name == "license")
     ).scalars().first()
     license_type_id = license_type.id if license_type else None
-
     soat_type = session.exec(
         select(DocumentType).where(DocumentType.name == "soat")
     ).scalars().first()
     soat_type_id = soat_type.id if soat_type else None
-
     vehicle_tech_type = session.exec(
         select(DocumentType).where(
             DocumentType.name == "technical_inspections")
     ).scalars().first()
     vehicle_tech_type_id = vehicle_tech_type.id if vehicle_tech_type else None
 
-    # Actualizar documentos
+    # Actualizar documentos del conductor
     doc_types = [
         (property_card_front, "property_card", "front", property_card_type_id),
         (property_card_back, "property_card", "back", property_card_type_id),
@@ -294,6 +292,7 @@ async def update_driver(
     ]
     for file, doc_type, side, doc_type_id in doc_types:
         if file is not None and doc_type_id is not None:
+            # Guardar el archivo y actualizar la URL en el documento correspondiente
             url = await uploader.save_driver_document(
                 file=file,
                 driver_id=driver_info.id,
@@ -322,28 +321,25 @@ async def update_driver(
                     document_back_url=url if side == "back" else None
                 ))
 
-    # Consultar documentos actualizados
+    # Consultar documentos actualizados para la respuesta
     property_card_doc = session.exec(
         select(DriverDocuments).where(
             DriverDocuments.driver_info_id == driver_info.id,
             DriverDocuments.document_type_id == property_card_type_id
         )
     ).scalars().first()
-
     license_doc = session.exec(
         select(DriverDocuments).where(
             DriverDocuments.driver_info_id == driver_info.id,
             DriverDocuments.document_type_id == license_type_id
         )
     ).scalars().first()
-
     soat_doc = session.exec(
         select(DriverDocuments).where(
             DriverDocuments.driver_info_id == driver_info.id,
             DriverDocuments.document_type_id == soat_type_id
         )
     ).scalars().first()
-
     vehicle_tech_doc = session.exec(
         select(DriverDocuments).where(
             DriverDocuments.driver_info_id == driver_info.id,
@@ -351,7 +347,7 @@ async def update_driver(
         )
     ).scalars().first()
 
-    # Actualizar fechas de vencimiento
+    # Actualizar fechas de vencimiento de los documentos
     if license_expiration_date is not None:
         doc = session.exec(
             select(DriverDocuments).where(
@@ -380,10 +376,10 @@ async def update_driver(
         if doc:
             doc.expiration_date = vehicle_technical_inspection_expiration_date
 
+    # Guardar todos los cambios en la base de datos
     session.commit()
 
-    # Construir respuesta con el objeto actualizado
-    # (puedes reutilizar la lógica de respuesta del POST)
+    # Construir y retornar la respuesta con la información actualizada
     return DriverFullResponse(
         user=UserResponse(
             full_name=driver_info.user.full_name,
@@ -439,5 +435,30 @@ def get_driver_detail(
     """
     Devuelve la información personal, de usuario y del vehículo de un conductor dado su driver_id.
     """
+    service = DriverService(session)
+    return service.get_driver_detail_service(session, driver_id)
+
+
+@router.get("/me", response_model=DriverFullResponse, description="""
+Devuelve la información personal, de usuario y del vehículo del conductor autenticado (toma el user_id desde el token).
+
+**Respuesta:**
+Incluye la información personal, de usuario, del vehículo y documentos del conductor.
+""")
+def get_driver_me(
+    request: Request,
+    session: Session = Depends(get_session),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+):
+    # Obtener el user_id desde el token
+    user_id = request.state.user_id
+    # Buscar el driver_info correspondiente a este usuario
+    driver_info = session.exec(select(DriverInfo).where(
+        DriverInfo.user_id == user_id)).first()
+    if not driver_info:
+        raise HTTPException(
+            status_code=404, detail="No se encontró información de conductor para este usuario.")
+    driver_id = driver_info.id
+    # Usar el servicio existente para obtener el detalle completo
     service = DriverService(session)
     return service.get_driver_detail_service(session, driver_id)
