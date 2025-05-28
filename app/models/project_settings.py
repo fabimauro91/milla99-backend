@@ -3,8 +3,15 @@ from datetime import datetime
 from typing import Optional
 
 class ProjectSettingsBase(SQLModel):
-    value: str
-    description: str
+    driver_dist: str
+    referral_1: str
+    referral_2: str
+    referral_3: str
+    referral_4: str
+    referral_5: str
+    driver_saving: str
+    company: str
+    bonus: str
 
 class ProjectSettings(ProjectSettingsBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

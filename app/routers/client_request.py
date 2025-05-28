@@ -34,7 +34,7 @@ router = APIRouter(
 )
 
 
-class Position(BaseModel):
+class Position(BaseModel): 
     lat: float
     lng: float
 

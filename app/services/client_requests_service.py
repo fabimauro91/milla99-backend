@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.driver_info import DriverInfo
 from app.models.vehicle_info import VehicleInfo
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload 
 import traceback
 from app.utils.geo_utils import wkb_to_coords
 from app.models.type_service import TypeService
@@ -120,7 +120,7 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
     return results
 
 
-def assign_driver_service(session: Session, id: int, id_driver_assigned: int, fare_assigned: float = None):
+def assign_driver_service(session: Session, id: str, id_driver_assigned: int, fare_assigned: float = None):
     # Validación: El conductor debe tener el rol DRIVER y status APPROVED
     try:
         user_role = session.query(UserHasRole).filter(
@@ -156,7 +156,7 @@ def assign_driver_service(session: Session, id: int, id_driver_assigned: int, fa
         raise
 
 
-def update_status_service(session: Session, id_client_request: int, status: str):
+def update_status_service(session: Session, id_client_request: str, status: str):
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
@@ -167,7 +167,7 @@ def update_status_service(session: Session, id_client_request: int, status: str)
     return {"success": True, "message": "Status actualizado correctamente"}
 
 
-def get_client_request_detail_service(session: Session, client_request_id: int):
+def get_client_request_detail_service(session: Session, client_request_id: str):
     """
     Devuelve el detalle de una Client Request, incluyendo info de usuario, driver y vehículo si aplica.
     """
@@ -262,7 +262,7 @@ def get_client_requests_by_status_service(session: Session, status: str):
     ]
 
 
-def update_client_rating_service(session: Session, id_client_request: int, client_rating: float, user_id: int):
+def update_client_rating_service(session: Session, id_client_request: str, client_rating: float, user_id: int):
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
@@ -276,7 +276,7 @@ def update_client_rating_service(session: Session, id_client_request: int, clien
     return {"success": True, "message": "Calificación del cliente actualizada correctamente"}
 
 
-def update_driver_rating_service(session: Session, id_client_request: int, driver_rating: float, user_id: int):
+def update_driver_rating_service(session: Session, id_client_request: str, driver_rating: float, user_id: int):
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
@@ -290,7 +290,7 @@ def update_driver_rating_service(session: Session, id_client_request: int, drive
     return {"success": True, "message": "Calificación del conductor actualizada correctamente"}
 
 
-def assign_driver(self, client_request_id: int, driver_id: int):
+def assign_driver(self, client_request_id: str, driver_id: int):
     """Asigna un conductor a una solicitud de cliente"""
     client_request = self.session.query(ClientRequest).filter(
         ClientRequest.id == client_request_id

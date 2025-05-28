@@ -1,8 +1,9 @@
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum, event
+from sqlalchemy import Column, Enum, event, String
 import enum
 from datetime import datetime, timezone
 from typing import Optional,List
+import uuid
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
 
@@ -33,11 +34,19 @@ class StatusEnum(str, enum.Enum):
     PAID = "PAID"
     CANCELLED = "CANCELLED"
 
+
+# Función para generar UUID
+def generate_uuid():
+    return str(uuid.uuid4())
+
 # Modelo de base de datos
-
-
 class ClientRequest(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    __tablename__ = "client_request"
+    id: str = Field(
+        default_factory=generate_uuid,
+        primary_key=True,
+        sa_column=Column(String(36), unique=True, index=True, nullable=False)
+    )
     id_client: int = Field(foreign_key="user.id")
     id_driver_assigned: Optional[int] = Field(
         default=None, foreign_key="user.id")

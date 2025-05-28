@@ -1,17 +1,23 @@
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, String
 from datetime import datetime
 from typing import Optional
 from enum import Enum
 from pydantic import field_validator
+import uuid
+
 
 # Definimos el enum para el status
-
 
 class DriverStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
     EXPIRED = "expired"
+
+
+def generate_uuid() -> str:
+    return str(uuid.uuid4())
 
 
 class DriverDocumentsBase(SQLModel):
@@ -24,8 +30,13 @@ class DriverDocumentsBase(SQLModel):
 
 
 class DriverDocuments(DriverDocumentsBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    driver_info_id: int = Field(foreign_key="driverinfo.id", nullable=False)
+    __tablename__ = "driver_documents"
+    id: str = Field(
+        default_factory=generate_uuid,
+        primary_key=True,
+        sa_column=Column(String(36), unique=True, index=True, nullable=False)
+    )
+    driver_info_id: str = Field(foreign_key="driverinfo.id", nullable=False)
     vehicle_info_id: Optional[int] = Field(
         default=None, foreign_key="vehicleinfo.id", nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -44,7 +55,7 @@ class DriverDocumentsCreate(DriverDocumentsBase):
 
 
 class DriverDocumentsRead(SQLModel):
-    id: int
+    id: str
     user_id: int
     driver_info_id: int
     document_type_id: int

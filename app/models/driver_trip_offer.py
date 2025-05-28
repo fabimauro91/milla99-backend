@@ -6,7 +6,7 @@ from app.models.driver_response import DriverInfoResponse, UserResponse, Vehicle
 
 class DriverTripOfferCreate(SQLModel):
     id_driver: int
-    id_client_request: int
+    id_client_request: str
     fare_offer: float
     time: float
     distance: float
@@ -14,7 +14,7 @@ class DriverTripOfferCreate(SQLModel):
 class DriverTripOffer(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     id_driver: int = Field(foreign_key="user.id")
-    id_client_request: int = Field(foreign_key="clientrequest.id")
+    id_client_request: str = Field(foreign_key="clientrequest.id")
     fare_offer: float
     time: float
     distance: float

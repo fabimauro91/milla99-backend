@@ -1,6 +1,9 @@
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, String
 from typing import Optional, TYPE_CHECKING, List
 from datetime import date
+import uuid
+
 
 if TYPE_CHECKING:
     from .user import User
@@ -15,9 +18,16 @@ class DriverInfoBase(SQLModel):
     email: Optional[str] = None
     # selfie_url: Optional[str] = None  # Eliminado, ahora está en User
 
+def generate_uuid() -> str:
+    return str(uuid.uuid4())
 
 class DriverInfo(DriverInfoBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    __tablename__ = "driver_info"
+    id: str = Field(
+        default_factory=generate_uuid,
+        primary_key=True,
+        sa_column=Column(String(36), unique=True, index=True, nullable=False)
+    )
     user_id: int = Field(foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="driver_info")
     # driver: Optional["Driver"] = Relationship(back_populates="driver_info")
