@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Security
+from app.utils.geo_utils import wkb_to_coords
 from datetime import datetime
 from app.utils.geo import wkb_to_coords
 

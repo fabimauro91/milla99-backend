@@ -41,7 +41,7 @@ def get_config_percentages(session):
 
 
 def distribute_earnings(session, request: ClientRequest) -> None:
-    if request.status != StatusEnum.FINISHED:
+    if request.status != StatusEnum.PAID:
         return
 
     fare = Decimal(str(request.fare_assigned or 0))

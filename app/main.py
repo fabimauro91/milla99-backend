@@ -4,12 +4,11 @@ from contextlib import asynccontextmanager
 
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import vehicle_type_configuration_admin
+from app.routers import config_service_value_admin
 from app.routers.transaction import router as transaction_router
-from app.routers.verify_mount import router as verify_mount_router
 
 from .core.db import create_all_tables
-from .routers import referrals, users, drivers, auth, verify_docs, driver_position, driver_trip_offer, client_request, vehicle_type_configuration
+from .routers import config_service_value, referrals, users, drivers, auth, verify_docs, driver_position, driver_trip_offer, client_request
 from .core.config import settings
 from .core.init_data import init_data
 from .core.middleware.auth import JWTAuthMiddleware
@@ -58,13 +57,14 @@ fastapi_app.include_router(auth.router)
 fastapi_app.include_router(drivers.router)
 fastapi_app.include_router(client_request.router)
 fastapi_app.include_router(driver_position.router)
-fastapi_app.include_router(vehicle_type_configuration.router)
+fastapi_app.include_router(config_service_value.router)
 fastapi_app.include_router(driver_trip_offer.router)
-fastapi_app.include_router(verify_docs.router)
-fastapi_app.include_router(vehicle_type_configuration_admin.router)
-fastapi_app.include_router(referrals.router)
 fastapi_app.include_router(transaction_router)
-fastapi_app.include_router(verify_mount_router)
+fastapi_app.include_router(referrals.router)
+fastapi_app.include_router(verify_docs.router)
+fastapi_app.include_router(config_service_value_admin.router)
+
+
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

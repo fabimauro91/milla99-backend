@@ -69,8 +69,7 @@ class DriverTripOfferService:
                 first_name=driver_info_obj.first_name,
                 last_name=driver_info_obj.last_name,
                 birth_date=str(driver_info_obj.birth_date),
-                email=driver_info_obj.email,
-                selfie_url=driver_info_obj.selfie_url
+                email=driver_info_obj.email
             ) if driver_info_obj else None
             
             user_response = UserResponse(

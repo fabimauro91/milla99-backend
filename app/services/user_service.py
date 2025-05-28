@@ -16,7 +16,7 @@ class UserService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_user(self, user_data: UserCreate, selfie: UploadFile = None) -> User:
+    def create_user(self, user_data: UserCreate) -> User:
         with self.session.begin():
             # Check for existing phone (country_code + phone_number)
             existing_user = self.session.exec(
@@ -35,14 +35,6 @@ class UserService:
             user = User.model_validate(user_data.model_dump())
             self.session.add(user)
             self.session.flush()  # Para obtener el id antes del commit
-
-            # Subir selfie si se proporciona
-            if selfie:
-                from app.services.upload_service import UploadService
-                uploader = UploadService()
-                selfie_info = self._save_user_selfie(uploader, user.id, selfie)
-                user.selfie_url = selfie_info["url"]
-                self.session.add(user)
 
             # Asignar el rol CLIENT por defecto
             client_role = self.session.exec(

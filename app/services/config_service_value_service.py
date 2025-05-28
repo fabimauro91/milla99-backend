@@ -1,70 +1,70 @@
 from typing import Optional, Dict, Any
 from datetime import datetime
 from sqlmodel import Session, select
-from app.models.vehicle_type_configuration import VehicleTypeConfiguration, FareCalculationResponse 
+from app.models.config_service_value import ConfigServiceValue, FareCalculationResponse 
 import requests
 
 
-class VehicleTypeConfigurationService:
+class ConfigServiceValueService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_vehicle_type_configuration(
+    def create_config_service_value(
         self,
         km_value: float,
         min_value: float,
         tarifa_value: Optional[float] = None,
         weight_value: Optional[float] = None
-    ) -> VehicleTypeConfiguration:
+    ) -> ConfigServiceValue:
         """
-        Crea un nuevo registro de VehicleTypeConfiguration
+        Crea un nuevo registro de ConfigServiceValue
         """ 
-        vehicle_type_configuration = VehicleTypeConfiguration(
+        config_service_value = ConfigServiceValue(
             km_value=km_value,
             min_value=min_value,
             tarifa_value=tarifa_value,
             weight_value=weight_value
         )
-        self.session.add(vehicle_type_configuration)
+        self.session.add(config_service_value)
         self.session.commit()
-        self.session.refresh(vehicle_type_configuration)
-        return vehicle_type_configuration
+        self.session.refresh(config_service_value)
+        return config_service_value
 
-    def get_vehicle_type_configuration_by_id(self, id: int) -> Optional[VehicleTypeConfiguration]:
+    def get_config_service_value_by_id(self, id: int) -> Optional[ConfigServiceValue]:
         """
         Busca un registro por ID
         """
-        statement = select(VehicleTypeConfiguration).where(VehicleTypeConfiguration.id == id)
+        statement = select(ConfigServiceValue).where(ConfigServiceValue.service_type_id == id)
         result = self.session.exec(statement).first()
         return result
 
-    def update_vehicle_type_configuration(
+    def update_config_service_value(
         self,
         id_type_vehicle: int,
         update_data: Dict[str, Any]
-    ) -> Optional[VehicleTypeConfiguration]:
+    ) -> Optional[ConfigServiceValue]:
         """
         Actualiza un registro según los campos proporcionados
         """
-        vehicle_type_configuration = self.get_vehicle_type_configuration_by_id(id_type_vehicle)
-        if not vehicle_type_configuration:
+        config_service_value = self.get_config_service_value_by_id(id_type_vehicle)
+        if not config_service_value:
             return None
 
         # Actualiza solo los campos proporcionados
         valid_fields = {'km_value', 'min_value', 'tarifa_value', 'weight_value'}
         for field, value in update_data.items():
             if field in valid_fields and value is not None:
-                setattr(vehicle_type_configuration, field, value)
+                setattr(config_service_value, field, value)
 
-        vehicle_type_configuration.updated_at = datetime.utcnow()
+        config_service_value.updated_at = datetime.utcnow()
         self.session.commit()
-        self.session.refresh(vehicle_type_configuration)
-        return vehicle_type_configuration
+        self.session.refresh(config_service_value)
+        return config_service_value
 
     def update_by_vehicle_type_id(self, vehicle_type_id: int, update_data: dict):
-        from app.models.vehicle_type_configuration import VehicleTypeConfiguration
+        from app.models.config_service_value import ConfigServiceValue
         config = self.session.exec(
-            select(VehicleTypeConfiguration).where(VehicleTypeConfiguration.vehicle_type_id == vehicle_type_id)
+            select(ConfigServiceValue).where(ConfigServiceValue.service_type_id == vehicle_type_id)
         ).first()
         if not config:
             return None
@@ -103,8 +103,8 @@ class VehicleTypeConfigurationService:
         
         try:
             # Obtener el registro de tarifas
-            vehicle_type_configuration = self.get_vehicle_type_configuration_by_id(id)
-            if not vehicle_type_configuration:
+            config_service_value = self.get_config_service_value_by_id(id)
+            if not config_service_value:
                 return None
 
             # Extraer los datos usando el modelo Pydantic
@@ -115,14 +115,14 @@ class VehicleTypeConfigurationService:
             time_minutes = element["duration"]["value"] / 60.00
 
             # Calcular el costo
-            distance_cost = distance_km * vehicle_type_configuration.km_value
-            time_cost = time_minutes * vehicle_type_configuration.min_value
+            distance_cost = distance_km * config_service_value.km_value
+            time_cost = time_minutes * config_service_value.min_value
           
             total_cost = distance_cost + time_cost
 
             # Aplicar tarifa mínima si existe
-            if vehicle_type_configuration.tarifa_value is not None:
-                total_cost = max(total_cost, vehicle_type_configuration.tarifa_value)
+            if config_service_value.tarifa_value is not None:
+                total_cost = max(total_cost, config_service_value.tarifa_value)
 
             return FareCalculationResponse(
                 recommended_value=round(total_cost, 2),

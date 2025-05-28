@@ -21,25 +21,16 @@ Crea un nuevo usuario en el sistema.
 - `full_name`: Nombre completo del usuario.
 - `country_code`: Código de país.
 - `phone_number`: Número de teléfono móvil.
-- `selfie`: Archivo de selfie (opcional).
 
 **Respuesta:**
 Devuelve el usuario creado con su información registrada.
 """)
 def create_user(
     session: SessionDep,
-    full_name: str = Form(...),
-    country_code: str = Form(...),
-    phone_number: str = Form(...),
-    selfie: UploadFile = File(None)
+    user_data: UserCreate
 ):
-    user_data = UserCreate(
-        full_name=full_name,
-        country_code=country_code,
-        phone_number=phone_number
-    )
     service = UserService(session)
-    return service.create_user(user_data, selfie)
+    return service.create_user(user_data)
 
 # List users endpoint (protegida)
 
