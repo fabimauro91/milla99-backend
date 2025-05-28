@@ -4,8 +4,7 @@ from sqlalchemy import Column, String
 from enum import Enum
 from datetime import datetime
 from sqlalchemy.orm import relationship
-import uuid
-
+from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .user import User
@@ -17,22 +16,14 @@ class SavingsType(str, Enum):
     RECHARGE = "RECHARGE"
     WITHDRAWS = "WITHDRAWS"
 
-def generate_uuid() -> str:
-    return str(uuid.uuid4())
-
 
 class DriverSavings(SQLModel, table=True):
-    __tablename__ = "driver_savings"
-    id: str = Field(
-        default_factory=generate_uuid,
-        primary_key=True,
-        sa_column=Column(String(36), unique=True, index=True, nullable=False)
-    )
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
-    user_id: int = Field(foreign_key="user.id")
+    user_id: UUID = Field(foreign_key="user.id")
     type: SavingsType
-    client_request_id: Optional[str] = Field(
+    client_request_id: Optional[UUID] = Field(
         default=None, foreign_key="clientrequest.id")
     date: datetime = Field(default_factory=datetime.utcnow)
 

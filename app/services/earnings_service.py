@@ -10,11 +10,12 @@ from app.models.user import User
 from app.models.driver_savings import DriverSavings
 from app.models.company_account import CompanyAccount
 from app.core.config import settings
+from uuid import UUID
 
 # Id especial (o None) para la empresa
 COMPANY_ID: int | None = None
 
-def _get_referral_chain(session, user_id: int, levels: int = 3) -> list[int]:
+def _get_referral_chain(session, user_id: UUID, levels: int = 3) -> list[UUID]:
     chain = []
     current_id = user_id
 
@@ -110,7 +111,7 @@ def distribute_earnings(session, request: ClientRequest) -> None:
     session.commit()
 
 
-def get_referral_earnings_structured(session, user_id: int):
+def get_referral_earnings_structured(session, user_id: UUID):
 
     user = session.execute(
         select(User).where(User.id == user_id)

@@ -3,12 +3,13 @@
 from fastapi import APIRouter, HTTPException, status
 from ..core.db import SessionDep
 from app.services.earnings_service import get_referral_earnings_structured
+from uuid import UUID
 
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
 @router.get("/{user_id}/earnings-structured")
 def get_referral_earnings_structured_api(
-    user_id: int,
+    user_id: UUID,
     session: SessionDep
 ):
     """

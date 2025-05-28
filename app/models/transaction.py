@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel
+from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .user import User
@@ -22,12 +23,12 @@ class TransactionType(str, Enum):
 
 
 class Transaction(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    user_id: UUID = Field(foreign_key="user.id")
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
     type: TransactionType
-    client_request_id: Optional[str] = Field(
+    client_request_id: Optional[UUID] = Field(
         default=None, foreign_key="clientrequest.id")
     date: datetime = Field(default_factory=datetime.utcnow)
     user: Optional["User"] = Relationship(back_populates="transactions")
@@ -39,4 +40,4 @@ class TransactionCreate(BaseModel):
     income: Optional[int] = 0
     expense: Optional[int] = 0
     type: TransactionType
-    client_request_id: Optional[int] = None
+    client_request_id: Optional[UUID] = None

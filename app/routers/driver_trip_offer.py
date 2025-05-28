@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.driver_trip_offer import DriverTripOfferCreate, DriverTripOffer, DriverTripOfferResponse
 from app.core.db import get_session
 from app.services.driver_trip_offer_service import DriverTripOfferService
+from uuid import UUID
 
 router = APIRouter(prefix="/driver-trip-offers", tags=["driver-trip-offers"])
 
@@ -38,7 +39,7 @@ Obtiene todas las ofertas de viaje realizadas por conductores para una solicitud
 Devuelve una lista de ofertas de viaje, incluyendo información del conductor, usuario y vehículo.
 """)
 def get_offers_by_client_request(
-    id_client_request: int,
+    id_client_request: UUID,
     session: Session = Depends(get_session)
 ):
     service = DriverTripOfferService(session)

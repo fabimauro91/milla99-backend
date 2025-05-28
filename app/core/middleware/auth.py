@@ -15,8 +15,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/auth/verify/", "POST"),  # Rutas de verificación
             ("/docs", "GET"),  # Documentación
             ("/openapi.json", "GET"),  # Esquema OpenAPI
-            ("/drivers/", "POST"),  # Creación de drivers
-            ("/openapi.json", "GET"),  # Esquema OpenAPI 
+            ("/drivers/", "POST", "PATCH"),  # Creación de drivers
+            ("/drivers", "POST", "PATCH"),  # Creación de drivers
+            ("/openapi.json", "GET"),  # Esquema OpenAPI
             ("/verify-docs/", "GET"),  # Rutas de verify-docs
             ("/verify-docs/", "POST"),
             ("/drivers-position/", "POST"),  # Rutas POST de drivers-position
@@ -27,11 +28,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/driver-trip-offers/", "POST"),
             ("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
             ("/static/uploads/", "GET"),
-            ("/distance-value/","GET"),
-            ("/vehicle-type-configuration/","GET"),
-            #("/referrals/", "POST"),
+            ("/distance-value/", "GET"),
+            ("/vehicle-type-configuration/", "GET"),
+            # ("/referrals/", "POST"),
             ("/referrals/", "GET"),
-            
+
         ]
 
         # Verificar si la ruta y método actual están en la lista de públicas

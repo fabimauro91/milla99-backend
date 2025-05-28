@@ -4,7 +4,7 @@ from typing import Optional, TYPE_CHECKING
 from enum import Enum
 from datetime import datetime
 from sqlalchemy.orm import relationship
-import uuid
+from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .user import User
@@ -16,25 +16,14 @@ class cashflow(str, Enum):
     WITHDRAWS = "WITHDRAWS"
     ADDITIONAL= "ADDITIONAL"
 
-
-# Función para generar UUID
-def generate_uuid():
-    return str(uuid.uuid4())
-
-
 class CompanyAccount(SQLModel, table=True):
-    __tablename__ = "company_account"
-    id: str = Field(
-        default_factory=generate_uuid,
-        primary_key=True,
-        sa_column=Column(String(36), unique=True, index=True, nullable=False)
-    )
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
     type: cashflow
    
-    client_request_id: Optional[str] = Field(
-        default=None, foreign_key="client_request.id")
+    client_request_id: Optional[UUID] = Field(
+        default=None, foreign_key="clientrequest.id")
     date: datetime = Field(default_factory=datetime.utcnow)
 
     

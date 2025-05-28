@@ -2,11 +2,12 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional
 from pydantic import BaseModel
+from uuid import UUID, uuid4
 
 class Referral(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")          # usuario referido (hijo)
-    referred_by_id: Optional[int] = Field(default=None,  # quién lo refirió (padre)
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    user_id: UUID = Field(foreign_key="user.id")          # usuario referido (hijo)
+    referred_by_id: Optional[UUID] = Field(default=None,  # quién lo refirió (padre)
                                           foreign_key="user.id")
 
     user:        "User" = Relationship(sa_relationship_kwargs={"foreign_keys": "[Referral.user_id]"})

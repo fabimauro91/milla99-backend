@@ -10,6 +10,7 @@ from app.models.driver_trip_offer import DriverTripOfferResponse
 from app.models.driver_response import UserResponse, DriverInfoResponse, VehicleInfoResponse
 from sqlalchemy.orm import selectinload
 from datetime import datetime
+from uuid import UUID
 
 class DriverTripOfferService:
     def __init__(self, session: Session):
@@ -42,7 +43,7 @@ class DriverTripOfferService:
         self.session.refresh(offer)
         return offer
 
-    def get_offers_by_client_request(self, id_client_request: int):
+    def get_offers_by_client_request(self, id_client_request: UUID):
         offers = self.session.query(DriverTripOffer).filter(
             DriverTripOffer.id_client_request == id_client_request
         ).all()

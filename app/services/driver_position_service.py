@@ -8,6 +8,7 @@ from sqlalchemy import select, text, func
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.role import Role
 from app.utils.geo import wkb_to_coords
+from uuid import UUID
 
 
 class DriverPositionService:
@@ -78,10 +79,10 @@ class DriverPositionService:
             ))
         return drivers
 
-    def get_driver_position(self, id_driver: int):
+    def get_driver_position(self, id_driver: UUID):
         return self.session.get(DriverPosition, id_driver)
 
-    def delete_driver_position(self, id_driver: int):
+    def delete_driver_position(self, id_driver: UUID):
         obj = self.session.get(DriverPosition, id_driver)
         if not obj:
             return False
@@ -89,7 +90,7 @@ class DriverPositionService:
         self.session.commit()
         return True
 
-    def get_nearby_drivers_by_client_request(self, id_client_request: int):
+    def get_nearby_drivers_by_client_request(self, id_client_request: UUID):
         from app.models.client_request import ClientRequest
         from app.models.type_service import TypeService
         from app.models.vehicle_info import VehicleInfo
@@ -170,7 +171,7 @@ class DriverPositionService:
             "drivers": drivers
         }
 
-    def get_driver_position_by_client_request(self, id_client_request: int):
+    def get_driver_position_by_client_request(self, id_client_request: UUID):
         from app.models.client_request import ClientRequest
         from app.models.driver_info import DriverInfo
         from app.models.vehicle_info import VehicleInfo

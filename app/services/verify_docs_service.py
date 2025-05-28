@@ -8,6 +8,7 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from pydantic import BaseModel
+from uuid import UUID
 
 # modelo  para la respuesta de listas en ususario
 class UserWithDocs(BaseModel):
@@ -19,7 +20,7 @@ class UserWithDocs(BaseModel):
 
 # Primero, creamos un modelo para la respuesta del documento
 class DocumentExpirationInfo(SQLModel):
-    document_id: int
+    document_id: UUID
     expiration_date: datetime
     days_remaining: int
 
@@ -29,7 +30,7 @@ class DocumentExpirationInfo(SQLModel):
 # Modelo para la respuesta completa
 class UserWithExpiringDocsResponse(SQLModel):
     # Datos del usuario
-    user_id: int
+    user_id: UUID
     user_full_name: str
     user_phone: str
     user_country_code: str

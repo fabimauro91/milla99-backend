@@ -6,6 +6,7 @@ from typing import Optional,List
 import uuid
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
+from uuid import UUID, uuid4
 
 # Modelo de entrada (lo que el usuario envía)
 
@@ -42,13 +43,10 @@ def generate_uuid():
 # Modelo de base de datos
 class ClientRequest(SQLModel, table=True):
     __tablename__ = "client_request"
-    id: str = Field(
-        default_factory=generate_uuid,
-        primary_key=True,
-        sa_column=Column(String(36), unique=True, index=True, nullable=False)
-    )
-    id_client: int = Field(foreign_key="user.id")
-    id_driver_assigned: Optional[int] = Field(
+    
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id_client: UUID = Field(foreign_key="user.id")
+    id_driver_assigned: Optional[UUID] = Field(
         default=None, foreign_key="user.id")
     type_service_id: int = Field(
         foreign_key="typeservice.id")  # Nueva relación

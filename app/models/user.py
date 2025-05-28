@@ -9,6 +9,7 @@ from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
 from datetime import datetime
 from sqlalchemy.orm import relationship
+from uuid import UUID, uuid4
 
 
 # Custom validated types
@@ -54,7 +55,7 @@ class UserRole(str, Enum):
 
 
 class User(UserBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     selfie_url: Optional[str] = None
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
@@ -164,7 +165,7 @@ class DriverInfoRead(BaseModel):
 
 
 class UserRead(BaseModel):
-    id: int
+    id: UUID
     country_code: str
     phone_number: str
     is_verified_phone: bool
@@ -179,7 +180,7 @@ class UserRead(BaseModel):
 
 
 class UserInDB(UserBase):
-    id: int
+    id: UUID
     is_active: bool
     is_verified_phone: bool
     selfie_url: Optional[str] = None
@@ -189,7 +190,7 @@ class UserInDB(UserBase):
 
 
 class UserResponse(UserBase):
-    id: int
+    id: UUID
     is_active: bool
     is_verified_phone: bool
     selfie_url: Optional[str] = None

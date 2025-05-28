@@ -126,6 +126,7 @@ async def create_driver(
 
         return DriverFullResponse(
             user=UserResponse(
+                id=result.user.id,
                 full_name=result.user.full_name,
                 country_code=result.user.country_code,
                 phone_number=result.user.phone_number,
@@ -386,6 +387,7 @@ async def update_driver(
     # (puedes reutilizar la lógica de respuesta del POST)
     return DriverFullResponse(
         user=UserResponse(
+            id=driver_info.user.id,
             full_name=driver_info.user.full_name,
             country_code=driver_info.user.country_code,
             phone_number=driver_info.user.phone_number
