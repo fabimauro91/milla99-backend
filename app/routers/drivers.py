@@ -419,26 +419,6 @@ async def update_driver(
     )
 
 
-@router.get("/{driver_id}", description="""
-Devuelve la información personal, de usuario y del vehículo de un conductor dado su driver_id.
-
-**Parámetros:**
-- `driver_id`: ID único del conductor.
-
-**Respuesta:**
-Incluye la información personal, de usuario, del vehículo y documentos del conductor.
-""")
-def get_driver_detail(
-    driver_id: int = Path(..., description="ID único del conductor"),
-    session: Session = Depends(get_session)
-):
-    """
-    Devuelve la información personal, de usuario y del vehículo de un conductor dado su driver_id.
-    """
-    service = DriverService(session)
-    return service.get_driver_detail_service(session, driver_id)
-
-
 @router.get("/me", response_model=DriverFullResponse, description="""
 Devuelve la información personal, de usuario y del vehículo del conductor autenticado (toma el user_id desde el token).
 
