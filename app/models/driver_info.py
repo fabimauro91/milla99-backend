@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, TYPE_CHECKING, List
 from datetime import date
+from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .user import User
@@ -17,8 +18,8 @@ class DriverInfoBase(SQLModel):
 
 
 class DriverInfo(DriverInfoBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    user_id: UUID = Field(foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="driver_info")
     # driver: Optional["Driver"] = Relationship(back_populates="driver_info")
     vehicle_info: Optional["VehicleInfo"] = Relationship(

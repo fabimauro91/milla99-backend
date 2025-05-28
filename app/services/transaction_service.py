@@ -4,13 +4,14 @@ from app.models.verify_mount import VerifyMount
 from sqlalchemy import func
 from fastapi import HTTPException
 import traceback
+from uuid import UUID
 
 
 class TransactionService:
     def __init__(self, session):
         self.session = session
 
-    def create_transaction(self, user_id, income=0, expense=0, type=None, client_request_id=None):
+    def create_transaction(self, user_id: UUID, income=0, expense=0, type=None, client_request_id=None):
         print("TRACEBACK INICIO:\n", "".join(traceback.format_stack()))
         print(f"DEBUG income: {income}, expense: {expense}, type: {type}")
 
@@ -84,7 +85,7 @@ class TransactionService:
             "transaction_type": type
         }
 
-    def get_user_balance(self, user_id: int):
+    def get_user_balance(self, user_id: UUID):
         total_income = self.session.query(func.sum(Transaction.income)).filter(
             Transaction.user_id == user_id).scalar() or 0
         total_expense = self.session.query(func.sum(Transaction.expense)).filter(
@@ -105,5 +106,5 @@ class TransactionService:
             "mount": mount
         }
 
-    def list_transactions(self, user_id: int):
+    def list_transactions(self, user_id: UUID):
         return self.session.query(Transaction).filter(Transaction.user_id == user_id).order_by(Transaction.date.desc()).all()

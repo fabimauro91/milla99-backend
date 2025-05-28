@@ -24,6 +24,7 @@ from fastapi import Security
 from app.utils.geo_utils import wkb_to_coords
 from datetime import datetime
 from app.utils.geo import wkb_to_coords
+from uuid import UUID
 
 bearer_scheme = HTTPBearer()
 
@@ -40,8 +41,8 @@ class Position(BaseModel):
 
 
 class ClientRequestResponse(BaseModel):
-    id: int
-    id_client: int
+    id: UUID
+    id_client: UUID
     fare_offered: float | None = None
     fare_assigned: float | None = None
     pickup_description: str | None = None
@@ -58,16 +59,16 @@ class ClientRequestResponse(BaseModel):
 
 
 class AssignDriverRequest(BaseModel):
-    id_client_request: int = Field(...,
+    id_client_request: UUID = Field(...,
                                    description="ID de la solicitud de viaje")
-    id_driver: int = Field(...,
+    id_driver: UUID = Field(...,
                            description="user_id que tiene como rol Driver")
     fare_assigned: float | None = Field(
         None, description="Tarifa asignada (opcional)")
 
 
 class CancelClientRequestRequest(BaseModel):
-    id_client_request: int = Field(...,
+    id_client_request: UUID = Field(...,
                                    description="ID de la solicitud de viaje a cancelar")
     reason: str | None = Field(
         None, description="Razón de la cancelación (opcional)")
@@ -334,8 +335,8 @@ def assign_driver(
     request_data: AssignDriverRequest = Body(
         ...,
         example={
-            "id_client_request": 1,
-            "id_driver": 2,
+            "id_client_request": "00000000-0000-0000-0000-000000000000",
+            "id_driver": "00000000-0000-0000-0000-000000000000",
             "fare_assigned": 25
         }
     ),
@@ -424,7 +425,7 @@ Actualiza el estado de una solicitud de viaje existente.
 Devuelve un mensaje de éxito o error.
 """)
 def update_status(
-    id_client_request: int = Body(...,
+    id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
@@ -458,7 +459,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_client_rating(
     request: Request,
-    id_client_request: int = Body(...,
+    id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
     client_rating: float = Body(...,
                                 description="Nueva calificación del cliente"),
@@ -484,7 +485,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_driver_rating(
     request: Request,
-    id_client_request: int = Body(...,
+    id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
     driver_rating: float = Body(...,
                                 description="Nueva calificación del conductor"),
@@ -590,7 +591,7 @@ Consulta el estado y la información detallada de una solicitud de viaje especí
 Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
 """)
 def get_client_request_detail(
-    client_request_id: int,
+    client_request_id: UUID,
     session: Session = Depends(get_session)
 ):
     """

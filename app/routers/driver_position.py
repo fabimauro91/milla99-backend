@@ -5,6 +5,7 @@ from app.models.driver_position import DriverPositionCreate, DriverPositionRead
 from app.core.db import get_session
 from app.services.driver_position_service import DriverPositionService
 from app.models.project_settings import ProjectSettings
+from uuid import UUID
 
 router = APIRouter(prefix="/drivers-position", tags=["drivers-position"])
 
@@ -48,7 +49,7 @@ Incluye la latitud, longitud y (si aplica) la distancia al punto de búsqueda.
 """
 )
 def get_driver_position(
-    id_driver: int,
+    id_driver: UUID,
     session: Session = Depends(get_session)
 ):
     service = DriverPositionService(session)
@@ -73,7 +74,7 @@ No retorna contenido si la eliminación fue exitosa.
 """
 )
 def delete_driver_position(
-    id_driver: int,
+    id_driver: UUID,
     session: Session = Depends(get_session)
 ):
     service = DriverPositionService(session)
@@ -131,7 +132,7 @@ def get_nearby_drivers(
     """
 )
 def get_drivers_by_client_request(
-    id_client_request: int,
+    id_client_request: UUID,
     session: Session = Depends(get_session)
 ):
     service = DriverPositionService(session)

@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 from enum import Enum
 from pydantic import field_validator
+from uuid import UUID, uuid4
 
 # Definimos el enum para el status
 
@@ -24,9 +25,9 @@ class DriverDocumentsBase(SQLModel):
 
 
 class DriverDocuments(DriverDocumentsBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    driver_info_id: int = Field(foreign_key="driverinfo.id", nullable=False)
-    vehicle_info_id: Optional[int] = Field(
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    driver_info_id: UUID = Field(foreign_key="driverinfo.id", nullable=False)
+    vehicle_info_id: Optional[UUID] = Field(
         default=None, foreign_key="vehicleinfo.id", nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
@@ -44,11 +45,11 @@ class DriverDocumentsCreate(DriverDocumentsBase):
 
 
 class DriverDocumentsRead(SQLModel):
-    id: int
-    user_id: int
-    driver_info_id: int
+    id: UUID
+    user_id: UUID
+    driver_info_id: UUID
     document_type_id: int
-    vehicle_info_id: Optional[int]
+    vehicle_info_id: Optional[UUID]
     soat_id: Optional[int]
     technomechanics_id: Optional[int]
     drivers_license_id: Optional[int]
@@ -62,7 +63,7 @@ class DriverDocumentsRead(SQLModel):
 
 class DriverDocumentsUpdate(SQLModel):
     document_type_id: Optional[int] = None
-    vehicle_info_id: Optional[int] = None
+    vehicle_info_id: Optional[UUID] = None
     soat_id: Optional[int] = None
     technomechanics_id: Optional[int] = None
     drivers_license_id: Optional[int] = None
@@ -73,10 +74,10 @@ class DriverDocumentsUpdate(SQLModel):
 
 
 class DriverDocumentsCreateRequest(SQLModel):
-    user_id: int
-    driver_info_id: int
+    user_id: UUID
+    driver_info_id: UUID
     document_type_id: int
     document_front_url: str
     document_back_url: Optional[str] = None
     expiration_date: Optional[datetime] = None
-    # vehicle_info_id: Optional[int] = None
+    # vehicle_info_id: Optional[UUID] = None

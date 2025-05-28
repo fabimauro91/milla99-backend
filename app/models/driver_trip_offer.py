@@ -3,18 +3,19 @@ from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
 from app.models.driver_response import DriverInfoResponse, UserResponse, VehicleInfoResponse
+from uuid import UUID, uuid4
 
 class DriverTripOfferCreate(SQLModel):
-    id_driver: int
-    id_client_request: int
+    id_driver: UUID
+    id_client_request: UUID
     fare_offer: float
     time: float
     distance: float
 
 class DriverTripOffer(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    id_driver: int = Field(foreign_key="user.id")
-    id_client_request: int = Field(foreign_key="clientrequest.id")
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id_driver: UUID = Field(foreign_key="user.id")
+    id_client_request: UUID = Field(foreign_key="clientrequest.id")
     fare_offer: float
     time: float
     distance: float
@@ -22,7 +23,7 @@ class DriverTripOffer(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class DriverTripOfferResponse(BaseModel):
-    id: int
+    id: UUID
     fare_offer: float
     time: float
     distance: float

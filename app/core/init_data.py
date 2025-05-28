@@ -29,6 +29,12 @@ from app.models.client_request import ClientRequest, StatusEnum
 from app.models.driver_position import DriverPosition
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
+from uuid import UUID
+
+
+def uuid_prueba(num: int) -> UUID:
+    """Genera un UUID de prueba con el patrón 00000000-0000-0000-0000-XXXXXXXXXXXX, donde X es el número con padding a 12 dígitos."""
+    return UUID(f"00000000-0000-0000-0000-{num:012d}")
 
 
 def init_roles():
@@ -424,138 +430,140 @@ def init_demo_driver():
 
 
 def init_additional_clients():
-    """Inicializa 4 clientes adicionales con datos de prueba"""
+    """Inicializa clientes adicionales con datos de prueba"""
     with Session(engine) as session:
-        # Lista de clientes a crear
+        # Lista de clientes a crear con sus IDs específicos
         clients_data = [
             {
+                "id": 1,  # ID específico para uuid_prueba
                 "full_name": "María García",
                 "phone_number": "3001111111",
                 "selfie_url": None
             },
             {
+                "id": 2,
                 "full_name": "Juan Pérez",
                 "phone_number": "3002222222",
                 "selfie_url": None
             },
             {
+                "id": 3,
                 "full_name": "Ana Martínez",
                 "phone_number": "3003333333",
                 "selfie_url": None
             },
             {
+                "id": 4,
                 "full_name": "Carlos Rodríguez",
                 "phone_number": "3004444444",
                 "selfie_url": None
             },
             {
+                "id": 5,
                 "full_name": "Jhonatan Restrepo",
                 "phone_number": "3004442444",
                 "selfie_url": None
             },
             {
+                "id": 6,
                 "full_name": "Maricela Muños",
                 "phone_number": "3004444445",
                 "selfie_url": None
             },
             {
+                "id": 7,
                 "full_name": "Daniel Carrascal",
                 "phone_number": "3004444446",
                 "selfie_url": None
             },
             {
+                "id": 8,
                 "full_name": "Carlos Valderrama",
                 "phone_number": "3004444447",
                 "selfie_url": None
             },
             {
+                "id": 9,
                 "full_name": "Carmenza Coyazos",
                 "phone_number": "3004444448",
                 "selfie_url": None
             },
             {
+                "id": 11,
                 "full_name": "Marcela Jimenez",
                 "phone_number": "3004444449",
                 "selfie_url": None
             },
             {
+                "id": 14,
                 "full_name": "Pedro Fernandez",
                 "phone_number": "3004444450",
                 "selfie_url": None
             },
             {
+                "id": 15,
                 "full_name": "Maritza Rodrigez",
                 "phone_number": "3004444451",
                 "selfie_url": None
             },
             {
+                "id": 16,
                 "full_name": "Estephany Pelaez",
                 "phone_number": "3004444452",
                 "selfie_url": None
             },
             {
+                "id": 17,
                 "full_name": "Angela ceballos",
                 "phone_number": "3004444452",
                 "selfie_url": None
             },
             {
+                "id": 18,
                 "full_name": "Diego Mojica",
                 "phone_number": "3004444453",
                 "selfie_url": None
             },
             {
+                "id": 19,
                 "full_name": "Diana Leane",
                 "phone_number": "3004444454",
                 "selfie_url": None
             },
             {
+                "id": 20,
                 "full_name": "Taliana Vega",
                 "phone_number": "3004444455",
                 "selfie_url": None
             },
             {
+                "id": 21,
                 "full_name": "Paulina Vargas",
                 "phone_number": "3004444456",
                 "selfie_url": None
             },
             {
+                "id": 22,
                 "full_name": "Angelina Fernandez",
                 "phone_number": "3004444457",
                 "selfie_url": None
             },
             {
+                "id": 23,
                 "full_name": "Cecilia Castrillon",
                 "phone_number": "3004444458",
                 "selfie_url": None
             },
             {
+                "id": 24,
                 "full_name": "Paulo Coelo",
                 "phone_number": "3004444459",
                 "selfie_url": None
             },
             {
+                "id": 25,
                 "full_name": "Cabriel Garcia",
                 "phone_number": "3004444460",
-                "selfie_url": None
-            },
-            {
-                "full_name": "Ana Estupiñan",
-                "phone_number": "3004444461",
-                "selfie_url": None
-            },
-            {
-                "full_name": "Cabriel Garcia",
-                "phone_number": "3004444462",
-                "selfie_url": None
-            },
-            {
-                "full_name": "Emilio Escobar",
-                "phone_number": "3004444463",
-                "selfie_url": None
-            },
-            {
-                "full_name": "Nahia Diaz",
-                "phone_number": "3004444464",
                 "selfie_url": None
             }
         ]
@@ -565,14 +573,15 @@ def init_additional_clients():
             select(Role).where(Role.id == "CLIENT")).first()
 
         for client_data in clients_data:
-            # Verificar si el cliente ya existe
+            # Verificar si el cliente ya existe por ID específico
             existing_user = session.exec(select(User).where(
-                User.phone_number == client_data["phone_number"]
+                User.id == uuid_prueba(client_data["id"])
             )).first()
 
             if not existing_user:
-                # Crear nuevo usuario
+                # Crear nuevo usuario con ID específico
                 user = User(
+                    id=uuid_prueba(client_data["id"]),  # Usar uuid_prueba con el ID específico
                     full_name=client_data["full_name"],
                     country_code="+57",
                     phone_number=client_data["phone_number"],
@@ -1085,6 +1094,7 @@ def init_client_requests_and_driver_positions():
         except Exception as e:
             session.rollback()
             raise
+
 def init_referral_data():
     """Inicializa los datos por defecto para la tabla Referral"""
     with Session(engine) as session:
@@ -1111,6 +1121,11 @@ def init_referral_data():
             {"user_id": 25, "referred_by_id": 11}
         ]
 
+        # Convertir los IDs a UUIDs usando uuid_prueba
+        for item in referral_data:
+            item["user_id"] = uuid_prueba(item["user_id"])
+            item["referred_by_id"] = uuid_prueba(item["referred_by_id"])
+        
         # Verificar si ya existen registros en la tabla Referral
         existing_referrals = session.exec(select(Referral)).all()
         if existing_referrals:

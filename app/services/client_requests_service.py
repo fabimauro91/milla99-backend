@@ -16,9 +16,10 @@ from sqlalchemy.orm import selectinload
 import traceback
 from app.utils.geo_utils import wkb_to_coords
 from app.models.type_service import TypeService
+from uuid import UUID
 
 
-def create_client_request(db: Session, data: ClientRequestCreate, id_client: int):
+def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUID):
     pickup_point = from_shape(
         Point(data.pickup_lng, data.pickup_lat), srid=4326)
     destination_point = from_shape(
@@ -120,7 +121,7 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
     return results
 
 
-def assign_driver_service(session: Session, id: int, id_driver_assigned: int, fare_assigned: float = None):
+def assign_driver_service(session: Session, id: UUID, id_driver_assigned: UUID, fare_assigned: float = None):
     # Validación: El conductor debe tener el rol DRIVER y status APPROVED
     try:
         user_role = session.query(UserHasRole).filter(
@@ -156,7 +157,7 @@ def assign_driver_service(session: Session, id: int, id_driver_assigned: int, fa
         raise
 
 
-def update_status_service(session: Session, id_client_request: int, status: str):
+def update_status_service(session: Session, id_client_request: UUID, status: str):
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
@@ -167,7 +168,7 @@ def update_status_service(session: Session, id_client_request: int, status: str)
     return {"success": True, "message": "Status actualizado correctamente"}
 
 
-def get_client_request_detail_service(session: Session, client_request_id: int):
+def get_client_request_detail_service(session: Session, client_request_id: UUID):
     """
     Devuelve el detalle de una Client Request, incluyendo info de usuario, driver y vehículo si aplica.
     """
@@ -262,7 +263,7 @@ def get_client_requests_by_status_service(session: Session, status: str):
     ]
 
 
-def update_client_rating_service(session: Session, id_client_request: int, client_rating: float, user_id: int):
+def update_client_rating_service(session: Session, id_client_request: UUID, client_rating: float, user_id: UUID):
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
@@ -276,7 +277,7 @@ def update_client_rating_service(session: Session, id_client_request: int, clien
     return {"success": True, "message": "Calificación del cliente actualizada correctamente"}
 
 
-def update_driver_rating_service(session: Session, id_client_request: int, driver_rating: float, user_id: int):
+def update_driver_rating_service(session: Session, id_client_request: UUID, driver_rating: float, user_id: UUID):
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
@@ -290,7 +291,7 @@ def update_driver_rating_service(session: Session, id_client_request: int, drive
     return {"success": True, "message": "Calificación del conductor actualizada correctamente"}
 
 
-def assign_driver(self, client_request_id: int, driver_id: int):
+def assign_driver(self, client_request_id: UUID, driver_id: UUID):
     """Asigna un conductor a una solicitud de cliente"""
     client_request = self.session.query(ClientRequest).filter(
         ClientRequest.id == client_request_id
@@ -333,7 +334,7 @@ def assign_driver(self, client_request_id: int, driver_id: int):
     return client_request
 
 
-def get_nearby_requests(self, driver_id: int, lat: float, lng: float, max_distance: float = 5.0):
+def get_nearby_requests(self, driver_id: UUID, lat: float, lng: float, max_distance: float = 5.0):
     """Obtiene las solicitudes cercanas al conductor, filtrando por tipo de servicio"""
     # Obtener el vehículo del conductor
     driver_vehicle = self.session.query(VehicleInfo).filter(

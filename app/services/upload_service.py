@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from enum import Enum
+from uuid import UUID
 
 # Definir tipos de documentos y sus categorí
 
@@ -126,7 +127,7 @@ class UploadService:
                 detail=f"El archivo es demasiado grande. Máximo permitido: {max_size // (1024*1024)}MB"
             )
 
-    def _generate_file_path(self, user_id: int, document_type: DocumentType) -> tuple[Path, str]:
+    def _generate_file_path(self, user_id: UUID, document_type: DocumentType) -> tuple[Path, str]:
         """Genera la ruta del archivo y su nombre único."""
         # Obtener la categoría del documento
         category = DOCUMENT_CATEGORIES[document_type]
@@ -146,7 +147,7 @@ class UploadService:
     async def save_document(
         self,
         file: UploadFile,
-        user_id: int,
+        user_id: UUID,
         document_type: DocumentType,
         description: Optional[str] = None
     ) -> dict:
@@ -212,7 +213,7 @@ class UploadService:
     async def save_document_dbtype(
         self,
         file: UploadFile,
-        driver_id: int,
+        driver_id: UUID,
         document_type: str,
         side: Optional[str] = None,
         description: Optional[str] = None

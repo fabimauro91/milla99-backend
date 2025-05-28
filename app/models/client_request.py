@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional,List
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
+from uuid import UUID, uuid4
 
 # Modelo de entrada (lo que el usuario envía)
 
@@ -37,9 +38,9 @@ class StatusEnum(str, enum.Enum):
 
 
 class ClientRequest(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    id_client: int = Field(foreign_key="user.id")
-    id_driver_assigned: Optional[int] = Field(
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id_client: UUID = Field(foreign_key="user.id")
+    id_driver_assigned: Optional[UUID] = Field(
         default=None, foreign_key="user.id")
     type_service_id: int = Field(
         foreign_key="typeservice.id")  # Nueva relación

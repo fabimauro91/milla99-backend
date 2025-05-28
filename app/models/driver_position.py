@@ -3,10 +3,11 @@ from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column
 from geoalchemy2 import Geometry
 from pydantic import BaseModel
+from uuid import UUID
 
 
 class DriverPosition(SQLModel, table=True):
-    id_driver: int = Field(foreign_key="user.id", primary_key=True)
+    id_driver: UUID = Field(foreign_key="user.id", primary_key=True)
     position: Optional[Any] = Field(
         sa_column=Column(
             Geometry(geometry_type="POINT", srid=4326),  # Agregado SRID 4326
@@ -17,7 +18,7 @@ class DriverPosition(SQLModel, table=True):
 
 
 class DriverPositionCreate(BaseModel):
-    id_driver: int = Field(...,
+    id_driver: UUID = Field(...,
                            description="ID único del conductor. Ejemplo: 123")
     lat: float = Field(...,
                        description="Latitud donde se encuentra el conductor. Ejemplo: 4.710989")
@@ -26,7 +27,7 @@ class DriverPositionCreate(BaseModel):
 
 
 class DriverPositionRead(BaseModel):
-    id_driver: int = Field(...,
+    id_driver: UUID = Field(...,
                            description="ID único del conductor. Ejemplo: 123")
     lat: float = Field(...,
                        description="Latitud de la posición del conductor. Ejemplo: 4.710989")

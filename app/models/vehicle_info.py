@@ -3,6 +3,7 @@ from typing import Optional, List, TYPE_CHECKING
 from datetime import date, datetime
 from enum import Enum
 from .vehicle_type import VehicleType
+from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .driver_info import DriverInfo
@@ -19,11 +20,11 @@ class VehicleInfoBase(SQLModel):
 
 
 class VehicleInfo(VehicleInfoBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
                                  "onupdate": datetime.utcnow})
-    driver_info_id: int = Field(foreign_key="driverinfo.id")
+    driver_info_id: UUID = Field(foreign_key="driverinfo.id")
     driver_info: Optional["DriverInfo"] = Relationship(
         back_populates="vehicle_info")
     vehicle_type: VehicleType = Relationship(back_populates="vehicles")

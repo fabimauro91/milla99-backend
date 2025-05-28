@@ -10,6 +10,7 @@ from datetime import datetime
 import os
 from app.core.config import settings
 import uuid
+from uuid import UUID
 
 
 class UserService:
@@ -76,7 +77,7 @@ class UserService:
 
         return user
 
-    def _save_user_selfie(self, uploader, user_id, selfie: UploadFile):
+    def _save_user_selfie(self, uploader, user_id: UUID, selfie: UploadFile):
         """Guarda la selfie en static/uploads/users/{user_id}/selfie_<uuid>.jpg"""
         selfie_dir = os.path.join("static", "uploads", "users", str(user_id))
         os.makedirs(selfie_dir, exist_ok=True)
@@ -91,7 +92,7 @@ class UserService:
     def get_users(self) -> list[User]:
         return self.session.exec(select(User)).all()
 
-    def get_user(self, user_id: int) -> User:
+    def get_user(self, user_id: UUID) -> User:
         user = self.session.get(User, user_id)
         if not user:
             raise HTTPException(
@@ -100,7 +101,7 @@ class UserService:
             )
         return user
 
-    def update_user(self, user_id: int, user_data: UserUpdate) -> User:
+    def update_user(self, user_id: UUID, user_data: UserUpdate) -> User:
         user = self.get_user(user_id)
         user_data_dict = user_data.model_dump(exclude_unset=True)
         user.sqlmodel_update(user_data_dict)
@@ -109,7 +110,7 @@ class UserService:
         self.session.refresh(user)
         return user
 
-    def delete_user(self, user_id: int) -> dict:
+    def delete_user(self, user_id: UUID) -> dict:
         user = self.get_user(user_id)
         if not user.is_active:
             raise HTTPException(
@@ -121,7 +122,7 @@ class UserService:
         self.session.commit()
         return {"message": "User deactivated (soft deleted) successfully"}
 
-    def verify_user(self, user_id: int) -> User:
+    def verify_user(self, user_id: UUID) -> User:
         user = self.get_user(user_id)
         if user.is_verified_phone:
             raise HTTPException(
@@ -135,7 +136,7 @@ class UserService:
         self.session.refresh(user)
         return user
 
-    def update_selfie(self, user_id: int, selfie: UploadFile):
+    def update_selfie(self, user_id: UUID, selfie: UploadFile):
         user = self.get_user(user_id)
         selfie_info = self._save_user_selfie(None, user.id, selfie)
         user.selfie_url = selfie_info["url"]

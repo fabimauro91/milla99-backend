@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, File, UploadFile, Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
+from uuid import UUID
 
 from app.core.dependencies.auth import user_is_owner
 from app.models.user import User, UserCreate, UserUpdate, UserRead
@@ -57,7 +58,7 @@ Obtiene la información de un usuario específico dado su ID.
 **Respuesta:**
 Devuelve el objeto de usuario correspondiente al ID proporcionado.
 """)
-def get_user(user_id: int, request: Request, session: SessionDep):
+def get_user(user_id: UUID, request: Request, session: SessionDep):
     service = UserService(session)
     return service.get_user(user_id)
 
@@ -66,7 +67,7 @@ def get_user(user_id: int, request: Request, session: SessionDep):
 
 
 def update_user(
-    user_id: int,
+    user_id: UUID,
     user_data: UserUpdate,
     session: SessionDep,
     permission: None = Depends(user_is_owner()),
@@ -87,7 +88,7 @@ def delete_user(user_id: int, request: Request, session: SessionDep):
 # @router.patch("/{user_id}/verify", response_model=User)
 
 
-async def verify_user(user_id: int, request: Request, session: SessionDep):
+async def verify_user(user_id:  UUID, request: Request, session: SessionDep):
     service = UserService(session)
     return service.verify_user(user_id)
 

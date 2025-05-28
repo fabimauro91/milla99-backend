@@ -7,25 +7,26 @@ from app.models.driver_documents import DriverDocuments, DriverDocumentsCreate
 from app.models.user import UserCreate, UserRead
 from app.models.driver_info import DriverInfoCreate, DriverInfo
 from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
+from uuid import UUID
 
 if TYPE_CHECKING:
     from .user import User
 
 
 class DriverBase(BaseModel):
-    driver_info_id: Optional[int] = Field(
+    driver_info_id: Optional[UUID] = Field(
         default=None, foreign_key="driverinfo.id")
 
 
 # class Driver(DriverBase):
 #     id: Optional[int] = Field(default=None, primary_key=True)
-#     user_id: int = Field(foreign_key="user.id")
+#     user_id: UUID = Field(foreign_key="user.id")
 #     #user: Optional["User"] = Relationship(back_populates="driver")
 #     driver_info: Optional["DriverInfo"] = Relationship(back_populates="driver")
 
 
 class DriverCreate(DriverBase):
-    user_id: int  # necesario para crear
+    user_id: UUID  # necesario para crear
 
 
 class DriverDocumentsInput(BaseModel):

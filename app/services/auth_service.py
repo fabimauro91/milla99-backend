@@ -13,6 +13,7 @@ import clicksend_client
 from clicksend_client import SmsMessage
 from clicksend_client.rest import ApiException
 from sqlalchemy.orm import joinedload
+from uuid import UUID
 
 
 class AuthService:
@@ -259,9 +260,8 @@ class AuthService:
 
         return True, access_token, user_data
 
-    def create_access_token(self, user_id: int):
+    def create_access_token(self, user_id: UUID):
         to_encode = {"sub": str(user_id)}
-        # Convertir minutos a timedelta
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         expire = datetime.utcnow() + expires_delta
         to_encode.update({"exp": expire})
