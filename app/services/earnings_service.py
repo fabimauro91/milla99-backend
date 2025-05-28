@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.driver_savings import DriverSavings
 from app.models.company_account import CompanyAccount
 from app.core.config import settings
+from app.services.transaction_service import TransactionService
 
 # Id especial (o None) para la empresa
 COMPANY_ID: int | None = None
@@ -49,7 +50,6 @@ def distribute_earnings(session, request: ClientRequest) -> None:
         return
 
     # Obtener los porcentajes desde la tabla de configuración
-    # Sin valores por defecto - lanzará error si falta algún valor
     config = get_config_percentages(session)
     driver_saving_pct = config["driver_saving"]
     company_pct = config["company"]
@@ -61,44 +61,86 @@ def distribute_earnings(session, request: ClientRequest) -> None:
         config["referral_5"],
     ]
 
-    # Obtener la cadena de referidos
-    chain_ids = _get_referral_chain(session, request.id_client, levels=5)
+    # Inicializar el servicio de transacciones
+    transaction_service = TransactionService(session)
 
-    earnings = []
+    # 1. Transacción de egreso para el conductor (10% del fare)
+    driver_expense_pct = Decimal("0.10")  # 10%
+    driver_expense = (fare * driver_expense_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    # Ganancia del conductor
+    # Obtener el balance del usuario
+    user_balance = transaction_service.get_user_balance(request.id_driver_assigned)
+    bonus_balance = user_balance["bonus"]
+
+    # Determinar si usar el saldo de bonus
+    if bonus_balance > 0:
+        if bonus_balance >= driver_expense:
+            # Usar solo el bonus
+            transaction_service.create_transaction(
+                user_id=request.id_driver_assigned,
+                expense=int(driver_expense),
+                type="BONUS",
+                client_request_id=request.id
+            )
+        else:
+            # Usar el bonus restante y el resto de SERVICE
+            transaction_service.create_transaction(
+                user_id=request.id_driver_assigned,
+                expense=int(bonus_balance),
+                type="BONUS",
+                client_request_id=request.id
+            )
+            remaining_expense = driver_expense - Decimal(bonus_balance)
+            transaction_service.create_transaction(
+                user_id=request.id_driver_assigned,
+                expense=int(remaining_expense),
+                type="SERVICE",
+                client_request_id=request.id
+            )
+    else:
+        # No hay bonus, usar solo SERVICE
+        transaction_service.create_transaction(
+            user_id=request.id_driver_assigned,
+            expense=int(driver_expense),
+            type="SERVICE",
+            client_request_id=request.id
+        )
+
+    # 2. Ganancia del conductor (driver_saving)
     driver_saving = (fare * driver_saving_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    earnings = []
     earnings.append(DriverSavings(
         user_id=request.id_driver_assigned,
-        income=driver_saving, 
-        expense= 0,   
+        income=driver_saving,
+        expense=0,
         type="SERVICE",
         client_request_id=request.id
     ))
 
-    # Ganancias de referidos
+    # 3. Ganancias de referidos
+    chain_ids = _get_referral_chain(session, request.id_client, levels=5)
     company_share = (fare * company_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     earnings.append(CompanyAccount(
         client_request_id=request.id,
         income=company_share,
         type="SERVICE"
     ))
-    company_share = 0
+    company_share = Decimal("0.00")
     for idx, pct in enumerate(referral_pcts):
         if idx < len(chain_ids):
             ref_amount = (fare * pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            earnings.append(Transaction(
-                client_request_id=request.id,
+            # Usar create_transaction para el referido
+            transaction_service.create_transaction(
                 user_id=chain_ids[idx],
-                income=ref_amount,
-                expense= 0,
-                type=f"REFERRAL_{idx+1}"
-            ))
+                income=int(ref_amount),
+                type=f"REFERRAL_{idx+1}",
+                client_request_id=request.id
+            )
         else:
             # Si no hay referido, ese porcentaje se suma a la compañía
             company_share += (fare * pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    # Ganancia de la compañía
+    # 4. Ganancia de la compañía adicional
     if company_share > 0:
         earnings.append(CompanyAccount(
             client_request_id=request.id,
@@ -108,7 +150,6 @@ def distribute_earnings(session, request: ClientRequest) -> None:
 
     session.add_all(earnings)
     session.commit()
-
 
 def get_referral_earnings_structured(session, user_id: int):
 

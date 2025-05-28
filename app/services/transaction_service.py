@@ -96,24 +96,25 @@ class TransactionService:
 
     def get_user_balance(self, user_id: int):
         total_income = self.session.query(func.sum(Transaction.income)).filter(
-        Transaction.user_id == user_id,Transaction.type != "BONUS").scalar() or 0
+            Transaction.user_id == user_id).scalar() or 0
         total_expense = self.session.query(func.sum(Transaction.expense)).filter(
-            Transaction.user_id == user_id,Transaction.type != "BONUS").scalar() or 0
-        bono_income = self.session.query(func.sum(Transaction.income)).filter(
-        Transaction.user_id == user_id,Transaction.type == "BONUS").scalar() or 0
-        bono_expense = self.session.query(func.sum(Transaction.expense)).filter(
-            Transaction.user_id == user_id,Transaction.type == "BONUS").scalar() or 0
+            Transaction.user_id == user_id).scalar() or 0
+        withdrawable_income = self.session.query(func.sum(Transaction.income)).filter(
+            Transaction.user_id == user_id, Transaction.type != TransactionType.BONUS).scalar() or 0
         available = total_income - total_expense
-        bono = bono_income - bono_expense
-        
+        withdrawable = withdrawable_income - total_expense
+        withdrawable = max(withdrawable, 0)
+        if total_income == withdrawable_income:
+            withdrawable = available
         verify_mount = self.session.query(VerifyMount).filter(
             VerifyMount.user_id == user_id).first()
         mount = verify_mount.mount if verify_mount else 0
         return {
-            "bonus": bono,
             "available": available,
-            "withdrawable": mount
+            "withdrawable": withdrawable,
+            "mount": mount
         }
+
 
     def list_transactions(self, user_id: int):
         return self.session.query(Transaction).filter(Transaction.user_id == user_id).order_by(Transaction.date.desc()).all()

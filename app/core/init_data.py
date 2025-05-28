@@ -1289,7 +1289,7 @@ def init_transations():
             transation = Transaction(
                 id=setting["id"],
                 user_id=setting["user_id"],
-                income=setting["value"],
+                income=setting["income"],
                 expense=setting["expense"],
                 type=setting["type"],
                 date=setting["date"]
