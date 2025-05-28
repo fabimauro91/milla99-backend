@@ -139,11 +139,11 @@ def run_nearby_test():
 
     # Solicitudes para moto
     moto_request1 = create_client_request(
-        "3003333333", moto_service_id)  # Ana Martínez
+        "3004444459", moto_service_id)  # Ana Martínez
     print(f"Solicitud de moto creada para Ana Martínez: {moto_request1['id']}")
 
     moto_request2 = create_client_request(
-        "3004444444", moto_service_id)  # Carlos Rodríguez
+        "3004444460", moto_service_id)  # Carlos Rodríguez
     print(
         f"Solicitud de moto creada para Carlos Rodríguez: {moto_request2['id']}")
 

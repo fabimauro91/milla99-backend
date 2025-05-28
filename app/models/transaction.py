@@ -14,6 +14,7 @@ class TransactionType(str, Enum):
     BONUS = "BONUS"
     SERVICE = "SERVICE"
     RECHARGE = "RECHARGE"
+    WITHDRAW = "WITHDRAW"
     REFERRAL_1 = "REFERRAL_1"
     REFERRAL_2 = "REFERRAL_2"
     REFERRAL_3 = "REFERRAL_3"

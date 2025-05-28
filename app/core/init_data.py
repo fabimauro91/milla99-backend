@@ -2,6 +2,7 @@ from sqlmodel import Session, select
 from datetime import datetime, timedelta, date
 from datetime import datetime
 from app.models.role import Role
+from app.models.transaction import Transaction
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.driver_documents import DriverDocuments, DriverStatus
@@ -954,7 +955,7 @@ def init_client_requests_and_driver_positions():
 
             # Obtener usuarios (clientes)
             clients = {}
-            for phone in ["3001111111", "3002222222", "3003333333", "3004444444"]:
+            for phone in ["3001111111", "3002222222", "3004444459", "3004444460"]:
                 client = session.exec(select(User).where(
                     User.phone_number == phone)).first()
                 if not client:
@@ -981,18 +982,18 @@ def init_client_requests_and_driver_positions():
                     {"client": clients["3002222222"], "type": car_service.id,
                         "pickup": "kennedy", "destination": "sur"}
                 ])
-            if "3003333333" in clients:  # Ana Martínez (moto)
+            if "3004444459" in clients:  # Ana Martínez (moto)
                 requests_data.extend([
-                    {"client": clients["3003333333"], "type": moto_service.id,
+                    {"client": clients["3004444459"], "type": moto_service.id,
                         "pickup": "suba", "destination": "norte"},
-                    {"client": clients["3003333333"], "type": moto_service.id,
+                    {"client": clients["3004444459"], "type": moto_service.id,
                         "pickup": "engativa", "destination": "centro"}
                 ])
-            if "3004444444" in clients:  # Carlos Rodríguez (moto)
+            if "3004444460" in clients:  # Carlos Rodríguez (moto)
                 requests_data.extend([
-                    {"client": clients["3004444444"], "type": moto_service.id,
+                    {"client": clients["3004444460"], "type": moto_service.id,
                         "pickup": "chapinero", "destination": "sur"},
-                    {"client": clients["3004444444"], "type": moto_service.id,
+                    {"client": clients["3004444460"], "type": moto_service.id,
                         "pickup": "kennedy", "destination": "occidente"}
                 ])
 
@@ -1204,7 +1205,15 @@ def init_project_settings():
                 "description": "company",
                 "created_at": datetime(2025, 5, 23, 21, 42, 27),
                 "updated_at": datetime(2025, 5, 23, 21, 42, 27)
+            },
+            {
+                "id": 9,
+                "value": "20000",
+                "description": "company",
+                "created_at": datetime(2025, 5, 23, 21, 42, 40),
+                "updated_at": datetime(2025, 5, 23, 21, 42, 40)
             }
+
         ]
 
         for setting in settings_data:
@@ -1219,6 +1228,76 @@ def init_project_settings():
 
         session.commit()
         print("Datos de ProjectSettings inicializados correctamente.")        
+
+
+def init_transations():
+    """Inicializa los datos por defecto para la tabla ProjectSettings"""
+    from datetime import datetime
+
+    with Session(engine) as session:
+        # Verificar si ya existen registros
+        existing_settings = session.exec(select(Transaction)).all()
+        if existing_settings:
+            print("Ya existen datos en la tabla Transaction, omitiendo inicialización.")
+            return
+
+        # Datos por defecto
+        settings_data = [
+            {
+                "id": 1,
+                "user_id": 27,
+                "income": "20000",
+                "expense": "0",
+                "type": "BONUS",
+                "date": datetime(2025, 5, 20, 15, 35, 26),
+            },
+            {
+                "id": 2,
+                "user_id": 28,
+                "income": "5000",
+                "expense": "0",
+                "type": "BONUS",
+                "date": datetime(2025, 5, 22, 14, 50, 43)
+            },
+            {
+                "id": 3,
+                "user_id": 29,
+                "income": "500",
+                "expense": "0",
+                "type": "BONUS",
+                "date": datetime(2025, 5, 22, 14, 51, 44)
+            },
+            {
+                "id": 4,
+                "user_id": 30,
+                "income": "1200",
+                "expense": "0",
+                "type": "BONUS",
+                "date": datetime(2025, 5, 22, 14, 51, 44)
+            },
+            {
+                "id": 5,
+                "user_id": 31,
+                "income": "3000",
+                "expense": "0",
+                "type": "BONUS",
+                "date": datetime(2025, 5, 22, 14, 54, 27)
+            }
+        ]
+
+        for setting in settings_data:
+            transation = Transaction(
+                id=setting["id"],
+                user_id=setting["user_id"],
+                income=setting["value"],
+                expense=setting["expense"],
+                type=setting["type"],
+                date=setting["date"]
+            )
+            session.add(transation)
+
+        session.commit()
+        print("Datos de Transaction inicializados correctamente.")        
 
 
 def init_data():
@@ -1252,6 +1331,7 @@ def init_data():
         init_client_requests_and_driver_positions()
         init_referral_data()    #agrega 19 referidos
         init_project_settings() #anexa congiguraciones de porcentajes de negocio
+        init_transations()
 
     except Exception as e:
         session.rollback()
