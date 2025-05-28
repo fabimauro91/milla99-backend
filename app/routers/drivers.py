@@ -129,6 +129,7 @@ async def create_driver(
 
         return DriverFullResponse(
             user=UserResponse(
+                id=result.user.id,
                 full_name=result.user.full_name,
                 country_code=result.user.country_code,
                 phone_number=result.user.phone_number,

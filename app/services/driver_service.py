@@ -284,6 +284,7 @@ class DriverService:
                     f"DEBUG selfie_url del usuario REFRESH: {user.selfie_url}")
                 response = DriverFullResponse(
                     user=UserResponse(
+                        id=user.id,
                         full_name=user.full_name,
                         country_code=user.country_code,
                         phone_number=user.phone_number,
