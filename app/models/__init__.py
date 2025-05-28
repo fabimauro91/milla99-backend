@@ -23,4 +23,4 @@ from .transaction import Transaction, TransactionType
 from .verify_mount import VerifyMount
 from .type_service import TypeService, TypeServiceCreate, TypeServiceRead
 from .config_service_value import ConfigServiceValue, VehicleTypeConfigurationCreate, VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
-
+from .withdrawal import Withdrawal, WithdrawalStatus
