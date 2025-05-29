@@ -5,7 +5,6 @@ from typing import Optional
 from enum import Enum
 from pydantic import field_validator
 from uuid import UUID, uuid4
->>>>>>> origin/uuid_database
 
 # Definimos el enum para el status
 
@@ -29,7 +28,6 @@ class DriverDocuments(DriverDocumentsBase, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     driver_info_id: UUID = Field(foreign_key="driverinfo.id", nullable=False)
     vehicle_info_id: Optional[UUID] = Field(
->>>>>>> origin/uuid_database
         default=None, foreign_key="vehicleinfo.id", nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
@@ -50,7 +48,6 @@ class DriverDocumentsRead(SQLModel):
     id: UUID
     user_id: UUID
     driver_info_id: UUID
->>>>>>> origin/uuid_database
     document_type_id: int
     vehicle_info_id: Optional[UUID]
     soat_id: Optional[int]
