@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Security
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.models.driver_position import DriverPositionCreate, DriverPositionRead
@@ -6,8 +6,12 @@ from app.core.db import get_session
 from app.services.driver_position_service import DriverPositionService
 from app.models.project_settings import ProjectSettings
 from uuid import UUID
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from app.models.driver_info import DriverInfo
 
 router = APIRouter(prefix="/drivers-position", tags=["drivers-position"])
+
+bearer_scheme = HTTPBearer()
 
 
 @router.post(
@@ -36,22 +40,30 @@ def create_driver_position(
 
 
 @router.get(
-    "/{id_driver}",
+    "/me",
     response_model=DriverPositionRead,
     description="""
-Devuelve la posición actual de un conductor dado su ID.
-
-**Parámetros:**
-- `id_driver`: ID único del conductor.
+Devuelve la posición actual del conductor autenticado (toma el user_id desde el token).
 
 **Respuesta:**
 Incluye la latitud, longitud y (si aplica) la distancia al punto de búsqueda.
 """
 )
 def get_driver_position(
-    id_driver: UUID,
-    session: Session = Depends(get_session)
+    request: Request,
+    session: Session = Depends(get_session),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
+    # Obtener el user_id desde el token
+    user_id = request.state.user_id
+    # Buscar el driver_info correspondiente a este usuario
+    driver_info = session.query(DriverInfo).filter(
+        DriverInfo.user_id == user_id).first()
+    if not driver_info:
+        raise HTTPException(
+            status_code=404, detail="No se encontró información de conductor para este usuario.")
+    id_driver = driver_info.id
+    # Usar el servicio existente para obtener la posición
     service = DriverPositionService(session)
     obj = service.get_driver_position(id_driver)
     if not obj:
@@ -61,27 +73,36 @@ def get_driver_position(
 
 
 @router.delete(
-    "/{id_driver}",
+    "/me",
     status_code=status.HTTP_204_NO_CONTENT,
     description="""
-Elimina la posición registrada de un conductor dado su ID.
-
-**Parámetros:**
-- `id_driver`: ID único del conductor.
+Elimina la posición registrada del conductor autenticado (toma el user_id desde el token).
 
 **Respuesta:**
 No retorna contenido si la eliminación fue exitosa.
 """
 )
-def delete_driver_position(
-    id_driver: UUID,
-    session: Session = Depends(get_session)
+def delete_my_driver_position(
+    request: Request,
+    session: Session = Depends(get_session),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
+    # Obtener el user_id desde el token
+    user_id = request.state.user_id
+    # Buscar el driver_info correspondiente a este usuario
+    driver_info = session.query(DriverInfo).filter(
+        DriverInfo.user_id == user_id).first()
+    if not driver_info:
+        raise HTTPException(
+            status_code=404, detail="No se encontró información de conductor para este usuario.")
+    id_driver = driver_info.id
+    # Usar el servicio existente para eliminar la posición
     service = DriverPositionService(session)
     success = service.delete_driver_position(id_driver)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Conductor no encontrado o sin posición registrada")
+    # No retorna contenido si la eliminación fue exitosa
 
 
 @router.get(

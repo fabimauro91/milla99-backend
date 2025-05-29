@@ -57,6 +57,14 @@ class UserRole(str, Enum):
 class User(UserBase, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     selfie_url: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
+
+    # Relaciones
     roles: List["Role"] = Relationship(
         back_populates="users", link_model=UserHasRole)
     driver_info: Optional["DriverInfo"] = Relationship(back_populates="user")

@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from pydantic import BaseModel
 from uuid import UUID
+from app.models.driver_info import DriverInfo
 
 # modelo  para la respuesta de listas en ususario
 class UserWithDocs(BaseModel):
@@ -48,10 +49,10 @@ class VerifyDocsService:
 
     def get_users_with_pending_docs(self) -> List[UserWithDocs]:
         """Lista usuarios con documentos pendientes y sus documentos"""
-        # Primero obtenemos los usuarios con documentos pendientes
         users_query = (
             select(User)
-            .join(DriverDocuments)
+            .join(DriverInfo, DriverInfo.user_id == User.id)
+            .join(DriverDocuments, DriverDocuments.driver_info_id == DriverInfo.id)
             .where(DriverDocuments.status == DriverStatus.PENDING)
             .distinct()
         )
@@ -62,8 +63,9 @@ class VerifyDocsService:
             # Para cada usuario, obtenemos sus documentos pendientes
             docs_query = (
                 select(DriverDocuments)
+                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
                 .where(
-                    DriverDocuments.user_id == user.id,
+                    DriverInfo.user_id == user.id,
                     DriverDocuments.status == DriverStatus.PENDING
                 )
             )

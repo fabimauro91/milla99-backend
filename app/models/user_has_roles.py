@@ -17,3 +17,9 @@ class UserHasRole(SQLModel, table=True):
     is_verified: bool = Field(default=False)
     status: RoleStatus = Field(default=RoleStatus.PENDING)
     verified_at: Optional[datetime] = Field(default=None) 
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )

@@ -30,9 +30,12 @@ class DriverDocuments(DriverDocumentsBase, table=True):
     driver_info_id: UUID = Field(foreign_key="driver_info.id", nullable=False)
     vehicle_info_id: Optional[UUID] = Field(
         default=None, foreign_key="vehicle_info.id", nullable=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
-                                 "onupdate": datetime.utcnow})
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
     # Relaciones
     driver_info: "DriverInfo" = Relationship(back_populates="documents")
     documenttype: "DocumentType" = Relationship(

@@ -22,9 +22,14 @@ class VehicleInfoBase(SQLModel):
 class VehicleInfo(VehicleInfoBase, table=True):
     __tablename__ = "vehicle_info"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
-                                 "onupdate": datetime.utcnow})
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
+
+    # Relaciones
     driver_info_id: UUID = Field(foreign_key="driver_info.id")
     driver_info: Optional["DriverInfo"] = Relationship(
         back_populates="vehicle_info")

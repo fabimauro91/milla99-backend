@@ -36,29 +36,27 @@ def create_user(
 # List users endpoint (protegida)
 
 
-@router.get("/", response_model=List[User], description="""
-Obtiene la lista de todos los usuarios registrados en el sistema.
+# @router.get("/", response_model=List[User], description="""
+# Obtiene la lista de todos los usuarios registrados en el sistema.
 
-**Respuesta:**
-Devuelve una lista de objetos de usuario con su información básica.
-""")
-def list_users(request: Request, session: SessionDep):
+# **Respuesta:**
+# Devuelve una lista de objetos de usuario con su información básica.
+# """)
+def list_users(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
     service = UserService(session)
     return service.get_users()
 
-# Get user by ID endpoint (protegida y solo para el usuario autenticado)
+# Get current user endpoint (protegida y solo para el usuario autenticado)
 
 
-@router.get("/{user_id}", response_model=UserRead, description="""
-Obtiene la información de un usuario específico dado su ID.
-
-**Parámetros:**
-- `user_id`: ID único del usuario a consultar.
+@router.get("/me", response_model=UserRead, description="""
+Obtiene la información del usuario autenticado (usando el token).
 
 **Respuesta:**
-Devuelve el objeto de usuario correspondiente al ID proporcionado.
+Devuelve el objeto de usuario correspondiente al usuario autenticado.
 """)
-def get_user(user_id: UUID, request: Request, session: SessionDep):
+def get_current_user(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
+    user_id = request.state.user_id
     service = UserService(session)
     return service.get_user(user_id)
 

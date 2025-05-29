@@ -17,6 +17,7 @@ import traceback
 from app.utils.geo_utils import wkb_to_coords
 from app.models.type_service import TypeService
 from uuid import UUID
+from typing import Dict, Set
 
 
 def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUID):
@@ -514,3 +515,192 @@ def get_nearby_drivers_service(
             status_code=500,
             detail=f"Error al buscar conductores cercanos: {str(e)}"
         )
+
+
+class ClientRequestStateMachine:
+    """
+    Máquina de estados para controlar las transiciones válidas en una solicitud de viaje.
+    """
+    # Estados que permiten cancelación
+    CANCELLABLE_STATES = {StatusEnum.CREATED, StatusEnum.ACCEPTED}
+
+    # Transiciones permitidas por rol
+    DRIVER_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
+        StatusEnum.ACCEPTED: {StatusEnum.ON_THE_WAY},
+        StatusEnum.ON_THE_WAY: {StatusEnum.ARRIVED},
+        StatusEnum.ARRIVED: {StatusEnum.TRAVELLING},
+        StatusEnum.TRAVELLING: {StatusEnum.FINISHED}
+    }
+
+    CLIENT_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
+        StatusEnum.CREATED: {StatusEnum.CANCELLED},
+        StatusEnum.ACCEPTED: {StatusEnum.CANCELLED},
+        # PAID solo se puede establecer después de un pago exitoso, no por cambio directo de estado
+    }
+
+    @classmethod
+    def can_transition(cls, current_state: StatusEnum, new_state: StatusEnum, role: str) -> bool:
+        """
+        Verifica si la transición de estado es válida para el rol especificado.
+        """
+        # PAID es un estado especial que solo se puede establecer después de un pago exitoso
+        if new_state == StatusEnum.PAID:
+            return False  # No se permite cambiar directamente a PAID
+
+        # Si el nuevo estado es CANCELLED, verificar que el estado actual lo permita
+        if new_state == StatusEnum.CANCELLED:
+            return current_state in cls.CANCELLABLE_STATES
+
+        # Obtener las transiciones permitidas según el rol
+        allowed_transitions = cls.DRIVER_TRANSITIONS if role == "DRIVER" else cls.CLIENT_TRANSITIONS
+
+        # Verificar si la transición está permitida
+        return new_state in allowed_transitions.get(current_state, set())
+
+    @classmethod
+    def get_allowed_transitions(cls, current_state: StatusEnum, role: str) -> Set[StatusEnum]:
+        """
+        Retorna el conjunto de estados a los que se puede transicionar desde el estado actual.
+        """
+        transitions = cls.DRIVER_TRANSITIONS if role == "DRIVER" else cls.CLIENT_TRANSITIONS
+        allowed = transitions.get(current_state, set())
+
+        # Si el estado actual permite cancelación, agregar CANCELLED a las transiciones permitidas
+        if current_state in cls.CANCELLABLE_STATES:
+            allowed.add(StatusEnum.CANCELLED)
+
+        return allowed
+
+
+def update_status_by_driver_service(session: Session, id_client_request: int, status: str, user_id: int):
+    """
+    Permite al conductor cambiar el estado de la solicitud solo a los estados permitidos.
+    """
+    try:
+        new_status = StatusEnum(status)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Estado inválido. Estados válidos: {[s.value for s in StatusEnum]}")
+
+    # Validar rol del conductor
+    user_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.id_rol == "DRIVER",
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+    if not user_role:
+        raise HTTPException(
+            status_code=403, detail="Solo conductores aprobados pueden cambiar este estado")
+
+    # Obtener la solicitud actual
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Validar que el conductor asignado sea el que hace la petición
+    if client_request.id_driver_assigned != user_id:
+        raise HTTPException(
+            status_code=403, detail="Solo el conductor asignado puede cambiar el estado de esta solicitud")
+
+    # Validar la transición de estado
+    if not ClientRequestStateMachine.can_transition(client_request.status, new_status, "DRIVER"):
+        allowed = ClientRequestStateMachine.get_allowed_transitions(
+            client_request.status, "DRIVER")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Transición de estado no permitida. Desde {client_request.status.value} solo se puede cambiar a: {', '.join(s.value for s in allowed)}"
+        )
+
+    # Actualizar el estado
+    client_request.status = new_status
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Status actualizado correctamente"}
+
+
+def update_status_by_client_service(session: Session, id_client_request: int, status: str, user_id: int):
+    """
+    Permite al cliente cambiar el estado de la solicitud solo a los estados permitidos.
+    """
+    try:
+        new_status = StatusEnum(status)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Estado inválido. Estados válidos: {[s.value for s in StatusEnum]}")
+
+    # Validar rol del cliente
+    user_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.id_rol == "CLIENT",
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+    if not user_role:
+        raise HTTPException(
+            status_code=403, detail="Solo clientes aprobados pueden cambiar este estado")
+
+    # Obtener la solicitud actual
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Validar que el cliente sea el dueño de la solicitud
+    if client_request.id_client != user_id:
+        raise HTTPException(
+            status_code=403, detail="Solo el cliente dueño de la solicitud puede cambiar el estado")
+
+    # Validar la transición de estado
+    if not ClientRequestStateMachine.can_transition(client_request.status, new_status, "CLIENT"):
+        allowed = ClientRequestStateMachine.get_allowed_transitions(
+            client_request.status, "CLIENT")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Transición de estado no permitida. Desde {client_request.status.value} solo se puede cambiar a: {', '.join(s.value for s in allowed)}"
+        )
+
+    # Actualizar el estado
+    client_request.status = new_status
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Status actualizado correctamente"}
+
+
+def update_status_to_paid_service(session: Session, id_client_request: int, user_id: int):
+    """
+    Actualiza el estado de la solicitud a PAID después de un pago exitoso.
+    Solo se puede cambiar a PAID desde FINISHED y solo por el cliente dueño de la solicitud.
+    """
+    # Validar rol del cliente
+    user_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.id_rol == "CLIENT",
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+    if not user_role:
+        raise HTTPException(
+            status_code=403, detail="Solo clientes aprobados pueden realizar pagos")
+
+    # Obtener la solicitud actual
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Validar que el cliente sea el dueño de la solicitud
+    if client_request.id_client != user_id:
+        raise HTTPException(
+            status_code=403, detail="Solo el cliente dueño de la solicitud puede realizar el pago")
+
+    # Validar que el estado actual sea FINISHED
+    if client_request.status != StatusEnum.FINISHED:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede realizar el pago cuando el viaje está FINISHED"
+        )
+
+    # Actualizar el estado a PAID
+    client_request.status = StatusEnum.PAID
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Pago registrado correctamente"}

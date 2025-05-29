@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from app.core.db import get_session
 from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
 from app.models.type_service import TypeService
+from app.core.db import SessionDep
 from app.services.client_requests_service import (
     create_client_request,
     get_time_and_distance_service,
@@ -13,7 +14,9 @@ from app.services.client_requests_service import (
     get_client_requests_by_status_service,
     update_client_rating_service,
     update_driver_rating_service,
-    get_nearby_drivers_service
+    get_nearby_drivers_service,
+    update_status_by_driver_service,
+    update_status_by_client_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -25,13 +28,14 @@ from app.utils.geo_utils import wkb_to_coords
 from datetime import datetime
 from app.utils.geo import wkb_to_coords
 from uuid import UUID
+from app.core.dependencies.auth import get_current_user
 
-bearer_scheme = HTTPBearer()
+#bearer_scheme = HTTPBearer()
 
 router = APIRouter(
     prefix="/client-request",
     tags=["client-request"],
-    dependencies=[Security(bearer_scheme)]
+    dependencies=[Depends(get_current_user)]
 )
 
 
@@ -276,7 +280,7 @@ def create_request(
         }
     ),
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    #credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     try:
         user_id = request.state.user_id
@@ -414,16 +418,16 @@ def assign_driver(
         )
 
 
-@router.patch("/updateStatus", description="""
-Actualiza el estado de una solicitud de viaje existente.
+# @router.patch("/updateStatus", description="""
+# Actualiza el estado de una solicitud de viaje existente.
 
-**Parámetros:**
-- `id_client_request`: ID de la solicitud de viaje.
-- `status`: Nuevo estado a asignar.
+# **Parámetros:**
+# - `id_client_request`: ID de la solicitud de viaje.
+# - `status`: Nuevo estado a asignar.
 
-**Respuesta:**
-Devuelve un mensaje de éxito o error.
-""")
+# **Respuesta:**
+# Devuelve un mensaje de éxito o error.
+# """)
 def update_status(
     id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
@@ -499,22 +503,22 @@ def update_driver_rating(
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)
 
 
-@router.get("/nearby-drivers", description="""
-Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
+# @router.get("/nearby-drivers", description="""
+# Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
 
-**Parámetros:**
-- `client_lat`: Latitud del cliente.
-- `client_lng`: Longitud del cliente.
-- `type_service_id`: ID del tipo de servicio solicitado.
+# **Parámetros:**
+# - `client_lat`: Latitud del cliente.
+# - `client_lng`: Longitud del cliente.
+# - `type_service_id`: ID del tipo de servicio solicitado.
 
-**Respuesta:**
-Devuelve una lista de conductores cercanos con su información, incluyendo:
-- Información del conductor
-- Información del vehículo
-- Distancia al cliente
-- Calificación promedio
-- Tiempo estimado de llegada (usando Google Distance Matrix)
-""")
+# **Respuesta:**
+# Devuelve una lista de conductores cercanos con su información, incluyendo:
+# - Información del conductor
+# - Información del vehículo
+# - Distancia al cliente
+# - Calificación promedio
+# - Tiempo estimado de llegada (usando Google Distance Matrix)
+# """)
 def get_nearby_drivers(
     request: Request,
     client_lat: float = Query(..., example=4.708822,
@@ -592,9 +596,61 @@ Incluye el detalle de la solicitud, información del usuario, conductor y vehíc
 """)
 def get_client_request_detail(
     client_request_id: UUID,
-    session: Session = Depends(get_session)
+    session: SessionDep
 ):
     """
     Consulta el estado y la información detallada de una Client Request específica.
     """
     return get_client_request_detail_service(session, client_request_id)
+
+
+@router.patch("/updateStatusByDriver", description="""
+Actualiza el estado de una solicitud de viaje, solo permitido para conductores (DRIVER).
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `status`: Nuevo estado a asignar (solo ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED).
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def update_status_by_driver(
+    request: Request,
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    status: str = Body(..., description="Nuevo estado a asignar"),
+    session: Session = Depends(get_session)
+):
+    """
+    Permite al conductor cambiar el estado de la solicitud solo a los estados permitidos.
+    """
+    user_id = getattr(request.state, 'user_id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    return update_status_by_driver_service(session, id_client_request, status, user_id)
+
+
+@router.patch("/updateStatusByClient", description="""
+Actualiza el estado de una solicitud de viaje, solo permitido para clientes (CLIENT).
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `status`: Nuevo estado a asignar (solo CANCELLED, PAID).
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def update_status_by_client(
+    request: Request,
+    id_client_request: int = Body(...,
+                                  description="ID de la solicitud de viaje"),
+    status: str = Body(..., description="Nuevo estado a asignar"),
+    session: Session = Depends(get_session)
+):
+    """
+    Permite al cliente cambiar el estado de la solicitud solo a los estados permitidos.
+    """
+    user_id = getattr(request.state, 'user_id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    return update_status_by_client_service(session, id_client_request, status, user_id)

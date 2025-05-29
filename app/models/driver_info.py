@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, String
 from typing import Optional, TYPE_CHECKING, List
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
@@ -22,11 +22,16 @@ class DriverInfo(DriverInfoBase, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUID = Field(foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="driver_info")
-    # driver: Optional["Driver"] = Relationship(back_populates="driver_info")
     vehicle_info: Optional["VehicleInfo"] = Relationship(
         back_populates="driver_info")
     documents: List["DriverDocuments"] = Relationship(
         back_populates="driver_info")
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
 
 class DriverInfoCreate(DriverInfoBase):

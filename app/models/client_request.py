@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum, event, String
 import enum
 from datetime import datetime, timezone
-from typing import Optional,List
+from typing import Optional, List
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
 from uuid import UUID, uuid4
@@ -64,10 +64,12 @@ class ClientRequest(SQLModel, table=True):
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
     destination_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc))
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
     # Relaciones explícitas
     client: Optional["User"] = Relationship(
@@ -82,7 +84,8 @@ class ClientRequest(SQLModel, table=True):
     transactions: List["Transaction"] = Relationship(back_populates="client_request")
     company_accounts: List["CompanyAccount"] = Relationship(back_populates="client_request")
 
-    type_service: "TypeService" = Relationship(back_populates="client_requests")  # Nueva relación
+    type_service: "TypeService" = Relationship(
+        back_populates="client_requests")  # Nueva relación
 
 
 # Definir el listener para el evento after_update
@@ -112,6 +115,6 @@ def after_update_listener(mapper, connection, target):
             finally:
                 session.close()
 
+
 # Registrar el evento después de definir la clase
-event.listen(ClientRequest, 'after_update', after_update_listener)    
-   
+event.listen(ClientRequest, 'after_update', after_update_listener)

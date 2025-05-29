@@ -1,21 +1,28 @@
 # app/routes/client_request.py
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from ..core.db import SessionDep
 from app.services.earnings_service import get_referral_earnings_structured
 from uuid import UUID
 
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
-@router.get("/{user_id}/earnings-structured")
+bearer_scheme = HTTPBearer()
+
+
+@router.get("/me/earnings-structured")
 def get_referral_earnings_structured_api(
-    user_id: UUID,
-    session: SessionDep
+    request: Request,
+    session: SessionDep,
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     """
-    Devuelve el resumen estructurado de ganancias de referidos para un usuario. 
+    Devuelve el resumen estructurado de ganancias de referidos para el usuario autenticado (toma el user_id desde el token).
     """
     try:
+        # Obtener el user_id desde el token
+        user_id = request.state.user_id
         data = get_referral_earnings_structured(session, user_id)
         if data is None:
             raise HTTPException(

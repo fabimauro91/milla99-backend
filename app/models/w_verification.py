@@ -12,7 +12,12 @@ class VerificationBase(SQLModel):
 
 class Verification(VerificationBase, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
 class VerificationCreate(VerificationBase):
     pass

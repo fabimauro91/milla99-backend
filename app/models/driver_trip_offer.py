@@ -20,8 +20,12 @@ class DriverTripOffer(SQLModel, table=True):
     fare_offer: float
     time: float
     distance: float
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
 class DriverTripOfferResponse(BaseModel):
     id: UUID
