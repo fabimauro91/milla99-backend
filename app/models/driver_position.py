@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from uuid import UUID
 from datetime import datetime
 
+
 class DriverPosition(SQLModel, table=True):
     __tablename__ = "driver_position"
     id_driver: UUID = Field(foreign_key="user.id", primary_key=True)
@@ -15,7 +16,8 @@ class DriverPosition(SQLModel, table=True):
             nullable=False
         )
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -25,8 +27,6 @@ class DriverPosition(SQLModel, table=True):
 
 
 class DriverPositionCreate(BaseModel):
-    id_driver: UUID = Field(...,
-                           description="ID único del conductor. Ejemplo: 123")
     lat: float = Field(...,
                        description="Latitud donde se encuentra el conductor. Ejemplo: 4.710989")
     lng: float = Field(...,
@@ -35,7 +35,7 @@ class DriverPositionCreate(BaseModel):
 
 class DriverPositionRead(BaseModel):
     id_driver: UUID = Field(...,
-                           description="ID único del conductor. Ejemplo: 123")
+                            description="ID único del conductor. Ejemplo: 123")
     lat: float = Field(...,
                        description="Latitud de la posición del conductor. Ejemplo: 4.710989")
     lng: float = Field(...,
