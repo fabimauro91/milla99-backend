@@ -27,6 +27,12 @@ class DriverSavings(SQLModel, table=True):
     client_request_id: Optional[UUID] = Field(
         default=None, foreign_key="client_request.id")
     date: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
     # Relación con ClassVar
     user: Optional["User"] = Relationship(back_populates="driver_savings")

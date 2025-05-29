@@ -17,8 +17,12 @@ class TypeService(SQLModel, table=True):
     description: Optional[str] = Field(default=None, max_length=255)
     vehicle_type_id: int = Field(foreign_key="vehicle_type.id")
     allowed_role: AllowedRole
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
     # Relaciones
     vehicle_type: "VehicleType" = Relationship(back_populates="type_services")

@@ -30,6 +30,8 @@ from app.models.driver_position import DriverPosition
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from uuid import UUID
+from app.models.administrador import Administrador
+from passlib.hash import bcrypt
 
 
 def uuid_prueba(num: int) -> UUID:
@@ -1129,7 +1131,7 @@ def init_referral_data():
         # Verificar si ya existen registros en la tabla Referral
         existing_referrals = session.exec(select(Referral)).all()
         if existing_referrals:
-            print("Ya existen datos en la tabla Referral, omitiendo inicialización.")
+            #print("Ya existen datos en la tabla Referral, omitiendo inicialización.")
             return
 
         # Crear los registros de referidos
@@ -1148,7 +1150,7 @@ def init_referral_data():
                 print(f"No se pudo crear referido: usuario {data['user_id']} o referente {data['referred_by_id']} no existe.")
 
         session.commit()
-        print("Datos de referidos inicializados correctamente.")
+        # print("Datos de referidos inicializados correctamente.")
 
 
 def init_project_settings():
@@ -1159,7 +1161,7 @@ def init_project_settings():
         # Verificar si ya existen registros
         existing_settings = session.exec(select(ProjectSettings)).first()
         if existing_settings:
-            print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
+            #print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
             return
 
         # Datos por defecto (un solo registro)
@@ -1178,7 +1180,21 @@ def init_project_settings():
         )
         session.add(project_setting)
         session.commit()
-        print("Datos de ProjectSettings inicializados correctamente.")        
+        #print("Datos de ProjectSettings inicializados correctamente.")        
+
+
+def create_admin(session: Session):
+    admin_email = "admin"
+    admin_password = "admin"
+    admin_role = 1
+    hashed_password = bcrypt.hash(admin_password)
+    admin = session.exec(
+        select(Administrador).where(Administrador.email == admin_email)
+    ).first()
+    if not admin:
+        admin = Administrador(email=admin_email, password=hashed_password, role=admin_role)
+        session.add(admin)
+        session.commit()
 
 
 def init_data():
@@ -1212,6 +1228,7 @@ def init_data():
         init_client_requests_and_driver_positions()
         init_referral_data()    #agrega 19 referidos
         init_project_settings() #anexa congiguraciones de porcentajes de negocio
+        create_admin(session)
 
     except Exception as e:
         session.rollback()

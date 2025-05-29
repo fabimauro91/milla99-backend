@@ -11,12 +11,6 @@ class ConfigServiceValue(SQLModel, table=True):
     min_value: float = Field(..., nullable=False)
     tarifa_value: float = Field(..., nullable=True)
     weight_value: float = Field(..., nullable=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        nullable=False,
-        sa_column_kwargs={"onupdate": datetime.utcnow}
-    )
     # Llave foránea única a TypeService
     service_type_id: int = Field(
         sa_column=Column(
@@ -26,7 +20,14 @@ class ConfigServiceValue(SQLModel, table=True):
             nullable=False
         )
     )
-    
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
+
+    # Relaciones
     type_service: Optional["TypeService"] = Relationship(back_populates="config_service_value")
 
 class CalculateFareRequest(BaseModel):

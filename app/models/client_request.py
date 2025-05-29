@@ -64,10 +64,12 @@ class ClientRequest(SQLModel, table=True):
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
     destination_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc))
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
     # Relaciones explícitas
     client: Optional["User"] = Relationship(

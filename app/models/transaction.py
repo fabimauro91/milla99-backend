@@ -32,6 +32,14 @@ class Transaction(SQLModel, table=True):
     client_request_id: Optional[UUID] = Field(
         default=None, foreign_key="client_request.id")
     date: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
+
+    # Relaciones
     user: Optional["User"] = Relationship(back_populates="transactions")
     client_request: Optional["ClientRequest"] = Relationship(
         back_populates="transactions")

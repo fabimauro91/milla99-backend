@@ -14,8 +14,13 @@ class VehicleType(SQLModel, table=True):
     name: str = Field(max_length=50, unique=True, index=True)
     description: Optional[str] = Field(default=None, max_length=255)
     capacity: int = Field(nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
+
     # Relaciones
     type_services: List["TypeService"] = Relationship(
         back_populates="vehicle_type")

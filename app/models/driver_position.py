@@ -4,7 +4,7 @@ from sqlalchemy import Column
 from geoalchemy2 import Geometry
 from pydantic import BaseModel
 from uuid import UUID
-
+from datetime import datetime
 
 class DriverPosition(SQLModel, table=True):
     __tablename__ = "driver_position"
@@ -14,6 +14,12 @@ class DriverPosition(SQLModel, table=True):
             Geometry(geometry_type="POINT", srid=4326),  # Agregado SRID 4326
             nullable=False
         )
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
     )
     user: Optional["User"] = Relationship(back_populates="driver_position")
 

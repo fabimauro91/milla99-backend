@@ -3,7 +3,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from jose import jwt, JWTError
 from app.core.config import settings
-
+from uuid import UUID
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -15,8 +15,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/auth/verify/", "POST"),  # Rutas de verificación
             ("/docs", "GET"),  # Documentación
             ("/openapi.json", "GET"),  # Esquema OpenAPI
-            ("/drivers/", "POST", "PATCH"),  # Creación de drivers
-            ("/drivers", "POST", "PATCH"),  # Creación de drivers
+            ("/drivers/", "POST"), #creacion de drivers
+            ("/drivers/", "PATCH"), #actualizacion de drivers
             ("/openapi.json", "GET"),  # Esquema OpenAPI
             ("/verify-docs/", "GET"),  # Rutas de verify-docs
             ("/verify-docs/", "POST"),
@@ -32,6 +32,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/vehicle-type-configuration/", "GET"),
             # ("/referrals/", "POST"),
             ("/referrals/", "GET"),
+            ("/login-admin/", "POST"),
 
         ]
 
@@ -64,7 +65,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     content={"detail": "Token inválido"}
                 )
 
-            request.state.user_id = int(user_id)
+            request.state.user_id = UUID(user_id)
 
         except JWTError:
             return JSONResponse(

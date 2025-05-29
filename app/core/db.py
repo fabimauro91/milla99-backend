@@ -12,7 +12,7 @@ from app.models import (
     DriverSavings, Transaction, VerifyMount, TypeService, ConfigServiceValue
 )
 
-engine = create_engine(settings.DATABASE_URL, echo=True)
+engine = create_engine(settings.DATABASE_URL, echo=False)
 
 def create_all_tables():
     """Crea todas las tablas en la base de datos"""

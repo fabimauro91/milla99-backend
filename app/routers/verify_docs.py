@@ -2,21 +2,24 @@ from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List
 
-from app.core.dependencies.auth import user_is_owner
+from app.core.dependencies.auth import get_current_user, user_is_owner
 from app.models.user import UserRead
 from app.models.driver_documents import DriverDocuments
 from app.core.db import SessionDep
 from app.services.verify_docs_service import VerifyDocsService, UserWithDocs, UserWithExpiringDocsResponse
+from app.core.dependencies.admin_auth import get_current_admin
 
+bearer_scheme = HTTPBearer()
 
 router = APIRouter(prefix="/verify-docs",
-                   tags=["ADMIN: document verification"])
+                   tags=["ADMIN: document verification"],
+                    dependencies=[Depends(get_current_user)])
 
 
 @router.get("/pending", response_model=List[UserWithDocs])
 def get_users_with_pending_docs(
     request: Request,
-    session: SessionDep
+    session: SessionDep,
 ):
     """
     Obtiene usuarios con documentos pendientes y sus documentos asociados.

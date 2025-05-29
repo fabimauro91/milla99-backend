@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from app.core.db import get_session
 from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
 from app.models.type_service import TypeService
+from app.core.db import SessionDep
 from app.services.client_requests_service import (
     create_client_request,
     get_time_and_distance_service,
@@ -25,13 +26,14 @@ from app.utils.geo_utils import wkb_to_coords
 from datetime import datetime
 from app.utils.geo import wkb_to_coords
 from uuid import UUID
+from app.core.dependencies.auth import get_current_user
 
-bearer_scheme = HTTPBearer()
+#bearer_scheme = HTTPBearer()
 
 router = APIRouter(
     prefix="/client-request",
     tags=["client-request"],
-    dependencies=[Security(bearer_scheme)]
+    dependencies=[Depends(get_current_user)]
 )
 
 
@@ -276,7 +278,7 @@ def create_request(
         }
     ),
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    #credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     try:
         user_id = request.state.user_id
@@ -592,7 +594,7 @@ Incluye el detalle de la solicitud, información del usuario, conductor y vehíc
 """)
 def get_client_request_detail(
     client_request_id: UUID,
-    session: Session = Depends(get_session)
+    session: SessionDep
 ):
     """
     Consulta el estado y la información detallada de una Client Request específica.

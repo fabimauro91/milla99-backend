@@ -16,8 +16,12 @@ class ProjectSettingsBase(SQLModel):
 class ProjectSettings(ProjectSettingsBase, table=True):
     __tablename__ = "project_settings"
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
 
 class ProjectSettingsCreate(ProjectSettingsBase):
     pass
