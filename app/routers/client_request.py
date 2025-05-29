@@ -30,7 +30,7 @@ from app.utils.geo import wkb_to_coords
 from uuid import UUID
 from app.core.dependencies.auth import get_current_user
 
-# bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer()
 
 router = APIRouter(
     prefix="/client-request",
@@ -224,28 +224,34 @@ def get_nearby_client_requests(
 
 
 @router.get("/by-status/{status}", description="""
-Devuelve una lista de solicitudes de viaje filtradas por el estado enviado en el parámetro.
+Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estado enviado en el parámetro.
 
 **Parámetros:**
 - `status`: Estado por el cual filtrar las solicitudes.
 
 **Respuesta:**
-Devuelve una lista de solicitudes de viaje con el estado especificado.
+Devuelve una lista de solicitudes de viaje del usuario autenticado con el estado especificado.
 """)
 def get_client_requests_by_status(
-    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
-    session: Session = Depends(get_session)
+    request: Request,
+    session: SessionDep,
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED")
 ):
     """
-    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estatus enviado en el parámetro.
     """
+    # Obtener el user_id del token
+    user_id = request.state.user_id
+
     # Validar que el status sea uno de los permitidos
     if status not in StatusEnum.__members__:
         raise HTTPException(
             status_code=400,
             detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
         )
-    return get_client_requests_by_status_service(session, status)
+
+    # Obtener las solicitudes filtradas por status y user_id
+    return get_client_requests_by_status_service(session, status, user_id)
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""

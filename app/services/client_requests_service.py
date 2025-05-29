@@ -243,13 +243,16 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
     }
 
 
-def get_client_requests_by_status_service(session: Session, status: str):
+def get_client_requests_by_status_service(session: Session, status: str, user_id: UUID):
     """
-    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro y el user_id.
+    Solo devuelve las solicitudes del usuario autenticado.
     """
     from app.models.client_request import ClientRequest
     results = session.query(ClientRequest).filter(
-        ClientRequest.status == status).all()
+        ClientRequest.status == status,
+        ClientRequest.id_client == user_id  # Filtrar por el usuario autenticado
+    ).all()
     # Puedes personalizar la respuesta según lo que quieras mostrar
     return [
         {
