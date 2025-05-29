@@ -11,6 +11,7 @@ import os
 from app.core.config import settings
 import uuid
 from uuid import UUID
+from app.models.verify_mount import VerifyMount
 
 
 class UserService:
@@ -74,6 +75,14 @@ class UserService:
 
             self.session.add(user)
             # El commit se hace automáticamente al salir del with
+
+            # Crear VerifyMount con mount=0 si no existe
+            verify_mount = self.session.exec(
+                select(VerifyMount).where(VerifyMount.user_id == user.id)
+            ).first()
+            if not verify_mount:
+                verify_mount = VerifyMount(user_id=user.id, mount=0)
+                self.session.add(verify_mount)
 
         return user
 
