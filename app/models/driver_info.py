@@ -18,6 +18,7 @@ class DriverInfoBase(SQLModel):
     # selfie_url: Optional[str] = None  # Eliminado, ahora está en User
 
 class DriverInfo(DriverInfoBase, table=True):
+    __tablename__ = "driver_info"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUID = Field(foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="driver_info")

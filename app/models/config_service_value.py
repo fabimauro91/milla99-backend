@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Relationship, Column, Integer, ForeignKey
 
 class ConfigServiceValue(SQLModel, table=True):
+    __tablename__ = "config_service_value"
     id: Optional[int] = Field(default=None, primary_key=True)
     km_value: float = Field(..., nullable=False)
     min_value: float = Field(..., nullable=False)
@@ -20,7 +21,7 @@ class ConfigServiceValue(SQLModel, table=True):
     service_type_id: int = Field(
         sa_column=Column(
             Integer,
-            ForeignKey("typeservice.id", ondelete="CASCADE"),
+            ForeignKey("type_service.id", ondelete="CASCADE"),
             unique=True,
             nullable=False
         )

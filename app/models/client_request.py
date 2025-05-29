@@ -3,7 +3,6 @@ from sqlalchemy import Column, Enum, event, String
 import enum
 from datetime import datetime, timezone
 from typing import Optional,List
-import uuid
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
 from uuid import UUID, uuid4
@@ -37,8 +36,7 @@ class StatusEnum(str, enum.Enum):
 
 
 # Función para generar UUID
-def generate_uuid():
-    return str(uuid.uuid4())
+
 
 # Modelo de base de datos
 class ClientRequest(SQLModel, table=True):
@@ -49,7 +47,7 @@ class ClientRequest(SQLModel, table=True):
     id_driver_assigned: Optional[UUID] = Field(
         default=None, foreign_key="user.id")
     type_service_id: int = Field(
-        foreign_key="typeservice.id")  # Nueva relación
+        foreign_key="type_service.id")  # Nueva relación
     fare_offered: Optional[float] = Field(default=None)
     fare_assigned: Optional[float] = Field(default=None)
     pickup_description: Optional[str] = Field(default=None, max_length=255)

@@ -4,21 +4,22 @@ from fastapi import Depends
 from sqlmodel import Session, create_engine, SQLModel
 from .config import settings
 
-# Importar todos los modelos para asegurar que estén registrados
-from app.models import Role, UserHasRole, DocumentType, DriverDocuments
+# ✅ IMPORTAR TODOS LOS MODELOS
+from app.models import (
+    Role, UserHasRole, DocumentType, DriverInfo, VehicleInfo,
+    VehicleType, User, DriverDocuments, ClientRequest, DriverPosition,
+    DriverTripOffer, ProjectSettings, Referral, CompanyAccount,
+    DriverSavings, Transaction, VerifyMount, TypeService, ConfigServiceValue
+)
 
-engine = create_engine(settings.DATABASE_URL)
+engine = create_engine(settings.DATABASE_URL, echo=True)
 
-def create_all_tables(app: FastAPI):
-    # Crear las tablas en orden específico
-    DocumentType.metadata.create_all(engine)  # Primero document_type
-    Role.metadata.create_all(engine)          # Luego role
-    UserHasRole.metadata.create_all(engine)   # Luego user_has_roles
-    DriverDocuments.metadata.create_all(engine)  # Finalmente driver_documents
-    yield
+def create_all_tables():
+    """Crea todas las tablas en la base de datos"""
+    SQLModel.metadata.create_all(engine)
 
 def get_session():
     with Session(engine) as session:
         yield session
 
-SessionDep = Annotated[Session, Depends(get_session)] 
+SessionDep = Annotated[Session, Depends(get_session)]

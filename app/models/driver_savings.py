@@ -18,13 +18,14 @@ class SavingsType(str, Enum):
 
 
 class DriverSavings(SQLModel, table=True):
+    __tablename__ = "driver_savings"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
     user_id: UUID = Field(foreign_key="user.id")
     type: SavingsType
     client_request_id: Optional[UUID] = Field(
-        default=None, foreign_key="clientrequest.id")
+        default=None, foreign_key="client_request.id")
     date: datetime = Field(default_factory=datetime.utcnow)
 
     # Relación con ClassVar

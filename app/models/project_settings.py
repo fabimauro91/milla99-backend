@@ -14,6 +14,7 @@ class ProjectSettingsBase(SQLModel):
     bonus: str
 
 class ProjectSettings(ProjectSettingsBase, table=True):
+    __tablename__ = "project_settings"
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

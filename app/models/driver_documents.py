@@ -17,7 +17,7 @@ class DriverStatus(str, Enum):
 
 class DriverDocumentsBase(SQLModel):
     document_type_id: int = Field(
-        foreign_key="documenttype.id", nullable=False)
+        foreign_key="document_type.id", nullable=False)
     document_front_url: Optional[str] = Field(default=None, nullable=True)
     document_back_url: Optional[str] = Field(default=None, nullable=True)
     status: DriverStatus = Field(default=DriverStatus.PENDING, nullable=False)
@@ -25,10 +25,11 @@ class DriverDocumentsBase(SQLModel):
 
 
 class DriverDocuments(DriverDocumentsBase, table=True):
+    __tablename__ = "driver_documents"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
-    driver_info_id: UUID = Field(foreign_key="driverinfo.id", nullable=False)
+    driver_info_id: UUID = Field(foreign_key="driver_info.id", nullable=False)
     vehicle_info_id: Optional[UUID] = Field(
-        default=None, foreign_key="vehicleinfo.id", nullable=True)
+        default=None, foreign_key="vehicle_info.id", nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={
                                  "onupdate": datetime.utcnow})

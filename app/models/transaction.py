@@ -29,7 +29,7 @@ class Transaction(SQLModel, table=True):
     expense: Optional[int] = Field(default=0)
     type: TransactionType
     client_request_id: Optional[UUID] = Field(
-        default=None, foreign_key="clientrequest.id")
+        default=None, foreign_key="client_request.id")
     date: datetime = Field(default_factory=datetime.utcnow)
     user: Optional["User"] = Relationship(back_populates="transactions")
     client_request: Optional["ClientRequest"] = Relationship(

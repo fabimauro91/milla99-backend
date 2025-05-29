@@ -13,9 +13,10 @@ class DriverTripOfferCreate(SQLModel):
     distance: float
 
 class DriverTripOffer(SQLModel, table=True):
+    __tablename__ = "driver_trip_offer"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     id_driver: UUID = Field(foreign_key="user.id")
-    id_client_request: UUID = Field(foreign_key="clientrequest.id")
+    id_client_request: UUID = Field(foreign_key="client_request.id")
     fare_offer: float
     time: float
     distance: float

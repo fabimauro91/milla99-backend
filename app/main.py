@@ -18,16 +18,10 @@ import socketio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Código que se ejecuta al iniciar la aplicación
-    import secrets
-    # print(secrets.token_hex(32))
     print("Iniciando la aplicación...")
-    # Crear las tablas
-    for _ in create_all_tables(app):
-        pass
-    init_data()  # Inicializar todos los datos por defecto
+    create_all_tables()  
+    init_data()
     yield
-    # Código que se ejecuta al cerrar la aplicación
     print("Cerrando la aplicación...")
 
 fastapi_app = FastAPI(

@@ -11,6 +11,7 @@ class RoleStatus(str, Enum):
     EXPIRED = 'expired'
 
 class UserHasRole(SQLModel, table=True):
+    __tablename__ = "user_has_role"
     id_user: Optional[UUID] = Field(foreign_key="user.id", primary_key=True, ondelete="CASCADE")
     id_rol: Optional[str] = Field(foreign_key="role.id", primary_key=True, ondelete="RESTRICT")
     is_verified: bool = Field(default=False)

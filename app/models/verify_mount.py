@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 
 class VerifyMount(SQLModel, table=True):
+    __tablename__ = "verify_mount"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUID = Field(foreign_key="user.id")
     mount: int

@@ -17,13 +17,14 @@ class cashflow(str, Enum):
     ADDITIONAL= "ADDITIONAL"
 
 class CompanyAccount(SQLModel, table=True):
+    __tablename__ = "company_account"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
     type: cashflow
    
     client_request_id: Optional[UUID] = Field(
-        default=None, foreign_key="clientrequest.id")
+        default=None, foreign_key="client_request.id")
     date: datetime = Field(default_factory=datetime.utcnow)
 
     

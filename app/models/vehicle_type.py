@@ -9,6 +9,7 @@ class VehicleTypeBase(SQLModel):
 
 
 class VehicleType(SQLModel, table=True):
+    __tablename__ = "vehicle_type"
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(max_length=50, unique=True, index=True)
     description: Optional[str] = Field(default=None, max_length=255)

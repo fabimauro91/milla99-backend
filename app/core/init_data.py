@@ -1157,81 +1157,26 @@ def init_project_settings():
 
     with Session(engine) as session:
         # Verificar si ya existen registros
-        existing_settings = session.exec(select(ProjectSettings)).all()
+        existing_settings = session.exec(select(ProjectSettings)).first()
         if existing_settings:
             print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
             return
 
-        # Datos por defecto
-        settings_data = [
-            {
-                "id": 1,
-                "value": "2",
-                "description": "distancia maxima del conductor",
-                "created_at": datetime(2025, 5, 20, 15, 35, 26),
-                "updated_at": datetime(2025, 5, 20, 15, 35, 26)
-            },
-            {
-                "id": 2,
-                "value": "0.02",
-                "description": "referral_1",
-                "created_at": datetime(2025, 5, 22, 14, 50, 43),
-                "updated_at": datetime(2025, 5, 22, 14, 50, 43)
-            },
-            {
-                "id": 3,
-                "value": "0.0125",
-                "description": "referral_2",
-                "created_at": datetime(2025, 5, 22, 14, 51, 44),
-                "updated_at": datetime(2025, 5, 22, 14, 51, 44)
-            },
-            {
-                "id": 4,
-                "value": "0.0075",
-                "description": "referral_3",
-                "created_at": datetime(2025, 5, 22, 14, 51, 44),
-                "updated_at": datetime(2025, 5, 22, 14, 51, 44)
-            },
-            {
-                "id": 5,
-                "value": "0.005",
-                "description": "referral_4",
-                "created_at": datetime(2025, 5, 22, 14, 54, 27),
-                "updated_at": datetime(2025, 5, 22, 14, 54, 27)
-            },
-            {
-                "id": 6,
-                "value": "0.005",
-                "description": "referral_5",
-                "created_at": datetime(2025, 5, 22, 14, 54, 27),
-                "updated_at": datetime(2025, 5, 22, 14, 54, 27)
-            },
-            {
-                "id": 7,
-                "value": "0.01",
-                "description": "driver_saving",
-                "created_at": datetime(2025, 5, 23, 21, 42, 27),
-                "updated_at": datetime(2025, 5, 23, 21, 42, 27)
-            },
-            {
-                "id": 8,
-                "value": "0.04",
-                "description": "company",
-                "created_at": datetime(2025, 5, 23, 21, 42, 27),
-                "updated_at": datetime(2025, 5, 23, 21, 42, 27)
-            }
-        ]
-
-        for setting in settings_data:
-            project_setting = ProjectSettings(
-                id=setting["id"],
-                value=setting["value"],
-                description=setting["description"],
-                created_at=setting["created_at"],
-                updated_at=setting["updated_at"]
-            )
-            session.add(project_setting)
-
+        # Datos por defecto (un solo registro)
+        project_setting = ProjectSettings(
+            driver_dist="2",
+            referral_1="0.02",
+            referral_2="0.0125",
+            referral_3="0.0075",
+            referral_4="0.005",
+            referral_5="0.005",
+            driver_saving="0.01",
+            company="0.04",
+            bonus="20000",
+            created_at=datetime(2025, 5, 20, 15, 35, 26),
+            updated_at=datetime(2025, 5, 20, 15, 35, 26)
+        )
+        session.add(project_setting)
         session.commit()
         print("Datos de ProjectSettings inicializados correctamente.")        
 

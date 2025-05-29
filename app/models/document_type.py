@@ -6,7 +6,7 @@ class DocumentTypeBase(SQLModel):
     name: str = Field(unique=True)
 
 class DocumentType(DocumentTypeBase, table=True):
-    
+    __tablename__ = "document_type"
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -7,6 +7,7 @@ from uuid import UUID
 
 
 class DriverPosition(SQLModel, table=True):
+    __tablename__ = "driver_position"
     id_driver: UUID = Field(foreign_key="user.id", primary_key=True)
     position: Optional[Any] = Field(
         sa_column=Column(
