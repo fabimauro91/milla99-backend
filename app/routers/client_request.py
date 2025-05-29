@@ -418,16 +418,16 @@ def assign_driver(
         )
 
 
-@router.patch("/updateStatus", description="""
-Actualiza el estado de una solicitud de viaje existente.
+# @router.patch("/updateStatus", description="""
+# Actualiza el estado de una solicitud de viaje existente.
 
-**Parámetros:**
-- `id_client_request`: ID de la solicitud de viaje.
-- `status`: Nuevo estado a asignar.
+# **Parámetros:**
+# - `id_client_request`: ID de la solicitud de viaje.
+# - `status`: Nuevo estado a asignar.
 
-**Respuesta:**
-Devuelve un mensaje de éxito o error.
-""")
+# **Respuesta:**
+# Devuelve un mensaje de éxito o error.
+# """)
 def update_status(
     id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
@@ -503,22 +503,22 @@ def update_driver_rating(
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)
 
 
-@router.get("/nearby-drivers", description="""
-Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
+# @router.get("/nearby-drivers", description="""
+# Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
 
-**Parámetros:**
-- `client_lat`: Latitud del cliente.
-- `client_lng`: Longitud del cliente.
-- `type_service_id`: ID del tipo de servicio solicitado.
+# **Parámetros:**
+# - `client_lat`: Latitud del cliente.
+# - `client_lng`: Longitud del cliente.
+# - `type_service_id`: ID del tipo de servicio solicitado.
 
-**Respuesta:**
-Devuelve una lista de conductores cercanos con su información, incluyendo:
-- Información del conductor
-- Información del vehículo
-- Distancia al cliente
-- Calificación promedio
-- Tiempo estimado de llegada (usando Google Distance Matrix)
-""")
+# **Respuesta:**
+# Devuelve una lista de conductores cercanos con su información, incluyendo:
+# - Información del conductor
+# - Información del vehículo
+# - Distancia al cliente
+# - Calificación promedio
+# - Tiempo estimado de llegada (usando Google Distance Matrix)
+# """)
 def get_nearby_drivers(
     request: Request,
     client_lat: float = Query(..., example=4.708822,

@@ -34,7 +34,7 @@ class Transaction(SQLModel, table=True):
     type: TransactionType
     client_request_id: Optional[UUID] = Field(
         default=None, foreign_key="client_request.id")
-    id_withdrawal: Optional[int] = Field(
+    id_withdrawal: Optional[UUID] = Field(
         default=None, foreign_key="withdrawal.id")
     is_confirmed: bool = Field(default=True)
     date: datetime = Field(default_factory=datetime.utcnow)

@@ -36,12 +36,12 @@ def create_user(
 # List users endpoint (protegida)
 
 
-@router.get("/", response_model=List[User], description="""
-Obtiene la lista de todos los usuarios registrados en el sistema.
+# @router.get("/", response_model=List[User], description="""
+# Obtiene la lista de todos los usuarios registrados en el sistema.
 
-**Respuesta:**
-Devuelve una lista de objetos de usuario con su información básica.
-""")
+# **Respuesta:**
+# Devuelve una lista de objetos de usuario con su información básica.
+# """)
 def list_users(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
     service = UserService(session)
     return service.get_users()
