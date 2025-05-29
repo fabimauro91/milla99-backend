@@ -1107,7 +1107,7 @@ def init_referral_data():
             {"user_id": 8, "referred_by_id": 7},
             {"user_id": 9, "referred_by_id": 5},
             {"user_id": 11, "referred_by_id": 5},
-            {"user_id": 14, "referred_by_id": 19},
+            {"user_id": 24, "referred_by_id": 19},
             {"user_id": 15, "referred_by_id": 14},
             {"user_id": 16, "referred_by_id": 15},
             {"user_id": 17, "referred_by_id": 16},
