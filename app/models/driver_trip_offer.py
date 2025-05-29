@@ -5,27 +5,33 @@ from pydantic import BaseModel
 from app.models.driver_response import DriverInfoResponse, UserResponse, VehicleInfoResponse
 from uuid import UUID, uuid4
 
-class DriverTripOfferCreate(SQLModel):
-    id_driver: UUID
-    id_client_request: UUID
-    fare_offer: float
-    time: float
-    distance: float
+
+class DriverTripOfferCreate(BaseModel):
+    id_client_request: UUID = Field(...,
+                                    description="ID de la solicitud de viaje del cliente.")
+    fare_offer: float = Field(...,
+                              description="Tarifa ofrecida por el conductor.")
+    time: float = Field(..., description="Tiempo estimado del viaje.")
+    distance: float = Field(..., description="Distancia estimada del viaje.")
+
 
 class DriverTripOffer(SQLModel, table=True):
     __tablename__ = "driver_trip_offer"
-    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id: Optional[UUID] = Field(
+        default_factory=uuid4, primary_key=True, unique=True)
     id_driver: UUID = Field(foreign_key="user.id")
     id_client_request: UUID = Field(foreign_key="client_request.id")
     fare_offer: float
     time: float
     distance: float
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.utcnow}
     )
+
 
 class DriverTripOfferResponse(BaseModel):
     id: UUID
