@@ -27,22 +27,16 @@ def request_withdrawal(
     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     """
-    Permite al usuario autenticado solicitar un retiro. El retiro queda en estado pending hasta que un admin lo apruebe o rechace.
+    Permite al usuario autenticado solicitar un retiro. 
+    Al solicitar el retiro:
+    1. Se verifica el saldo
+    2. Se descuenta el monto inmediatamente
+    3. Se crea la transacción con is_confirmed=True
+    4. Se crea el retiro en estado PENDING
     """
     user_id = request.state.user_id
-    # Validar saldo suficiente
-    try:
-        assert_can_withdraw(session, user_id, data.amount)
-    except InsufficientFundsException:
-        raise HTTPException(
-            status_code=400, detail="Insufficient funds for withdrawal")
-    # Crear el retiro en estado pending
-    withdrawal = Withdrawal(user_id=user_id, amount=data.amount,
-                            status=WithdrawalStatus.PENDING)
-    session.add(withdrawal)
-    session.commit()
-    session.refresh(withdrawal)
-    return withdrawal
+    service = WithdrawalService(session)
+    return service.request_withdrawal(user_id, data.amount)
 
 
 @router.get("/me", response_model=list[Withdrawal])
