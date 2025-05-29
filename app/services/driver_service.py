@@ -20,6 +20,7 @@ from app.models.transaction import Transaction, TransactionType
 import uuid
 from app.core.config import settings
 import os
+from app.models.driver_savings import DriverSavings, SavingsType
 
 
 class DriverService:
@@ -86,6 +87,12 @@ class DriverService:
                     session.add(user)
                     session.commit()
                     session.refresh(user)
+                    # Crear DriverSavings con mount=0
+                    driver_savings = DriverSavings(
+                        mount=0, user_id=user.id, status=SavingsType.SAVING)
+                    session.add(driver_savings)
+                    session.commit()
+                    session.refresh(driver_savings)
                     # Asignar el rol DRIVER
                     driver_role = session.exec(
                         select(Role).where(Role.id == "DRIVER")).first()

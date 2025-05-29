@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum, event
 import enum
 from datetime import datetime, timezone
-from typing import Optional,List
+from typing import Optional, List
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
 
@@ -74,11 +74,14 @@ class ClientRequest(SQLModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
-    transactions: List["Transaction"] = Relationship(back_populates="client_request")
-    driver_savings: List["DriverSavings"] = Relationship(back_populates="client_request")
-    company_accounts: List["CompanyAccount"] = Relationship(back_populates="client_request")
+    transactions: List["Transaction"] = Relationship(
+        back_populates="client_request")
+    # driver_savings: List["DriverSavings"] = Relationship(back_populates="client_request")
+    company_accounts: List["CompanyAccount"] = Relationship(
+        back_populates="client_request")
 
-    type_service: "TypeService" = Relationship(back_populates="client_requests")  # Nueva relación
+    type_service: "TypeService" = Relationship(
+        back_populates="client_requests")  # Nueva relación
 
 
 # Definir el listener para el evento after_update
@@ -108,6 +111,6 @@ def after_update_listener(mapper, connection, target):
             finally:
                 session.close()
 
+
 # Registrar el evento después de definir la clase
-event.listen(ClientRequest, 'after_update', after_update_listener)    
-   
+event.listen(ClientRequest, 'after_update', after_update_listener)
