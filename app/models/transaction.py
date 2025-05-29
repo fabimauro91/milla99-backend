@@ -20,6 +20,7 @@ class TransactionType(str, Enum):
     REFERRAL_3 = "REFERRAL_3"
     REFERRAL_4 = "REFERRAL_4"
     REFERRAL_5 = "REFERRAL_5"
+    WITHDRAW = "WITHDRAW"
 
 
 class Transaction(SQLModel, table=True):
