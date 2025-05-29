@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.driver_info import DriverInfo
 from app.models.vehicle_info import VehicleInfo
-from sqlalchemy.orm import selectinload 
+from sqlalchemy.orm import selectinload
 import traceback
 from app.utils.geo_utils import wkb_to_coords
 from app.models.type_service import TypeService
@@ -169,9 +169,10 @@ def update_status_service(session: Session, id_client_request: UUID, status: str
     return {"success": True, "message": "Status actualizado correctamente"}
 
 
-def get_client_request_detail_service(session: Session, client_request_id: UUID):
+def get_client_request_detail_service(session: Session, client_request_id: UUID, user_id: UUID):
     """
     Devuelve el detalle de una Client Request, incluyendo info de usuario, driver y vehículo si aplica.
+    Solo permite acceso al cliente dueño de la solicitud o al conductor asignado.
     """
     from app.models.user import User
     from app.models.client_request import ClientRequest
@@ -182,6 +183,13 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID)
     if not cr:
         raise HTTPException(
             status_code=404, detail="Client Request no encontrada")
+
+    # Validar que el usuario tenga permiso para ver esta solicitud
+    if cr.id_client != user_id and cr.id_driver_assigned != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para ver esta solicitud. Solo el cliente o el conductor asignado pueden verla."
+        )
 
     # Buscar el usuario que la creó
     user = session.query(User).filter(User.id == cr.id_client).first()
