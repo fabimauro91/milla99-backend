@@ -25,7 +25,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             # Rutas DELETE de drivers-position
             ("/drivers-position/", "DELETE"),
             # Rutas POST de driver-trip-offers
-            ("/driver-trip-offers/", "POST"),
+            #("/driver-trip-offers/", "POST"),
             ("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
             ("/static/uploads/", "GET"),
             ("/distance-value/", "GET"),
