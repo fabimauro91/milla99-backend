@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-
+from uuid import UUID
 
 class DriverDocumentsResponse(BaseModel):
     property_card_front_url: Optional[str]
@@ -31,7 +31,7 @@ class DriverInfoResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int
+    id: UUID
     full_name: str
     country_code: str
     phone_number: str
