@@ -57,22 +57,3 @@ def list_my_withdrawals(
     withdrawals = session.query(Withdrawal).filter(
         Withdrawal.user_id == user_id).order_by(Withdrawal.withdrawal_date.desc()).all()
     return withdrawals
-
-
-@router.patch("/update-status")
-def update_withdrawal_status(
-    data: WithdrawalStatusUpdateRequest,
-    session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
-):
-    """
-    Actualiza el estado de un retiro (approved o rejected).
-    """
-    service = WithdrawalService(session)
-    if data.status.lower() == "approved":
-        return service.approve_withdrawal(data.withdrawal_id)
-    elif data.status.lower() == "rejected":
-        return service.reject_withdrawal(data.withdrawal_id)
-    else:
-        raise HTTPException(
-            status_code=400, detail="Estado inválido. Debe ser 'approved' o 'rejected'.")
