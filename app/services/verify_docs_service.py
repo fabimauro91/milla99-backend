@@ -1,7 +1,7 @@
 from sqlmodel import select, and_, or_, SQLModel
 from datetime import datetime, timedelta
 from typing import List, Optional
-from app.models.driver_documents import DriverDocuments, DriverStatus,DriverDocumentsCreateRequest
+from app.models.driver_documents import DocumentsUpdate, DriverDocuments, DriverStatus,DriverDocumentsCreateRequest
 from app.models.user import User
 from app.models.document_type import DocumentType
 from app.models.user_has_roles import UserHasRole, RoleStatus
@@ -286,12 +286,13 @@ class VerifyDocsService:
     
 
 
-    def update_documents(self, updates: List[dict]) -> List[DriverDocuments]:
+    def update_documents(self, updates: List[DocumentsUpdate]) -> List[DriverDocuments]:
         """Actualiza múltiples documentos"""
         updated_docs = []
 
         for update in updates:
-            doc_id = update.pop("id", None)
+            # Acceder al atributo id directamente
+            doc_id = update.id
             if not doc_id:
                 continue
 
@@ -299,8 +300,12 @@ class VerifyDocsService:
             if not doc:
                 continue
 
-            for key, value in update.items():
-                if hasattr(doc, key):
+            # Convertir el modelo a diccionario y excluir campos None y el id
+            update_data = update.model_dump(exclude_unset=True, exclude={'id'})
+
+            # Actualizar solo los campos que tienen valor
+            for key, value in update_data.items():
+                if hasattr(doc, key) and value is not None:
                     setattr(doc, key, value)
 
             updated_docs.append(doc)

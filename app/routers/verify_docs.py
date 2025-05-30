@@ -4,10 +4,11 @@ from typing import List
 
 from app.core.dependencies.admin_auth import get_current_admin
 from app.models.user import UserRead
-from app.models.driver_documents import DriverDocuments
+from app.models.driver_documents import DocumentsUpdate, DriverDocuments
 from app.core.db import SessionDep
 from app.services.verify_docs_service import VerifyDocsService, UserWithDocs, UserWithExpiringDocsResponse
 from app.core.dependencies.admin_auth import get_current_admin
+
 
 bearer_scheme = HTTPBearer()
 
@@ -106,14 +107,21 @@ def check_soon_to_expire_documents(
 
 @router.put("/update-documents", status_code=status.HTTP_200_OK)
 def update_documents(
-    updates: List[dict],
+    updates: List[DocumentsUpdate],
     request: Request,
     session: SessionDep
 ):
     """
     Actualiza múltiples documentos.
-    Se debe enviar una lista de diccionarios, cada uno con el id del documento y los datos a actualizar.
-
+    Se puede enciar uno o mas de documentos, cada uno con el id del documento y los datos a actualizar.
+    Se debe enviar al menos un documento y al menos un dato a modificar
+    
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "status": "pending",                                opcional
+            "expiration_date": "2025-05-30T16:53:32.029Z",      opcional
+            "document_front_url": "string",                     opcional
+            "document_back_url": "string"                       opcional
+      
     **Respuesta:**
     Devuelve un mensaje indicando cuántos documentos fueron actualizados correctamente.
     """
