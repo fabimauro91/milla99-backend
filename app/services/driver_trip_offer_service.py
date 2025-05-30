@@ -49,7 +49,7 @@ class DriverTripOfferService:
         self.session.refresh(offer)
         return offer
 
-    def get_offers_by_client_request(self, id_client_request: UUID):
+    def get_offers_by_client_request(self, id_client_request: UUID, user_id: UUID, user_role: str):
         offers = self.session.query(DriverTripOffer).filter(
             DriverTripOffer.id_client_request == id_client_request
         ).all()
@@ -100,4 +100,25 @@ class DriverTripOfferService:
                 driver_info=driver_info_response,
                 vehicle_info=vehicle_info_response
             ))
+
+        # Filtrado según el rol
+        from app.models.client_request import ClientRequest
+        client_request = self.session.query(ClientRequest).filter(
+            ClientRequest.id == id_client_request).first()
+        if not client_request:
+            raise HTTPException(
+                status_code=404, detail="Solicitud de cliente no encontrada")
+
+        if user_role == "DRIVER":
+            # Solo ve su propia oferta
+            result = [r for r in result if r.user.id == user_id]
+        elif user_role == "CLIENT":
+            # Solo el cliente dueño puede ver todas
+            if client_request.id_client != user_id:
+                raise HTTPException(
+                    status_code=403, detail="No autorizado para ver las ofertas de esta solicitud")
+            # El cliente dueño ve todas
+        else:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
         return result
