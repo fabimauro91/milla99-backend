@@ -4,14 +4,17 @@ from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel
 
-from app.core.dependencies.auth import user_is_owner
+from app.core.dependencies.auth import user_is_owner, get_current_user
 from app.models.user import User, UserCreate, UserUpdate, UserRead
 from app.core.db import SessionDep
 from app.services.user_service import UserService
 
 bearer_scheme = HTTPBearer()
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(
+    prefix="/users",
+    tags=["users"]
+)
 
 # Create user endpoint (pública)
 
@@ -43,7 +46,7 @@ def create_user(
 # **Respuesta:**
 # Devuelve una lista de objetos de usuario con su información básica.
 # """)
-def list_users(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
+def list_users(request: Request, session: SessionDep):
     service = UserService(session)
     return service.get_users()
 
@@ -56,7 +59,7 @@ Obtiene la información del usuario autenticado (usando el token).
 **Respuesta:**
 Devuelve el objeto de usuario correspondiente al usuario autenticado.
 """)
-def get_current_user(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
+def get_current_user_endpoint(request: Request, session: SessionDep, current_user=Depends(get_current_user)):
     user_id = request.state.user_id
     service = UserService(session)
     return service.get_user(user_id)
@@ -68,9 +71,7 @@ def get_current_user(request: Request, session: SessionDep, credentials: HTTPAut
 def update_user(
     user_id: UUID,
     user_data: UserUpdate,
-    session: SessionDep,
-    permission: None = Depends(user_is_owner()),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    session: SessionDep
 ):
     service = UserService(session)
     return service.update_user(user_id, user_data)
@@ -109,7 +110,7 @@ def update_me(
     session: SessionDep,
     full_name: Optional[str] = Form(None),
     selfie: Optional[UploadFile] = File(None),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     """
     Actualiza la información del usuario autenticado.
