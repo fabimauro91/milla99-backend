@@ -42,4 +42,4 @@ class DriverTripOfferResponse(BaseModel):
     updated_at: str
     user: UserResponse
     driver_info: DriverInfoResponse
-    vehicle_info: VehicleInfoResponse
+    vehicle_info: Optional[VehicleInfoResponse] = None
