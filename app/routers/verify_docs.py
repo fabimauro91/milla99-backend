@@ -117,7 +117,7 @@ def update_documents(
     Se debe enviar al menos un documento y al menos un dato a modificar
     
             "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-            "status": "pending",                                opcional
+            "status": "pending",                                
             "expiration_date": "2025-05-30T16:53:32.029Z",      opcional
             "document_front_url": "string",                     opcional
             "document_back_url": "string"                       opcional
