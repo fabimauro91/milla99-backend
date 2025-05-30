@@ -28,7 +28,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             #("/driver-trip-offers/", "POST"),
             #("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
             ("/static/uploads/", "GET"),
-            ("/distance-value/", "GET"),
+            #("/distance-value/", "GET"),
             #("/vehicle-type-configuration/", "GET"),
             # ("/referrals/", "POST"),
             #("/referrals/", "GET"),
