@@ -76,6 +76,13 @@ class DriverDocumentsUpdate(SQLModel):
     status: Optional[DriverStatus] = None
     expiration_date: Optional[datetime] = None
 
+class DocumentsUpdate (SQLModel):
+    id: UUID
+    status: Optional[DriverStatus] = None
+    expiration_date: Optional[datetime] = None
+    document_front_url: Optional[str] = None
+    document_back_url: Optional[str] = None
+
 
 class DriverDocumentsCreateRequest(SQLModel):
     user_id: UUID
