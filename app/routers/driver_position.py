@@ -108,13 +108,14 @@ def delete_my_driver_position(
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id
+    print(f"user_id: {user_id}")
     # Buscar el driver_info correspondiente a este usuario
     driver_info = session.query(DriverInfo).filter(
         DriverInfo.user_id == user_id).first()
     if not driver_info:
         raise HTTPException(
             status_code=404, detail="No se encontró información de conductor para este usuario.")
-    id_driver = driver_info.id
+    id_driver = driver_info.user_id
     # Usar el servicio existente para eliminar la posición
     service = DriverPositionService(session)
     success = service.delete_driver_position(id_driver)
