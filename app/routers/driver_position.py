@@ -53,11 +53,8 @@ def create_driver_position(
             detail="El usuario no tiene el rol de conductor aprobado"
         )
 
-    # Usar el user_id del token en lugar del que viene en el body
-    data.id_driver = user_id
-
     service = DriverPositionService(session)
-    obj = service.create_driver_position(data)
+    obj = service.create_driver_position(data, user_id)
     return DriverPositionRead.from_orm_with_point(obj)
 
 

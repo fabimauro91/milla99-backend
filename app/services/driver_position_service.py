@@ -15,8 +15,8 @@ class DriverPositionService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_driver_position(self, data: DriverPositionCreate) -> DriverPosition:
-        user = self.session.get(User, data.id_driver)
+    def create_driver_position(self, data: DriverPositionCreate, user_id: UUID) -> DriverPosition:
+        user = self.session.get(User, user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -24,7 +24,7 @@ class DriverPositionService:
         # Validar que el usuario tenga el rol DRIVER aprobado
         driver_role = self.session.exec(
             select(UserHasRole).where(
-                UserHasRole.id_user == data.id_driver,
+                UserHasRole.id_user == user_id,
                 UserHasRole.id_rol == "DRIVER",
             )
         ).first()
@@ -33,7 +33,7 @@ class DriverPositionService:
                                 detail="El usuario no tiene el rol de conductor aprobado")
 
         # Verifica si ya existe una posición para este driver
-        existing = self.session.get(DriverPosition, data.id_driver)
+        existing = self.session.get(DriverPosition, user_id)
         point = from_shape(Point(data.lng, data.lat), srid=4326)
         if existing:
             existing.position = point
@@ -43,7 +43,7 @@ class DriverPositionService:
             return existing
 
         driver_position = DriverPosition(
-            id_driver=data.id_driver,
+            id_driver=user_id,
             position=point
         )
         self.session.add(driver_position)
