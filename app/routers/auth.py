@@ -82,14 +82,20 @@ async def verify_code(
     session: SessionDep                             # Sesión de base de datos
 ):
     """Verify the code sent via WhatsApp"""
-    service = AuthService(
-        session)                                  # Crear instancia del servicio
-    result, access_token, user = service.verify_code(
-        country_code, phone_number, verification.code)            # Verificar el código
-    print(access_token)
-    return VerifResponseCode(
-        message="Code verified successfully",
-        access_token=access_token,
-        token_type="bearer",
-        user=UserRead.model_validate(user, from_attributes=True)
-    )
+    service = AuthService(session)  # crear instancia del servicio
+    try:
+        result, access_token, user = service.verify_code(
+            country_code, phone_number, verification.code)  # verificar el código
+        return VerifResponseCode(
+            message="Code verified successfully",
+            access_token=access_token,
+            token_type="bearer",
+            user=UserRead.model_validate(user, from_attributes=True)
+        )
+    except Exception as e:
+        return VerifResponseCode(
+            message=f"Error verifying code: {str(e)}",
+            access_token=None,
+            token_type=None,
+            user=None
+        )
