@@ -20,18 +20,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             ("/openapi.json", "GET"),  # Esquema OpenAPI
             ("/verify-docs/", "GET"),  # Rutas de verify-docs
             ("/verify-docs/", "POST"),
-            ("/drivers-position/", "POST"),  # Rutas POST de drivers-position
-            ("/drivers-position/", "GET"),  # Rutas GET de drivers-position
+            #("/drivers-position/", "POST"),  # Rutas POST de drivers-position
+            #("/drivers-position/", "GET"),  # Rutas GET de drivers-position
             # Rutas DELETE de drivers-position
-            ("/drivers-position/", "DELETE"),
+            #("/drivers-position/", "DELETE"),
             # Rutas POST de driver-trip-offers
             #("/driver-trip-offers/", "POST"),
-            ("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
+            #("/driver-trip-offers/", "GET"),  # Rutas GET de driver-trip-offers
             ("/static/uploads/", "GET"),
             ("/distance-value/", "GET"),
-            ("/vehicle-type-configuration/", "GET"),
+            #("/vehicle-type-configuration/", "GET"),
             # ("/referrals/", "POST"),
-            ("/referrals/", "GET"),
+            #("/referrals/", "GET"),
             ("/login-admin/", "POST"),
 
         ]
