@@ -70,7 +70,7 @@ async def calculate_fare_unique(
             settings.GOOGLE_API_KEY
         )
         # 2. Calcula la tarifa
-        result = await service.calculate_total_value(type_service_id, google_data, user_id=user_id)
+        result = await service.calculate_total_value(type_service_id, google_data)
 
         if result is None:
             return JSONResponse(
