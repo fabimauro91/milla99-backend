@@ -39,25 +39,11 @@ def create_user(
     service = UserService(session)
     try:
         return service.create_user(user_data)
-    except HTTPException as e:
-        print(f"HTTPException: {e.detail}")
-        raise e
     except ValueError as e:
-        # Mensaje personalizado para número no colombiano
-        if "Colombian" in str(e):
-            print(f"Validation error: {e}")
-            raise HTTPException(
-                status_code=400, detail="El número debe ser un móvil colombiano válido (empieza con 3 y código +57).")
-        elif "Invalid phone number format" in str(e):
-            print(f"Validation error: {e}")
-            raise HTTPException(
-                status_code=400, detail="Formato de número inválido. Usa +57 y un número móvil válido.")
-        else:
-            print(f"Validation error: {e}")
-            raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        print("Traceback (most recent call last):")
-        traceback.print_exc()
         logging.exception("Unexpected error creating user")
         raise HTTPException(status_code=500, detail="Internal server error")
 
