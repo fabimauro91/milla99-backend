@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, Annotated, List,ClassVar
+from typing import Optional, Annotated, List, ClassVar
 from pydantic import constr, field_validator, ValidationInfo, BaseModel
 from enum import Enum
 import phonenumbers
@@ -26,27 +26,6 @@ class UserBase(SQLModel):
     is_verified_phone: bool = False
     is_active: bool = False
 
-    # Validation for phone number
-    @field_validator("phone_number")
-    @classmethod
-    def validate_phone_number(cls, value: str, info: ValidationInfo) -> str:
-        country_code = info.data.get("country_code", "")
-        full_number = f"{country_code}{value}"
-
-        try:
-            parsed = phonenumbers.parse(full_number, None)
-
-            if phonenumbers.region_code_for_number(parsed) != "CO":
-                raise ValueError("Phone number must be Colombian.")
-            if not str(parsed.national_number).startswith("3"):
-                raise ValueError("Colombian mobile numbers must start with 3.")
-            if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Invalid phone number.")
-        except phonenumbers.NumberParseException as e:
-            raise ValueError("Invalid phone number format.") from e
-
-        return value
-
 
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
@@ -55,9 +34,11 @@ class UserRole(str, Enum):
 
 
 class User(UserBase, table=True):
-    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id: Optional[UUID] = Field(
+        default_factory=uuid4, primary_key=True, unique=True)
     selfie_url: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,

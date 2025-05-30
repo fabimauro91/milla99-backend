@@ -3,6 +3,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel
+import logging
+import traceback
 
 from app.core.dependencies.auth import user_is_owner, get_current_user
 from app.models.user import User, UserCreate, UserUpdate, UserRead
@@ -35,7 +37,29 @@ def create_user(
     user_data: UserCreate
 ):
     service = UserService(session)
-    return service.create_user(user_data)
+    try:
+        return service.create_user(user_data)
+    except HTTPException as e:
+        print(f"HTTPException: {e.detail}")
+        raise e
+    except ValueError as e:
+        # Mensaje personalizado para número no colombiano
+        if "Colombian" in str(e):
+            print(f"Validation error: {e}")
+            raise HTTPException(
+                status_code=400, detail="El número debe ser un móvil colombiano válido (empieza con 3 y código +57).")
+        elif "Invalid phone number format" in str(e):
+            print(f"Validation error: {e}")
+            raise HTTPException(
+                status_code=400, detail="Formato de número inválido. Usa +57 y un número móvil válido.")
+        else:
+            print(f"Validation error: {e}")
+            raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print("Traceback (most recent call last):")
+        traceback.print_exc()
+        logging.exception("Unexpected error creating user")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # List users endpoint (protegida)
 
