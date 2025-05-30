@@ -1,6 +1,7 @@
 from sqlmodel import Session, select
 from fastapi import HTTPException, status, UploadFile
 from app.models.driver_documents import DriverDocuments, DriverDocumentsCreate
+from app.models.project_settings import ProjectSettings
 from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
 from app.models.driver_info import DriverInfo, DriverInfoCreate
@@ -327,19 +328,20 @@ class DriverService:
                             vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
                     )
                 )
-
+                existing_user = session.exec(select(ProjectSettings).where(ProjectSettings.id == 1)).first()
+                bonus= Decimal(existing_user.bonus)
                 # Crear transacción de bono y actualizar mount
                 bonus_transaction = Transaction(
                     user_id=user.id,
-                    income=50000,
+                    income=bonus,
                     expense=0,
                     type=TransactionType.BONUS,
                     client_request_id=None
-                )
+                ) 
                 session.add(bonus_transaction)
                 session.commit()
                 # Actualizar el mount en VerifyMount
-                verify_mount.mount += 50000
+                verify_mount.mount += bonus
                 session.add(verify_mount)
                 session.commit()
 

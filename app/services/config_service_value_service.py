@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any,List
 from datetime import datetime
 from sqlmodel import Session, select
 from app.models.config_service_value import ConfigServiceValue, FareCalculationResponse 
@@ -36,6 +36,14 @@ class ConfigServiceValueService:
         """
         statement = select(ConfigServiceValue).where(ConfigServiceValue.service_type_id == id)
         result = self.session.exec(statement).first()
+        return result 
+    
+    def get_config_service_values(self) -> List[ConfigServiceValue]:
+        """
+        Obtiene todos los registros de ConfigServiceValue
+        """
+        statement = select(ConfigServiceValue)
+        result = self.session.exec(statement).all()
         return result
 
     def update_config_service_value(

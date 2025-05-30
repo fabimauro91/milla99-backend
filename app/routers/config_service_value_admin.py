@@ -1,13 +1,13 @@
 from fastapi import APIRouter, status, HTTPException, Query
-from typing import Optional
+from typing import Optional, List
 from app.services.config_service_value_service import ConfigServiceValueService  # Importación absoluta
 from app.core.db import SessionDep  # Importación absoluta
-from app.models.config_service_value import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse
+from app.models.config_service_value import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse,ConfigServiceValue
 
 router = APIRouter(prefix="/config-service-value", tags=["ADMIN: config-service-value"])
 
 
-@router.get("/{vehicle_type_id}", response_model=VehicleTypeConfigurationResponse)
+@router.patch("/{vehicle_type_id}", response_model=VehicleTypeConfigurationResponse)
 async def update_config_service_value(
     db: SessionDep,
     vehicle_type_id: int,
@@ -62,4 +62,19 @@ async def update_config_service_value(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+    
+@router.get("/", response_model=List[ConfigServiceValue])
+def get_all_config_service_values(session: SessionDep):
+    """
+    Obtiene todos los registros de ConfigServiceValue
+    """
+    try:
+        service = ConfigServiceValueService(session)
+        config_values = service.get_config_service_values()
+        return config_values
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al obtener los valores de configuración: {str(e)}"
         )
