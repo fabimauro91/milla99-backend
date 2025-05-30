@@ -83,7 +83,10 @@ class DriverPositionService:
         return self.session.get(DriverPosition, id_driver)
 
     def delete_driver_position(self, id_driver: UUID):
-        obj = self.session.get(DriverPosition, id_driver)
+        # Buscar la posición usando el user_id directamente
+        obj = self.session.query(DriverPosition).filter(
+            DriverPosition.id_driver == id_driver
+        ).first()
         if not obj:
             return False
         self.session.delete(obj)
