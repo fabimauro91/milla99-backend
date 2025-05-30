@@ -654,7 +654,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_status_by_client(
     request: Request,
-    id_client_request: int = Body(...,
+    id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
