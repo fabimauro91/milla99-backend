@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List
 
-from app.core.dependencies.auth import get_current_user, user_is_owner
+from app.core.dependencies.admin_auth import get_current_admin
 from app.models.user import UserRead
 from app.models.driver_documents import DriverDocuments
 from app.core.db import SessionDep
@@ -13,7 +13,7 @@ bearer_scheme = HTTPBearer()
 
 router = APIRouter(prefix="/verify-docs",
                    tags=["ADMIN: document verification"],
-                    dependencies=[Depends(get_current_user)])
+                    dependencies=[Depends(get_current_admin)])
 
 
 @router.get("/pending", response_model=List[UserWithDocs])
