@@ -9,6 +9,7 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.role import Role
 from app.utils.geo import wkb_to_coords
 from uuid import UUID
+import traceback
 
 
 class DriverPositionService:
@@ -93,7 +94,7 @@ class DriverPositionService:
         self.session.commit()
         return True
 
-    def get_nearby_drivers_by_client_request(self, id_client_request: UUID):
+    def get_nearby_drivers_by_client_request(self, id_client_request: UUID, user_id: UUID, user_role: str):
         from app.models.client_request import ClientRequest
         from app.models.type_service import TypeService
         from app.models.vehicle_info import VehicleInfo
@@ -120,7 +121,6 @@ class DriverPositionService:
         vehicle_type_id = type_service.vehicle_type_id
 
         # 4. Buscar todos los conductores con vehículo compatible y posición actual
-        # Usar DriverPosition para obtener la posición
         allowed_role = type_service.allowed_role
         results = (
             self.session.query(User, DriverInfo, VehicleInfo, DriverPosition)
@@ -163,6 +163,28 @@ class DriverPositionService:
                 },
                 "current_position": coords
             })
+
+        # Filtrado según el rol
+        # Ahora usando los strings 'DRIVER' y 'CLIENT' según la tabla de roles
+        print(
+            f"[DEBUG] user_role: {user_role}, user_id: {user_id}, client_request.id_client: {client_request.id_client}")
+        try:
+            if user_role == "DRIVER":  # Conductor
+                print(f"[DEBUG] Es DRIVER, filtrando por user_id")
+                drivers = [d for d in drivers if d["user_id"] == user_id]
+            elif user_role == "CLIENT":  # Cliente
+                print(f"[DEBUG] Es CLIENT, validando dueño de la solicitud")
+                if client_request.id_client != user_id:
+                    print(f"[ERROR] Cliente no autorizado para ver esta solicitud")
+                    raise HTTPException(
+                        status_code=403, detail="No autorizado para ver esta solicitud")
+                # El cliente dueño ve todos
+            else:
+                print(f"[ERROR] Rol no autorizado: {user_role}")
+                raise HTTPException(status_code=403, detail="No autorizado")
+        except Exception as e:
+            print(f"[TRACEBACK] {traceback.format_exc()}")
+            raise
 
         return {
             "client_request_id": client_request.id,
