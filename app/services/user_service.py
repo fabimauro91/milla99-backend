@@ -48,7 +48,7 @@ class UserService:
             # La relación se crea automáticamente a través del link_model
             user.roles.append(client_role)
 
-            # Si hay un token de referido, validarlo y crear la relación de referido
+            # Si hay un  referido, validarlo y crear la relación de referido
             if user_data.referral_phone:
                 referral_user = self.session.exec(
                     select(User).where(

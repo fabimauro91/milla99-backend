@@ -81,11 +81,8 @@ class ClientRequest(SQLModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
-    transactions: List["Transaction"] = Relationship(
-        back_populates="client_request")
-    # driver_savings: List["DriverSavings"] = Relationship(back_populates="client_request")
-    company_accounts: List["CompanyAccount"] = Relationship(
-        back_populates="client_request")
+    transactions: List["Transaction"] = Relationship(back_populates="client_request")
+    company_accounts: List["CompanyAccount"] = Relationship(back_populates="client_request")
 
     type_service: "TypeService" = Relationship(
         back_populates="client_requests")  # Nueva relación
