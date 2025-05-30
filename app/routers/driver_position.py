@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.models.driver_info import DriverInfo
 from app.models.user_has_roles import UserHasRole, RoleStatus
+from app.core.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/drivers-position", tags=["drivers-position"])
 
@@ -34,7 +35,7 @@ def create_driver_position(
     request: Request,
     data: DriverPositionCreate,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id
@@ -73,7 +74,7 @@ Incluye la latitud, longitud y (si aplica) la distancia al punto de búsqueda.
 def get_driver_position(
     request: Request,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id
@@ -106,7 +107,7 @@ No retorna contenido si la eliminación fue exitosa.
 def delete_my_driver_position(
     request: Request,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id
