@@ -19,6 +19,11 @@ class WithdrawalIdRequest(BaseModel):
     withdrawal_id: int
 
 
+class WithdrawalStatusUpdateRequest(BaseModel):
+    withdrawal_id: int
+    status: str  # 'approved' o 'rejected'
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def request_withdrawal(
     request: Request,
@@ -54,27 +59,20 @@ def list_my_withdrawals(
     return withdrawals
 
 
-@router.patch("/approve")
-def approve_withdrawal(
-    data: WithdrawalIdRequest,
+@router.patch("/update-status")
+def update_withdrawal_status(
+    data: WithdrawalStatusUpdateRequest,
     session: Session = Depends(get_session),
     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     """
-    Aprueba un retiro (en el futuro, solo admin podrá usarlo).
+    Actualiza el estado de un retiro (approved o rejected).
     """
     service = WithdrawalService(session)
-    return service.approve_withdrawal(data.withdrawal_id)
-
-
-@router.patch("/reject")
-def reject_withdrawal(
-    data: WithdrawalIdRequest,
-    session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
-):
-    """
-    Rechaza un retiro (en el futuro, solo admin podrá usarlo).
-    """
-    service = WithdrawalService(session)
-    return service.reject_withdrawal(data.withdrawal_id)
+    if data.status.lower() == "approved":
+        return service.approve_withdrawal(data.withdrawal_id)
+    elif data.status.lower() == "rejected":
+        return service.reject_withdrawal(data.withdrawal_id)
+    else:
+        raise HTTPException(
+            status_code=400, detail="Estado inválido. Debe ser 'approved' o 'rejected'.")

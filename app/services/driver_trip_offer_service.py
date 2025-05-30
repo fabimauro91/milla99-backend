@@ -12,32 +12,38 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime
 from uuid import UUID
 
+
 class DriverTripOfferService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_offer(self, data: DriverTripOfferCreate) -> DriverTripOffer:
+    def create_offer(self, data: dict) -> DriverTripOffer:
         # Validar que el driver exista y tenga el rol DRIVER
-        user = self.session.get(User, data.id_driver)
+        user = self.session.get(User, data["id_driver"])
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conductor no encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Conductor no encontrado")
         driver_role = self.session.exec(
             select(UserHasRole).where(
-                UserHasRole.id_user == data.id_driver,
+                UserHasRole.id_user == data["id_driver"],
                 UserHasRole.id_rol == "DRIVER"
             )
         ).first()
         if not driver_role:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El usuario no tiene el rol de conductor")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="El usuario no tiene el rol de conductor")
 
         # Validar que la solicitud exista y esté en estado CREATED
-        client_request = self.session.get(ClientRequest, data.id_client_request)
+        client_request = self.session.get(
+            ClientRequest, data["id_client_request"])
         if not client_request:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitud de cliente no encontrada")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail="Solicitud de cliente no encontrada")
         if client_request.status != StatusEnum.CREATED:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La solicitud no está en estado CREATED")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="La solicitud no está en estado CREATED")
 
-        offer = DriverTripOffer(**data.dict())
+        offer = DriverTripOffer(**data)
         self.session.add(offer)
         self.session.commit()
         self.session.refresh(offer)
@@ -50,13 +56,15 @@ class DriverTripOfferService:
         result = []
         for offer in offers:
             user = self.session.query(User).options(
-                selectinload(User.driver_info).selectinload(DriverInfo.vehicle_info),
+                selectinload(User.driver_info).selectinload(
+                    DriverInfo.vehicle_info),
                 selectinload(User.roles)
             ).filter(User.id == offer.id_driver).first()
-            
+
             driver_info_obj = user.driver_info if user else None
-            vehicle_info_obj = driver_info_obj.vehicle_info if driver_info_obj and hasattr(driver_info_obj, 'vehicle_info') else None
-            
+            vehicle_info_obj = driver_info_obj.vehicle_info if driver_info_obj and hasattr(
+                driver_info_obj, 'vehicle_info') else None
+
             vehicle_info_response = VehicleInfoResponse(
                 brand=vehicle_info_obj.brand,
                 model=vehicle_info_obj.model,
@@ -65,20 +73,20 @@ class DriverTripOfferService:
                 plate=vehicle_info_obj.plate,
                 vehicle_type_id=vehicle_info_obj.vehicle_type_id
             ) if vehicle_info_obj else None
-            
+
             driver_info_response = DriverInfoResponse(
                 first_name=driver_info_obj.first_name,
                 last_name=driver_info_obj.last_name,
                 birth_date=str(driver_info_obj.birth_date),
                 email=driver_info_obj.email
             ) if driver_info_obj else None
-            
+
             user_response = UserResponse(
                 full_name=user.full_name,
                 country_code=user.country_code,
                 phone_number=user.phone_number
             ) if user else None
-            
+
             result.append(DriverTripOfferResponse(
                 id=offer.id,
                 fare_offer=offer.fare_offer,
@@ -90,4 +98,4 @@ class DriverTripOfferService:
                 driver_info=driver_info_response,
                 vehicle_info=vehicle_info_response
             ))
-        return result 
+        return result

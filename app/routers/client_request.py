@@ -30,7 +30,7 @@ from app.utils.geo import wkb_to_coords
 from uuid import UUID
 from app.core.dependencies.auth import get_current_user
 
-#bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer()
 
 router = APIRouter(
     prefix="/client-request",
@@ -39,7 +39,7 @@ router = APIRouter(
 )
 
 
-class Position(BaseModel): 
+class Position(BaseModel):
     lat: float
     lng: float
 
@@ -64,16 +64,16 @@ class ClientRequestResponse(BaseModel):
 
 class AssignDriverRequest(BaseModel):
     id_client_request: UUID = Field(...,
-                                   description="ID de la solicitud de viaje")
+                                    description="ID de la solicitud de viaje")
     id_driver: UUID = Field(...,
-                           description="user_id que tiene como rol Driver")
+                            description="user_id que tiene como rol Driver")
     fare_assigned: float | None = Field(
         None, description="Tarifa asignada (opcional)")
 
 
 class CancelClientRequestRequest(BaseModel):
     id_client_request: UUID = Field(...,
-                                   description="ID de la solicitud de viaje a cancelar")
+                                    description="ID de la solicitud de viaje a cancelar")
     reason: str | None = Field(
         None, description="Razón de la cancelación (opcional)")
 
@@ -224,28 +224,34 @@ def get_nearby_client_requests(
 
 
 @router.get("/by-status/{status}", description="""
-Devuelve una lista de solicitudes de viaje filtradas por el estado enviado en el parámetro.
+Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estado enviado en el parámetro.
 
 **Parámetros:**
 - `status`: Estado por el cual filtrar las solicitudes.
 
 **Respuesta:**
-Devuelve una lista de solicitudes de viaje con el estado especificado.
+Devuelve una lista de solicitudes de viaje del usuario autenticado con el estado especificado.
 """)
 def get_client_requests_by_status(
-    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED"),
-    session: Session = Depends(get_session)
+    request: Request,
+    session: SessionDep,
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED")
 ):
     """
-    Devuelve una lista de client_request filtrados por el estatus enviado en el parámetro.
+    Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estatus enviado en el parámetro.
     """
+    # Obtener el user_id del token
+    user_id = request.state.user_id
+
     # Validar que el status sea uno de los permitidos
     if status not in StatusEnum.__members__:
         raise HTTPException(
             status_code=400,
             detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
         )
-    return get_client_requests_by_status_service(session, status)
+
+    # Obtener las solicitudes filtradas por status y user_id
+    return get_client_requests_by_status_service(session, status, user_id)
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""
@@ -280,7 +286,7 @@ def create_request(
         }
     ),
     session: Session = Depends(get_session),
-    #credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    # credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
     try:
         user_id = request.state.user_id
@@ -430,7 +436,7 @@ def assign_driver(
 # """)
 def update_status(
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
+                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
 ):
@@ -464,7 +470,7 @@ Devuelve un mensaje de éxito o error.
 def update_client_rating(
     request: Request,
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
+                                   description="ID de la solicitud de viaje"),
     client_rating: float = Body(...,
                                 description="Nueva calificación del cliente"),
     session: Session = Depends(get_session)
@@ -490,7 +496,7 @@ Devuelve un mensaje de éxito o error.
 def update_driver_rating(
     request: Request,
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
+                                   description="ID de la solicitud de viaje"),
     driver_rating: float = Body(...,
                                 description="Nueva calificación del conductor"),
     session: Session = Depends(get_session)
@@ -593,15 +599,21 @@ Consulta el estado y la información detallada de una solicitud de viaje especí
 
 **Respuesta:**
 Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
+
+**Nota:**
+Solo el cliente dueño de la solicitud o el conductor asignado pueden ver los detalles.
 """)
 def get_client_request_detail(
+    request: Request,
     client_request_id: UUID,
     session: SessionDep
 ):
     """
     Consulta el estado y la información detallada de una Client Request específica.
+    Solo permite acceso al cliente dueño de la solicitud o al conductor asignado.
     """
-    return get_client_request_detail_service(session, client_request_id)
+    user_id = request.state.user_id
+    return get_client_request_detail_service(session, client_request_id, user_id)
 
 
 @router.patch("/updateStatusByDriver", description="""

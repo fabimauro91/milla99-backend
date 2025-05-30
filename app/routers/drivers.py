@@ -21,6 +21,7 @@ from app.models.driver_documents import DriverDocuments
 from app.models.user import User
 from app.models.document_type import DocumentType
 from app.core.config import settings
+from app.core.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
@@ -218,7 +219,7 @@ async def update_driver(
     soat_expiration_date: Optional[str] = Form(None),
     vehicle_technical_inspection_expiration_date: Optional[str] = Form(None),
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id
@@ -430,7 +431,7 @@ Incluye la información personal, de usuario, del vehículo y documentos del con
 def get_driver_me(
     request: Request,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id

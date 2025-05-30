@@ -2,15 +2,19 @@ from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
 from uuid import UUID
+from pydantic import BaseModel
 
-from app.core.dependencies.auth import user_is_owner
+from app.core.dependencies.auth import user_is_owner, get_current_user
 from app.models.user import User, UserCreate, UserUpdate, UserRead
 from app.core.db import SessionDep
 from app.services.user_service import UserService
 
 bearer_scheme = HTTPBearer()
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(
+    prefix="/users",
+    tags=["users"]
+)
 
 # Create user endpoint (pública)
 
@@ -42,7 +46,7 @@ def create_user(
 # **Respuesta:**
 # Devuelve una lista de objetos de usuario con su información básica.
 # """)
-def list_users(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
+def list_users(request: Request, session: SessionDep):
     service = UserService(session)
     return service.get_users()
 
@@ -55,7 +59,7 @@ Obtiene la información del usuario autenticado (usando el token).
 **Respuesta:**
 Devuelve el objeto de usuario correspondiente al usuario autenticado.
 """)
-def get_current_user(request: Request, session: SessionDep, credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
+def get_current_user_endpoint(request: Request, session: SessionDep, current_user=Depends(get_current_user)):
     user_id = request.state.user_id
     service = UserService(session)
     return service.get_user(user_id)
@@ -67,9 +71,7 @@ def get_current_user(request: Request, session: SessionDep, credentials: HTTPAut
 def update_user(
     user_id: UUID,
     user_data: UserUpdate,
-    session: SessionDep,
-    permission: None = Depends(user_is_owner()),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    session: SessionDep
 ):
     service = UserService(session)
     return service.update_user(user_id, user_data)
@@ -93,10 +95,38 @@ async def verify_user(user_id:  UUID, request: Request, session: SessionDep):
 # Update selfie endpoint (protegida) – toma el user_id desde el token (request.state.user_id)
 
 
-@router.patch("/selfie", status_code=status.HTTP_200_OK, description="""
-Actualiza la selfie del usuario autenticado (se toma el user_id desde el token).
+@router.patch("/me/update", status_code=status.HTTP_200_OK, description="""
+Actualiza la información del usuario autenticado (se toma el user_id desde el token).
+
+**Parámetros:**
+- `full_name`: Nombre completo del usuario (opcional).
+- `selfie`: Archivo de la selfie del usuario (opcional).
+
+**Respuesta:**
+Devuelve la información actualizada del usuario, incluyendo la URL de la selfie si se actualizó.
 """)
-def update_selfie(request: Request, session: SessionDep, selfie: UploadFile = File(...), credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)):
+def update_me(
+    request: Request,
+    session: SessionDep,
+    full_name: Optional[str] = Form(None),
+    selfie: Optional[UploadFile] = File(None),
+    current_user=Depends(get_current_user)
+):
+    """
+    Actualiza la información del usuario autenticado.
+    Permite actualizar el nombre completo y/o la selfie.
+    """
     user_id = request.state.user_id
     service = UserService(session)
-    return service.update_selfie(user_id, selfie)
+
+    # Si se proporciona full_name, actualizar el nombre
+    if full_name is not None:
+        user_data = UserUpdate(full_name=full_name)
+        service.update_user(user_id, user_data)
+
+    # Si se proporciona selfie, actualizar la selfie
+    if selfie is not None:
+        service.update_selfie(user_id, selfie)
+
+    # Retornar el usuario actualizado
+    return service.get_user(user_id)
