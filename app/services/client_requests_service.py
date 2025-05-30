@@ -99,8 +99,8 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
     for row in query_results:
         cr, full_name, country_code, phone_number, type_service_name, distance, time_difference = row
         result = {
-            "id": cr.id,
-            "id_client": cr.id_client,
+            "id": str(cr.id),
+            "id_client": str(cr.id_client),
             "fare_offered": cr.fare_offered,
             "pickup_description": cr.pickup_description,
             "destination_description": cr.destination_description,

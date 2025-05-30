@@ -174,7 +174,7 @@ def get_nearby_client_requests(
         results = get_nearby_client_requests_service(
             driver_lat, driver_lng, session, wkb_to_coords, type_service_ids=type_service_ids
         )
-        print(f"[DEBUG] results: {results}")
+        print(f"[DEBUG] Número de solicitudes encontradas: {len(results)}")
         if not results:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
