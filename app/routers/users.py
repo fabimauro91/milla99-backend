@@ -3,6 +3,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel
+import logging
+import traceback
 
 from app.core.dependencies.auth import user_is_owner, get_current_user
 from app.models.user import User, UserCreate, UserUpdate, UserRead
@@ -35,7 +37,15 @@ def create_user(
     user_data: UserCreate
 ):
     service = UserService(session)
-    return service.create_user(user_data)
+    try:
+        return service.create_user(user_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logging.exception("Unexpected error creating user")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # List users endpoint (protegida)
 

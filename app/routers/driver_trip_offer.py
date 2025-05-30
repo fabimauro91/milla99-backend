@@ -5,6 +5,7 @@ from app.core.db import get_session
 from app.services.driver_trip_offer_service import DriverTripOfferService
 from uuid import UUID
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from app.core.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/driver-trip-offers", tags=["driver-trip-offers"])
 
@@ -48,7 +49,8 @@ Devuelve una lista de ofertas de viaje, incluyendo información del conductor, u
 """)
 def get_offers_by_client_request(
     id_client_request: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
 ):
     service = DriverTripOfferService(session)
     return service.get_offers_by_client_request(id_client_request)

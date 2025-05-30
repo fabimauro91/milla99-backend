@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from ..core.db import SessionDep
 from ..services.auth_service import AuthService
 from pydantic import BaseModel
 from app.models.user import UserRead
+import logging
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -92,10 +93,10 @@ async def verify_code(
             token_type="bearer",
             user=UserRead.model_validate(user, from_attributes=True)
         )
+    except HTTPException as e:
+        # Errores esperados (usuario no encontrado, código inválido, etc.)
+        raise e
     except Exception as e:
-        return VerifResponseCode(
-            message=f"Error verifying code: {str(e)}",
-            access_token=None,
-            token_type=None,
-            user=None
-        )
+        # Loguear el error inesperado
+        logging.exception("Unexpected error verifying code")
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -174,7 +174,7 @@ def get_nearby_client_requests(
         results = get_nearby_client_requests_service(
             driver_lat, driver_lng, session, wkb_to_coords, type_service_ids=type_service_ids
         )
-        print(f"[DEBUG] results: {results}")
+        print(f"[DEBUG] Número de solicitudes encontradas: {len(results)}")
         if not results:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
@@ -628,7 +628,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_status_by_driver(
     request: Request,
-    id_client_request: int = Body(...,
+    id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
@@ -654,7 +654,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_status_by_client(
     request: Request,
-    id_client_request: int = Body(...,
+    id_client_request: UUID = Body(...,
                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)

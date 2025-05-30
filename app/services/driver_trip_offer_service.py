@@ -82,9 +82,11 @@ class DriverTripOfferService:
             ) if driver_info_obj else None
 
             user_response = UserResponse(
+                id=user.id,
                 full_name=user.full_name,
                 country_code=user.country_code,
-                phone_number=user.phone_number
+                phone_number=user.phone_number,
+                selfie_url=user.selfie_url
             ) if user else None
 
             result.append(DriverTripOfferResponse(

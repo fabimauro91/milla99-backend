@@ -12,6 +12,8 @@ from app.core.config import settings
 import uuid
 from uuid import UUID
 from app.models.verify_mount import VerifyMount
+from phonenumbers.phonenumberutil import NumberParseException
+import phonenumbers
 
 
 class UserService:
@@ -19,6 +21,36 @@ class UserService:
         self.session = session
 
     def create_user(self, user_data: UserCreate) -> User:
+        # Validación personalizada de número de teléfono colombiano
+        full_number = f"{user_data.country_code}{user_data.phone_number}"
+        try:
+            parsed = phonenumbers.parse(full_number, None)
+            if phonenumbers.region_code_for_number(parsed) != "CO":
+                raise ValueError("El número debe ser colombiano (+57).")
+            if not str(parsed.national_number).startswith("3"):
+                raise ValueError(
+                    "El número móvil colombiano debe empezar con 3.")
+            # Validar prefijo válido (300-399)
+            prefix = int(str(parsed.national_number)[:3])
+            if prefix < 300 or prefix > 399:
+                raise ValueError(
+                    "El prefijo del número móvil colombiano no es válido (debe estar entre 300 y 399).")
+            if not phonenumbers.is_valid_number(parsed):
+                raise ValueError("El número de teléfono no es válido.")
+        except NumberParseException as e:
+            if e.error_type == NumberParseException.INVALID_COUNTRY_CODE:
+                raise ValueError(
+                    "Código de país inválido. Usa +57 para Colombia.")
+            elif e.error_type == NumberParseException.NOT_A_NUMBER:
+                raise ValueError(
+                    "El valor ingresado no es un número de teléfono.")
+            elif e.error_type == NumberParseException.TOO_SHORT_NSN:
+                raise ValueError("El número es demasiado corto para Colombia.")
+            elif e.error_type == NumberParseException.TOO_LONG:
+                raise ValueError("El número es demasiado largo para Colombia.")
+            else:
+                raise ValueError("Número de teléfono inválido.")
+
         with self.session.begin():
             # Check for existing phone (country_code + phone_number)
             existing_user = self.session.exec(

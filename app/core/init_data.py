@@ -910,6 +910,12 @@ def init_client_requests_and_driver_positions():
             from geoalchemy2.shape import from_shape
             from shapely.geometry import Point
 
+            # Verificar si ya existen solicitudes
+            existing_requests = session.exec(select(ClientRequest)).first()
+            if existing_requests:
+                print("Ya existen solicitudes en la base de datos, omitiendo creación de nuevas solicitudes.")
+                return
+
             # Coordenadas de prueba en Bogotá
             TEST_COORDINATES = {
                 # Conductores
@@ -1075,6 +1081,7 @@ def init_client_requests_and_driver_positions():
 
             # Commit de las solicitudes
             session.commit()
+            print(f"Se crearon {len(created_requests)} solicitudes de prueba.")
         except Exception as e:
             session.rollback()
             raise

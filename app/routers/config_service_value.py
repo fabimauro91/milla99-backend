@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, Depends, HTTPException, Query
+from fastapi import APIRouter, status, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
 # Importación absoluta
@@ -6,6 +6,7 @@ from app.services.config_service_value_service import ConfigServiceValueService
 from app.core.db import SessionDep  # Importación absoluta
 from app.models.config_service_value import VehicleTypeConfigurationCreate, FareCalculationResponse
 from app.core.config import settings
+from app.core.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/distance-value", tags=["distance-value"])
 
@@ -35,7 +36,7 @@ async def create_config_service_value(
 
 
 @router.get("/", response_model=FareCalculationResponse, description="""
-Calcula la tarifa recomendada para un viaje según el tipo de vehículo y la distancia entre dos puntos.
+Calcula la tarifa recomendada para un viaje según el tipo de vehículo y la distancia entre dos puntos. (toma id_user desde el token)
 
 **Parámetros:**
 - `type_service_id`: ID del tipo de vehículo.
@@ -48,14 +49,17 @@ Calcula la tarifa recomendada para un viaje según el tipo de vehículo y la dis
 Devuelve la tarifa recomendada, las direcciones de origen y destino, la distancia y la duración estimada del viaje.
 """)
 async def calculate_fare_unique(
+    request: Request,
     session: SessionDep,
     type_service_id: int = Query(..., description="ID del tipo de servicio"),
     origin_lat: float = Query(..., description="Latitud de origen"),
     origin_lng: float = Query(..., description="Longitud de origen"),
-    destination_lat: float = Query(..., description="Latitud de destino"), 
+    destination_lat: float = Query(..., description="Latitud de destino"),
     destination_lng: float = Query(..., description="Longitud de destino"),
+    current_user=Depends(get_current_user)
 ):
     try:
+        user_id = request.state.user_id
         service = ConfigServiceValueService(session)
         # 1. Llama a Google Distance Matrix
         google_data = service.get_google_distance_data(
