@@ -2,6 +2,7 @@ from sqlmodel import Session, select
 from datetime import datetime, timedelta, date
 from datetime import datetime
 from app.models.role import Role
+from app.models.transaction import Transaction
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.driver_documents import DriverDocuments, DriverStatus
@@ -437,133 +438,151 @@ def init_additional_clients():
         # Lista de clientes a crear con sus IDs específicos
         clients_data = [
             {
-                "id": 1,  # ID específico para uuid_prueba
+                
                 "full_name": "María García",
                 "phone_number": "3001111111",
                 "selfie_url": None
             },
             {
-                "id": 2,
+               
                 "full_name": "Juan Pérez",
                 "phone_number": "3002222222",
                 "selfie_url": None
             },
             {
-                "id": 3,
+                
                 "full_name": "Ana Martínez",
                 "phone_number": "3003333333",
                 "selfie_url": None
             },
             {
-                "id": 4,
+                
                 "full_name": "Carlos Rodríguez",
                 "phone_number": "3004444444",
                 "selfie_url": None
             },
             {
-                "id": 5,
+               
                 "full_name": "Jhonatan Restrepo",
                 "phone_number": "3004442444",
                 "selfie_url": None
             },
             {
-                "id": 6,
+                
                 "full_name": "Maricela Muños",
                 "phone_number": "3004444445",
                 "selfie_url": None
             },
             {
-                "id": 7,
+                
                 "full_name": "Daniel Carrascal",
                 "phone_number": "3004444446",
                 "selfie_url": None
             },
             {
-                "id": 8,
+              
                 "full_name": "Carlos Valderrama",
                 "phone_number": "3004444447",
                 "selfie_url": None
             },
             {
-                "id": 9,
+               
                 "full_name": "Carmenza Coyazos",
                 "phone_number": "3004444448",
                 "selfie_url": None
             },
             {
-                "id": 11,
+               
+                "full_name": "juan hoyos",
+                "phone_number": "3009644448",
+                "selfie_url": None
+            },
+            {
+              
                 "full_name": "Marcela Jimenez",
                 "phone_number": "3004444449",
                 "selfie_url": None
             },
             {
-                "id": 14,
+              
+                "full_name": "Paola Roa",
+                "phone_number": "3004994449",
+                "selfie_url": None
+            },
+            {
+        
+                "full_name": "Jason Avarez",
+                "phone_number": "3004884450",
+                "selfie_url": None
+            },
+            {
+        
                 "full_name": "Pedro Fernandez",
                 "phone_number": "3004444450",
                 "selfie_url": None
             },
             {
-                "id": 15,
+             
                 "full_name": "Maritza Rodrigez",
                 "phone_number": "3004444451",
                 "selfie_url": None
             },
             {
-                "id": 16,
+              
                 "full_name": "Estephany Pelaez",
                 "phone_number": "3004444452",
                 "selfie_url": None
             },
             {
-                "id": 17,
+              
                 "full_name": "Angela ceballos",
-                "phone_number": "3004444452",
+                "phone_number": "3334444452",
                 "selfie_url": None
             },
             {
-                "id": 18,
+               
                 "full_name": "Diego Mojica",
                 "phone_number": "3004444453",
                 "selfie_url": None
             },
             {
-                "id": 19,
+               
                 "full_name": "Diana Leane",
                 "phone_number": "3004444454",
                 "selfie_url": None
             },
             {
-                "id": 20,
+              
                 "full_name": "Taliana Vega",
                 "phone_number": "3004444455",
                 "selfie_url": None
             },
             {
-                "id": 21,
+               
                 "full_name": "Paulina Vargas",
                 "phone_number": "3004444456",
                 "selfie_url": None
             },
             {
-                "id": 22,
+               
                 "full_name": "Angelina Fernandez",
                 "phone_number": "3004444457",
                 "selfie_url": None
             },
             {
-                "id": 23,
+              
                 "full_name": "Cecilia Castrillon",
                 "phone_number": "3004444458",
                 "selfie_url": None
             },
             {
-                "id": 24,
+              
                 "full_name": "Paulo Coelo",
                 "phone_number": "3004444459",
                 "selfie_url": None
             },
             {
-                "id": 25,
+              
                 "full_name": "Cabriel Garcia",
                 "phone_number": "3004444460",
                 "selfie_url": None
@@ -577,13 +596,13 @@ def init_additional_clients():
         for client_data in clients_data:
             # Verificar si el cliente ya existe por ID específico
             existing_user = session.exec(select(User).where(
-                User.id == uuid_prueba(client_data["id"])
-            )).first()
+                 User.phone_number == client_data["phone_number"]
+             )).first()
 
             if not existing_user:
-                # Crear nuevo usuario con ID específico
+                    # Crear nuevo usuario con ID específico
                 user = User(
-                    id=uuid_prueba(client_data["id"]),  # Usar uuid_prueba con el ID específico
+                    #id=uuid_prueba(client_data["id"]),  # Usar uuid_prueba con el ID específico
                     full_name=client_data["full_name"],
                     country_code="+57",
                     phone_number=client_data["phone_number"],
@@ -791,6 +810,18 @@ def init_additional_drivers():
                 session.add(driver_info)
                 session.commit()
                 session.refresh(driver_info)
+
+                transaction = Transaction(
+                user_id=user.id,
+                income=2000,
+                expense=0,
+                type="BONUS",
+                client_request_id=None
+                )
+                
+                session.add(transaction)
+                session.commit()
+                session.refresh(transaction)
 
                 # Crear VehicleInfo
                 vehicle_type_id = car_type.id if i < 2 else moto_type.id
@@ -1098,60 +1129,51 @@ def init_client_requests_and_driver_positions():
             raise
 
 def init_referral_data():
-    """Inicializa los datos por defecto para la tabla Referral"""
+    """Inicializa los datos por defecto para la tabla Referral usando UUIDs"""
     with Session(engine) as session:
-        # Datos de referidos según la tabla proporcionada
+        # Datos de referidos usando phone_number
         referral_data = [
-            {"user_id": 3, "referred_by_id": 2},
-            {"user_id": 4, "referred_by_id": 1},
-            {"user_id": 6, "referred_by_id": 1},
-            {"user_id": 7, "referred_by_id": 3},
-            {"user_id": 8, "referred_by_id": 7},
-            {"user_id": 9, "referred_by_id": 5},
-            {"user_id": 11, "referred_by_id": 5},
-            {"user_id": 14, "referred_by_id": 19},
-            {"user_id": 15, "referred_by_id": 14},
-            {"user_id": 16, "referred_by_id": 15},
-            {"user_id": 17, "referred_by_id": 16},
-            {"user_id": 18, "referred_by_id": 7},
-            {"user_id": 19, "referred_by_id": 11},
-            {"user_id": 20, "referred_by_id": 18},
-            {"user_id": 21, "referred_by_id": 8},
-            {"user_id": 22, "referred_by_id": 9},
-            {"user_id": 23, "referred_by_id": 1},
-            {"user_id": 24, "referred_by_id": 22},
-            {"user_id": 25, "referred_by_id": 11}
+            {"user_phone": "3003333333", "referrer_phone": "3002222222"},
+            {"user_phone": "3004444444", "referrer_phone": "3001111111"},
+            {"user_phone": "3004444445", "referrer_phone": "3001111111"},
+            {"user_phone": "3004444446", "referrer_phone": "3003333333"},
+            {"user_phone": "3004444447", "referrer_phone": "3004444446"},
+            {"user_phone": "3004444448", "referrer_phone": "3004442444"},
+            {"user_phone": "3004444449", "referrer_phone": "3004442444"},
+            {"user_phone": "3004444450", "referrer_phone": "3004884450"},
+            {"user_phone": "3004444451", "referrer_phone": "3004444450"},
+            {"user_phone": "3004444452", "referrer_phone": "3004444451"},
+            {"user_phone": "3334444452", "referrer_phone": "3004444452"},
+            {"user_phone": "3004444453", "referrer_phone": "3004444446"},
+            {"user_phone": "3004444454", "referrer_phone": "3004444449"},
+            {"user_phone": "3004444455", "referrer_phone": "3004444453"},
+            {"user_phone": "3004444456", "referrer_phone": "3004444447"},
+            {"user_phone": "3004444457", "referrer_phone": "3004444448"},
+            {"user_phone": "3004444458", "referrer_phone": "3001111111"},
+            {"user_phone": "3004444459", "referrer_phone": "3004444454"},
+            {"user_phone": "3004444460", "referrer_phone": "3004444449"},
+            # ...agrega el resto según tu lógica anterior
         ]
 
-        # Convertir los IDs a UUIDs usando uuid_prueba
-        for item in referral_data:
-            item["user_id"] = uuid_prueba(item["user_id"])
-            item["referred_by_id"] = uuid_prueba(item["referred_by_id"])
-        
         # Verificar si ya existen registros en la tabla Referral
         existing_referrals = session.exec(select(Referral)).all()
         if existing_referrals:
-            #print("Ya existen datos en la tabla Referral, omitiendo inicialización.")
             return
 
-        # Crear los registros de referidos
         for data in referral_data:
-            # Verificar que ambos usuarios existen
-            user = session.exec(select(User).where(User.id == data["user_id"])).first()
-            referrer = session.exec(select(User).where(User.id == data["referred_by_id"])).first()
+            user = session.exec(select(User).where(User.phone_number == data["user_phone"])).first()
+            referrer = session.exec(select(User).where(User.phone_number == data["referrer_phone"])).first()
 
             if user and referrer:
                 referral = Referral(
-                    user_id=data["user_id"],
-                    referred_by_id=data["referred_by_id"]
+                    user_id=user.id,  # UUID
+                    referred_by_id=referrer.id  # UUID
                 )
                 session.add(referral)
             else:
-                print(f"No se pudo crear referido: usuario {data['user_id']} o referente {data['referred_by_id']} no existe.")
+                print(f"No se pudo crear referido: usuario {data['user_phone']} o referente {data['referrer_phone']} no existe.")
 
         session.commit()
-        # print("Datos de referidos inicializados correctamente.")
-
 
 def init_project_settings():
     """Inicializa los datos por defecto para la tabla ProjectSettings"""

@@ -8,6 +8,8 @@ from app.models.project_settings import ProjectSettings
 from uuid import UUID
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.models.driver_info import DriverInfo
+from app.models.user_has_roles import UserHasRole, RoleStatus
+from app.core.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/drivers-position", tags=["drivers-position"])
 
@@ -19,10 +21,9 @@ bearer_scheme = HTTPBearer()
     response_model=DriverPositionRead,
     status_code=status.HTTP_201_CREATED,
     description="""
-Registra o actualiza la posición actual de un conductor en el sistema.
+Registra o actualiza la posición actual del conductor autenticado (se toma el user_id desde el token).
 
 **Parámetros:**
-- `id_driver`: ID único del conductor. 
 - `lat`: Latitud donde se encuentra el conductor. 
 - `lng`: Longitud donde se encuentra el conductor. 
 
@@ -31,9 +32,30 @@ Devuelve la posición registrada del conductor.
 """
 )
 def create_driver_position(
+    request: Request,
     data: DriverPositionCreate,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
 ):
+    # Obtener el user_id desde el token
+    user_id = request.state.user_id
+
+    # Validar que el usuario tenga el rol DRIVER aprobado
+    driver_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.id_rol == "DRIVER",
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+
+    if not driver_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario no tiene el rol de conductor aprobado"
+        )
+
+    # Usar el user_id del token en lugar del que viene en el body
+    data.id_driver = user_id
+
     service = DriverPositionService(session)
     obj = service.create_driver_position(data)
     return DriverPositionRead.from_orm_with_point(obj)
@@ -52,7 +74,7 @@ Incluye la latitud, longitud y (si aplica) la distancia al punto de búsqueda.
 def get_driver_position(
     request: Request,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id
@@ -85,7 +107,7 @@ No retorna contenido si la eliminación fue exitosa.
 def delete_my_driver_position(
     request: Request,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     # Obtener el user_id desde el token
     user_id = request.state.user_id

@@ -154,7 +154,7 @@ class VehicleTypeRead(BaseModel):
 
 
 class VehicleInfoRead(BaseModel):
-    id: int
+    id: UUID
     brand: str
     model: str
     model_year: int
@@ -164,7 +164,7 @@ class VehicleInfoRead(BaseModel):
 
 
 class DriverInfoRead(BaseModel):
-    id: int
+    id: UUID
     first_name: str
     last_name: str
     birth_date: date
