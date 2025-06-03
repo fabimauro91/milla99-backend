@@ -1,5 +1,6 @@
 import socketio
 import json
+from datetime import datetime
 
 # Configura Redis como message manager
 mgr = socketio.AsyncRedisManager('redis://localhost:6379/0')
@@ -115,4 +116,42 @@ async def update_status_trip(sid, data):
             'id_client_request': data['id_client_request']
         }
     ) 
+
+@sio.event
+async def client_to_driver_message(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'Mensaje del cliente al conductor: {sid}: {data}')
+    # Emitir el mensaje al conductor específico
+    await sio.emit(
+        f'client_message/{data["id_driver"]}',
+        {
+            'id_socket': sid,
+            'message': data['message'],
+            'client_id': data['client_id'],
+            'client_name': data['client_name'],
+            'id_client_request': data['id_client_request'],
+            'timestamp': datetime.utcnow().isoformat()
+        }
+    )
+
+@sio.event
+async def driver_to_client_message(sid, data):
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'Mensaje del conductor al cliente: {sid}: {data}')
+    # Emitir el mensaje al cliente específico
+    await sio.emit(
+        f'driver_message/{data["id_client"]}',
+        {
+            'id_socket': sid,
+            'message': data['message'],
+            'driver_id': data['driver_id'],
+            'driver_name': data['driver_name'],
+            'id_client_request': data['id_client_request'],
+            'timestamp': datetime.utcnow().isoformat()
+        }
+    )
 
