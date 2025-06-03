@@ -460,6 +460,7 @@ def update_status(
 
 @router.patch("/updateClientRating", description="""
 Actualiza la calificación del cliente para una solicitud de viaje. Solo el conductor asignado puede calificar al cliente.
+Solo se permite calificar cuando el viaje está en estado PAID.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje.
@@ -479,6 +480,7 @@ def update_client_rating(
     """
     Actualiza la calificación del cliente para una solicitud de viaje.
     Solo el conductor asignado puede calificar al cliente.
+    Solo se permite calificar cuando el viaje está en estado PAID.
     """
     user_id = request.state.user_id
     return update_client_rating_service(session, id_client_request, client_rating, user_id)
@@ -486,6 +488,7 @@ def update_client_rating(
 
 @router.patch("/updateDriverRating", description="""
 Actualiza la calificación del conductor para una solicitud de viaje. Solo el cliente puede calificar al conductor.
+Solo se permite calificar cuando el viaje está en estado PAID.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje.
@@ -505,6 +508,7 @@ def update_driver_rating(
     """
     Actualiza la calificación del conductor para una solicitud de viaje.
     Solo el cliente puede calificar al conductor.
+    Solo se permite calificar cuando el viaje está en estado PAID.
     """
     user_id = request.state.user_id
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)

@@ -276,13 +276,53 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
 
 
 def update_client_rating_service(session: Session, id_client_request: UUID, client_rating: float, user_id: UUID):
+    """
+    Permite al conductor asignado calificar al cliente de una solicitud específica.
+
+    Validaciones:
+    1. La solicitud debe existir
+    2. La solicitud debe estar en estado PAID
+    3. El usuario debe ser el conductor asignado a esta solicitud específica
+    4. La calificación debe estar entre 1 y 5
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud a calificar
+        client_rating: Calificación a asignar (1-5)
+        user_id: ID del usuario que intenta calificar (debe ser el conductor asignado)
+
+    Returns:
+        Mensaje de éxito si la calificación se actualiza correctamente
+
+    Raises:
+        HTTPException(404): Si la solicitud no existe
+        HTTPException(400): Si la solicitud no está en estado PAID o la calificación está fuera de rango
+        HTTPException(403): Si el usuario no es el conductor asignado a esta solicitud
+    """
+    # Validar rango de calificación
+    if not (1 <= client_rating <= 5):
+        raise HTTPException(
+            status_code=400,
+            detail="La calificación debe estar entre 1 y 5"
+        )
+
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Primero validar el estado
+    if client_request.status != StatusEnum.PAID:
+        raise HTTPException(
+            status_code=400, detail="Solo se puede calificar cuando el viaje está PAID")
+
+    # Luego validar que el usuario es el conductor asignado a esta solicitud específica
     if client_request.id_driver_assigned != user_id:
         raise HTTPException(
-            status_code=403, detail="Solo el conductor asignado puede calificar al cliente")
+            status_code=403,
+            detail="No tienes permiso para calificar esta solicitud. Solo el conductor asignado a esta solicitud puede calificar al cliente."
+        )
+
     client_request.client_rating = client_rating
     client_request.updated_at = datetime.utcnow()
     session.commit()
@@ -290,13 +330,53 @@ def update_client_rating_service(session: Session, id_client_request: UUID, clie
 
 
 def update_driver_rating_service(session: Session, id_client_request: UUID, driver_rating: float, user_id: UUID):
+    """
+    Permite al cliente calificar al conductor de una solicitud específica.
+
+    Validaciones:
+    1. La solicitud debe existir
+    2. La solicitud debe estar en estado PAID
+    3. El usuario debe ser el cliente que creó esta solicitud específica
+    4. La calificación debe estar entre 1 y 5
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud a calificar
+        driver_rating: Calificación a asignar (1-5)
+        user_id: ID del usuario que intenta calificar (debe ser el cliente que creó la solicitud)
+
+    Returns:
+        Mensaje de éxito si la calificación se actualiza correctamente
+
+    Raises:
+        HTTPException(404): Si la solicitud no existe
+        HTTPException(400): Si la solicitud no está en estado PAID o la calificación está fuera de rango
+        HTTPException(403): Si el usuario no es el cliente que creó esta solicitud
+    """
+    # Validar rango de calificación
+    if not (1 <= driver_rating <= 5):
+        raise HTTPException(
+            status_code=400,
+            detail="La calificación debe estar entre 1 y 5"
+        )
+
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Primero validar el estado
+    if client_request.status != StatusEnum.PAID:
+        raise HTTPException(
+            status_code=400, detail="Solo se puede calificar cuando el viaje está PAID")
+
+    # Luego validar que el usuario es el cliente que creó esta solicitud específica
     if client_request.id_client != user_id:
         raise HTTPException(
-            status_code=403, detail="Solo el cliente puede calificar al conductor")
+            status_code=403,
+            detail="No tienes permiso para calificar esta solicitud. Solo el cliente que creó esta solicitud puede calificar al conductor."
+        )
+
     client_request.driver_rating = driver_rating
     client_request.updated_at = datetime.utcnow()
     session.commit()
