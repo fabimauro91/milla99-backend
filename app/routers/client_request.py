@@ -16,7 +16,8 @@ from app.services.client_requests_service import (
     update_driver_rating_service,
     get_nearby_drivers_service,
     update_status_by_driver_service,
-    update_status_by_client_service
+    client_canceled_service,
+    update_review_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -266,6 +267,8 @@ Crea una nueva solicitud de viaje para un cliente.
 - `pickup_description`: Descripción del punto de recogida (opcional).
 - `destination_description`: Descripción del destino (opcional).
 - `type_service_id`: ID del tipo de servicio (obligatorio, por ejemplo 1 para Car Ride, 2 para Motorcycle Ride)
+- `payment_method_id`: ID del método de pago (opcional, 1 para cash, 2 para nequi, 3 para daviplata)
+- `review`: Comentario o reseña (opcional, máximo 255 caracteres)
 
 **Respuesta:**
 Devuelve la solicitud de viaje creada con toda su información.
@@ -282,7 +285,9 @@ def create_request(
             "pickup_lng": -74.073170,
             "destination_lat": 4.702468,
             "destination_lng": -74.109776,
-            "type_service_id": 1  # 1 Car or 2 Motorcycle
+            "type_service_id": 1,  # 1 Car or 2 Motorcycle
+            "payment_method_id": 1,  # 1 cash, 2 nequi, 3 daviplata
+            "review": "Viaje rápido y seguro"
         }
     ),
     session: Session = Depends(get_session),
@@ -459,6 +464,7 @@ def update_status(
 
 @router.patch("/updateClientRating", description="""
 Actualiza la calificación del cliente para una solicitud de viaje. Solo el conductor asignado puede calificar al cliente.
+Solo se permite calificar cuando el viaje está en estado PAID.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje.
@@ -478,6 +484,7 @@ def update_client_rating(
     """
     Actualiza la calificación del cliente para una solicitud de viaje.
     Solo el conductor asignado puede calificar al cliente.
+    Solo se permite calificar cuando el viaje está en estado PAID.
     """
     user_id = request.state.user_id
     return update_client_rating_service(session, id_client_request, client_rating, user_id)
@@ -485,6 +492,7 @@ def update_client_rating(
 
 @router.patch("/updateDriverRating", description="""
 Actualiza la calificación del conductor para una solicitud de viaje. Solo el cliente puede calificar al conductor.
+Solo se permite calificar cuando el viaje está en estado PAID.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje.
@@ -504,6 +512,7 @@ def update_driver_rating(
     """
     Actualiza la calificación del conductor para una solicitud de viaje.
     Solo el cliente puede calificar al conductor.
+    Solo se permite calificar cuando el viaje está en estado PAID.
     """
     user_id = request.state.user_id
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)
@@ -629,7 +638,7 @@ Devuelve un mensaje de éxito o error.
 def update_status_by_driver(
     request: Request,
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
+                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
 ):
@@ -642,12 +651,11 @@ def update_status_by_driver(
     return update_status_by_driver_service(session, id_client_request, status, user_id)
 
 
-@router.patch("/updateStatusByClient", description="""
-Actualiza el estado de una solicitud de viaje, solo permitido para clientes (CLIENT).
+@router.patch("/clientCanceled", description="""
+Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
 
 **Parámetros:**
-- `id_client_request`: ID de la solicitud de viaje.
-- `status`: Nuevo estado a asignar (solo CANCELLED, PAID).
+- `id_client_request`: ID de la solicitud de viaje a cancelar.
 
 **Respuesta:**
 Devuelve un mensaje de éxito o error.
@@ -655,14 +663,41 @@ Devuelve un mensaje de éxito o error.
 def update_status_by_client(
     request: Request,
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
-    status: str = Body(..., description="Nuevo estado a asignar"),
+                                   description="ID de la solicitud de viaje a cancelar"),
     session: Session = Depends(get_session)
 ):
     """
-    Permite al cliente cambiar el estado de la solicitud solo a los estados permitidos.
+    Permite al cliente cancelar su solicitud de viaje.
+    Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
     """
     user_id = getattr(request.state, 'user_id', None)
     if user_id is None:
         raise HTTPException(status_code=401, detail="No autenticado")
-    return update_status_by_client_service(session, id_client_request, status, user_id)
+    return client_canceled_service(session, id_client_request, user_id)
+
+
+@router.patch("/updateReview", description="""
+Actualiza el review de una solicitud de viaje. Solo el cliente puede agregar un review.
+Solo se permite agregar un review cuando el viaje está en estado PAID.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `review`: Review a agregar (máximo 255 caracteres).
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def update_review(
+    request: Request,
+    id_client_request: UUID = Body(...,
+                                   description="ID de la solicitud de viaje"),
+    review: str = Body(...,
+                       description="Review a agregar (máximo 255 caracteres)"),
+    session: Session = Depends(get_session)
+):
+    """
+    Permite al cliente agregar un review a su solicitud de viaje.
+    Solo se permite cuando el viaje está en estado PAID.
+    """
+    user_id = request.state.user_id
+    return update_review_service(session, id_client_request, review, user_id)
