@@ -818,3 +818,57 @@ def update_status_to_paid_service(session: Session, id_client_request: int, user
     client_request.updated_at = datetime.utcnow()
     session.commit()
     return {"success": True, "message": "Pago registrado correctamente"}
+
+
+def update_review_service(session: Session, id_client_request: UUID, review: str, user_id: UUID):
+    """
+    Permite al cliente actualizar el review de una solicitud específica.
+
+    Validaciones:
+    1. La solicitud debe existir
+    2. La solicitud debe estar en estado PAID
+    3. El usuario debe ser el cliente que creó esta solicitud específica
+    4. El review no debe exceder 255 caracteres
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud a actualizar
+        review: Review a asignar (máximo 255 caracteres)
+        user_id: ID del usuario que intenta actualizar (debe ser el cliente que creó la solicitud)
+
+    Returns:
+        Mensaje de éxito si el review se actualiza correctamente
+
+    Raises:
+        HTTPException(404): Si la solicitud no existe
+        HTTPException(400): Si la solicitud no está en estado PAID o el review excede el límite
+        HTTPException(403): Si el usuario no es el cliente que creó esta solicitud
+    """
+    # Validar longitud del review
+    if review and len(review) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="El review no puede exceder los 255 caracteres"
+        )
+
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Validar que el estado sea PAID
+    if client_request.status != StatusEnum.PAID:
+        raise HTTPException(
+            status_code=400, detail="Solo se puede agregar un review cuando el viaje está PAID")
+
+    # Validar que el usuario es el cliente que creó esta solicitud
+    if client_request.id_client != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para actualizar esta solicitud. Solo el cliente que creó esta solicitud puede agregar un review."
+        )
+
+    client_request.review = review
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Review actualizado correctamente"}

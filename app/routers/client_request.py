@@ -16,7 +16,8 @@ from app.services.client_requests_service import (
     update_driver_rating_service,
     get_nearby_drivers_service,
     update_status_by_driver_service,
-    client_canceled_service
+    client_canceled_service,
+    update_review_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -673,3 +674,30 @@ def update_status_by_client(
     if user_id is None:
         raise HTTPException(status_code=401, detail="No autenticado")
     return client_canceled_service(session, id_client_request, user_id)
+
+
+@router.patch("/updateReview", description="""
+Actualiza el review de una solicitud de viaje. Solo el cliente puede agregar un review.
+Solo se permite agregar un review cuando el viaje está en estado PAID.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje.
+- `review`: Review a agregar (máximo 255 caracteres).
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def update_review(
+    request: Request,
+    id_client_request: UUID = Body(...,
+                                   description="ID de la solicitud de viaje"),
+    review: str = Body(...,
+                       description="Review a agregar (máximo 255 caracteres)"),
+    session: Session = Depends(get_session)
+):
+    """
+    Permite al cliente agregar un review a su solicitud de viaje.
+    Solo se permite cuando el viaje está en estado PAID.
+    """
+    user_id = request.state.user_id
+    return update_review_service(session, id_client_request, review, user_id)
