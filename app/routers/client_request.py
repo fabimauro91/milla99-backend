@@ -16,7 +16,8 @@ from app.services.client_requests_service import (
     update_driver_rating_service,
     get_nearby_drivers_service,
     update_status_by_driver_service,
-    update_status_by_client_service
+    update_status_by_client_service,
+    client_canceled_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -629,7 +630,7 @@ Devuelve un mensaje de éxito o error.
 def update_status_by_driver(
     request: Request,
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
+                                   description="ID de la solicitud de viaje"),
     status: str = Body(..., description="Nuevo estado a asignar"),
     session: Session = Depends(get_session)
 ):
@@ -642,12 +643,11 @@ def update_status_by_driver(
     return update_status_by_driver_service(session, id_client_request, status, user_id)
 
 
-@router.patch("/updateStatusByClient", description="""
-Actualiza el estado de una solicitud de viaje, solo permitido para clientes (CLIENT).
+@router.patch("/clientcanceled", description="""
+Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
 
 **Parámetros:**
-- `id_client_request`: ID de la solicitud de viaje.
-- `status`: Nuevo estado a asignar (solo CANCELLED, PAID).
+- `id_client_request`: ID de la solicitud de viaje a cancelar.
 
 **Respuesta:**
 Devuelve un mensaje de éxito o error.
@@ -655,14 +655,14 @@ Devuelve un mensaje de éxito o error.
 def update_status_by_client(
     request: Request,
     id_client_request: UUID = Body(...,
-                                  description="ID de la solicitud de viaje"),
-    status: str = Body(..., description="Nuevo estado a asignar"),
+                                   description="ID de la solicitud de viaje a cancelar"),
     session: Session = Depends(get_session)
 ):
     """
-    Permite al cliente cambiar el estado de la solicitud solo a los estados permitidos.
+    Permite al cliente cancelar su solicitud de viaje.
+    Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
     """
     user_id = getattr(request.state, 'user_id', None)
     if user_id is None:
         raise HTTPException(status_code=401, detail="No autenticado")
-    return update_status_by_client_service(session, id_client_request, status, user_id)
+    return client_canceled_service(session, id_client_request, user_id)

@@ -540,7 +540,8 @@ class ClientRequestStateMachine:
         StatusEnum.ACCEPTED: {StatusEnum.ON_THE_WAY},
         StatusEnum.ON_THE_WAY: {StatusEnum.ARRIVED},
         StatusEnum.ARRIVED: {StatusEnum.TRAVELLING},
-        StatusEnum.TRAVELLING: {StatusEnum.FINISHED}
+        StatusEnum.TRAVELLING: {StatusEnum.FINISHED},
+        StatusEnum.FINISHED: {StatusEnum.PAID}
     }
 
     CLIENT_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
@@ -554,9 +555,7 @@ class ClientRequestStateMachine:
         """
         Verifica si la transición de estado es válida para el rol especificado.
         """
-        # PAID es un estado especial que solo se puede establecer después de un pago exitoso
-        if new_state == StatusEnum.PAID:
-            return False  # No se permite cambiar directamente a PAID
+        # PAID ahora se permite desde FINISHED (para el rol DRIVER) (se quita la restricción anterior)
 
         # Si el nuevo estado es CANCELLED, verificar que el estado actual lo permita
         if new_state == StatusEnum.CANCELLED:
@@ -630,17 +629,11 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
     return {"success": True, "message": "Status actualizado correctamente"}
 
 
-def update_status_by_client_service(session: Session, id_client_request: int, status: str, user_id: int):
+def client_canceled_service(session: Session, id_client_request: int, user_id: int):
     """
-    Permite al cliente cambiar el estado de la solicitud solo a los estados permitidos.
+    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) únicamente si la solicitud está en CREATED o ACCEPTED.
     """
-    try:
-        new_status = StatusEnum(status)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Estado inválido. Estados válidos: {[s.value for s in StatusEnum]}")
-
-    # Validar rol del cliente
+    # Validar rol del cliente (que sea CLIENT y esté aprobado)
     user_role = session.query(UserHasRole).filter(
         UserHasRole.id_user == user_id,
         UserHasRole.id_rol == "CLIENT",
@@ -648,33 +641,29 @@ def update_status_by_client_service(session: Session, id_client_request: int, st
     ).first()
     if not user_role:
         raise HTTPException(
-            status_code=403, detail="Solo clientes aprobados pueden cambiar este estado")
+            status_code=403, detail="Solo clientes aprobados pueden cancelar su solicitud.")
 
-    # Obtener la solicitud actual
+    # Obtener la solicitud actual (por su id_client_request)
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
-        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada.")
 
-    # Validar que el cliente sea el dueño de la solicitud
-    if client_request.id_client != user_id:
+    # Validar que el cliente sea el dueño de la solicitud (es decir, que client_request.id_client == user_id)
+    if (client_request.id_client != user_id):
         raise HTTPException(
-            status_code=403, detail="Solo el cliente dueño de la solicitud puede cambiar el estado")
+            status_code=403, detail="Solo el cliente dueño de la solicitud puede cancelarla.")
 
-    # Validar la transición de estado
-    if not ClientRequestStateMachine.can_transition(client_request.status, new_status, "CLIENT"):
-        allowed = ClientRequestStateMachine.get_allowed_transitions(
-            client_request.status, "CLIENT")
+    # Validar que la solicitud esté en CREATED o ACCEPTED (es decir, que su estado actual esté en CANCELLABLE_STATES)
+    if (client_request.status not in ClientRequestStateMachine.CANCELLABLE_STATES):
         raise HTTPException(
-            status_code=400,
-            detail=f"Transición de estado no permitida. Desde {client_request.status.value} solo se puede cambiar a: {', '.join(s.value for s in allowed)}"
-        )
+            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED o ACCEPTED).")
 
-    # Actualizar el estado
-    client_request.status = new_status
+    # (Forzar) Actualizar el estado a CANCELLED (sin validar transición, ya que se verifica que el estado actual esté en CANCELLABLE_STATES)
+    client_request.status = StatusEnum.CANCELLED
     client_request.updated_at = datetime.utcnow()
     session.commit()
-    return {"success": True, "message": "Status actualizado correctamente"}
+    return {"success": True, "message": "Solicitud cancelada (estado actualizado a CANCELLED) correctamente."}
 
 
 def update_status_to_paid_service(session: Session, id_client_request: int, user_id: int):
