@@ -18,6 +18,7 @@ from app.utils.geo_utils import wkb_to_coords
 from app.models.type_service import TypeService
 from uuid import UUID
 from typing import Dict, Set
+from app.models.payment_method import PaymentMethod
 
 
 def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUID):
@@ -35,7 +36,9 @@ def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUI
         driver_rating=data.driver_rating,
         pickup_position=pickup_point,
         destination_position=destination_point,
-        type_service_id=data.type_service_id
+        type_service_id=data.type_service_id,
+        review=data.review,
+        payment_method_id=data.payment_method_id
     )
     db.add(db_obj)
     db.commit()
@@ -226,6 +229,17 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
                     "vehicle_type_id": vi.vehicle_type_id
                 }
 
+    # Buscar información del método de pago si existe
+    payment_method = None
+    if cr.payment_method_id:
+        pm = session.query(PaymentMethod).filter(
+            PaymentMethod.id == cr.payment_method_id).first()
+        if pm:
+            payment_method = {
+                "id": pm.id,
+                "name": pm.name
+            }
+
     return {
         "id": cr.id,
         "status": str(cr.status),
@@ -239,7 +253,9 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
         "pickup_position": wkb_to_coords(cr.pickup_position),
         "destination_position": wkb_to_coords(cr.destination_position),
         "driver_info": driver_info,
-        "vehicle_info": vehicle_info
+        "vehicle_info": vehicle_info,
+        "review": cr.review,
+        "payment_method": payment_method
     }
 
 
@@ -249,11 +265,27 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
     Solo devuelve las solicitudes del usuario autenticado.
     """
     from app.models.client_request import ClientRequest
+    from app.models.payment_method import PaymentMethod
+
+    # Obtener las solicitudes con sus métodos de pago
     results = session.query(ClientRequest).filter(
         ClientRequest.status == status,
         ClientRequest.id_client == user_id  # Filtrar por el usuario autenticado
     ).all()
-    # Puedes personalizar la respuesta según lo que quieras mostrar
+
+    # Crear un diccionario de métodos de pago para evitar múltiples consultas
+    payment_methods = {}
+    for cr in results:
+        if cr.payment_method_id and cr.payment_method_id not in payment_methods:
+            pm = session.query(PaymentMethod).filter(
+                PaymentMethod.id == cr.payment_method_id).first()
+            if pm:
+                payment_methods[cr.payment_method_id] = {
+                    "id": pm.id,
+                    "name": pm.name
+                }
+
+    # Construir la respuesta
     return [
         {
             "id": cr.id,
@@ -269,7 +301,9 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
             "pickup_position": wkb_to_coords(cr.pickup_position),
             "destination_position": wkb_to_coords(cr.destination_position),
             "created_at": cr.created_at.isoformat(),
-            "updated_at": cr.updated_at.isoformat()
+            "updated_at": cr.updated_at.isoformat(),
+            "review": cr.review,
+            "payment_method": payment_methods.get(cr.payment_method_id) if cr.payment_method_id else None
         }
         for cr in results
     ]

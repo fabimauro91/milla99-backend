@@ -23,7 +23,9 @@ class ClientRequestCreate(SQLModel):
     destination_lng: float
     type_service_id: int  # Nuevo campo
     review: Optional[str] = None  # Nuevo campo
-    payment_method_id: Optional[int] = None  # Nuevo campo
+    payment_method_id: Optional[int] = Field(
+        # Nuevo campo con valor por defecto
+        default=1, description="ID del método de pago (1=cash, 2=nequi, 3=daviplata). Por defecto es 1 (cash)")
 
 
 class StatusEnum(str, enum.Enum):
