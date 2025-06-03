@@ -16,7 +16,6 @@ from app.services.client_requests_service import (
     update_driver_rating_service,
     get_nearby_drivers_service,
     update_status_by_driver_service,
-    update_status_by_client_service,
     client_canceled_service
 )
 from sqlalchemy.orm import Session
@@ -647,7 +646,7 @@ def update_status_by_driver(
     return update_status_by_driver_service(session, id_client_request, status, user_id)
 
 
-@router.patch("/clientcanceled", description="""
+@router.patch("/clientCanceled", description="""
 Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
 
 **Parámetros:**
