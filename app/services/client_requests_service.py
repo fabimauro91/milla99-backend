@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.driver_info import DriverInfo
 from app.models.vehicle_info import VehicleInfo
+from app.services.driver_trip_offer_service import get_average_rating
 from sqlalchemy.orm import selectinload
 import traceback
 from app.utils.geo_utils import wkb_to_coords
@@ -192,12 +193,14 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
         )
 
     # Buscar el usuario que la creó
-    user = session.query(User).filter(User.id == cr.id_client).first()
+    user = session.query(User).filter(User.id == cr.id_client).first() 
+    average_rating = get_average_rating(session,"passenger", user.id) if user else 0.0
     client_data = {
         "id": user.id,
         "full_name": user.full_name,
         "phone_number": user.phone_number,
-        "country_code": user.country_code
+        "country_code": user.country_code,
+        "average_rating": average_rating
     } if user else None
 
     # Buscar info del conductor asignado (si existe)

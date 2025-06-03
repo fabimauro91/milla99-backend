@@ -228,7 +228,7 @@ async def update_driver(
         DriverInfo.user_id == user_id)).first()
     if not driver_info:
         raise HTTPException(
-            status_code=404, detail="No se encontró información de conductor para este usuario.")
+            status_code=404, detail="No se encontró información de conductor para este usuario.") 
     driver_id = driver_info.id
 
     # Buscar la información del vehículo asociada al conductor
@@ -436,8 +436,7 @@ def get_driver_me(
     # Obtener el user_id desde el token
     user_id = request.state.user_id
     # Buscar el driver_info correspondiente a este usuario
-    driver_info = session.exec(select(DriverInfo).where(
-        DriverInfo.user_id == user_id)).first()
+    driver_info = session.query(DriverInfo).filter(DriverInfo.user_id == user_id).first()
     if not driver_info:
         raise HTTPException(
             status_code=404, detail="No se encontró información de conductor para este usuario.")
