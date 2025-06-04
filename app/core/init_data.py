@@ -1211,6 +1211,7 @@ def init_project_settings():
             driver_saving="0.01",
             company="0.04",
             bonus="20000",
+            amount="50000",  # Monto mínimo para retiro de ahorros
             created_at=datetime(2025, 5, 20, 15, 35, 26),
             updated_at=datetime(2025, 5, 20, 15, 35, 26)
         )
