@@ -268,7 +268,6 @@ Crea una nueva solicitud de viaje para un cliente.
 - `destination_description`: Descripción del destino (opcional).
 - `type_service_id`: ID del tipo de servicio (obligatorio, por ejemplo 1 para Car Ride, 2 para Motorcycle Ride)
 - `payment_method_id`: ID del método de pago (opcional, 1 para cash, 2 para nequi, 3 para daviplata)
-- `review`: Comentario o reseña (opcional, máximo 255 caracteres)
 
 **Respuesta:**
 Devuelve la solicitud de viaje creada con toda su información.
@@ -286,12 +285,10 @@ def create_request(
             "destination_lat": 4.702468,
             "destination_lng": -74.109776,
             "type_service_id": 1,  # 1 Car or 2 Motorcycle
-            "payment_method_id": 1,  # 1 cash, 2 nequi, 3 daviplata
-            "review": "Viaje rápido y seguro"
+            "payment_method_id": 1  # 1 cash, 2 nequi, 3 daviplata
         }
     ),
-    session: Session = Depends(get_session),
-    # credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    session: Session = Depends(get_session)
 ):
     try:
         user_id = request.state.user_id

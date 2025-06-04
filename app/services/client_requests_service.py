@@ -37,7 +37,6 @@ def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUI
         pickup_position=pickup_point,
         destination_position=destination_point,
         type_service_id=data.type_service_id,
-        review=data.review,
         payment_method_id=data.payment_method_id
     )
     db.add(db_obj)

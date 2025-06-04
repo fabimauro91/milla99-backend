@@ -21,8 +21,7 @@ class ClientRequestCreate(SQLModel):
     pickup_lng: float
     destination_lat: float
     destination_lng: float
-    type_service_id: int  # Nuevo campo
-    review: Optional[str] = None  # Nuevo campo
+    type_service_id: int
     payment_method_id: Optional[int] = Field(
         # Nuevo campo con valor por defecto
         default=1, description="ID del método de pago (1=cash, 2=nequi, 3=daviplata). Por defecto es 1 (cash)")
