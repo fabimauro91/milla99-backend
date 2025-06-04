@@ -228,7 +228,15 @@ def get_nearby_client_requests(
 Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estado enviado en el parámetro.
 
 **Parámetros:**
-- `status`: Estado por el cual filtrar las solicitudes.
+- `status`: Estado por el cual filtrar las solicitudes. Debe ser uno de:
+  - `CREATED`: Solicitud recién creada, esperando conductor
+  - `ACCEPTED`: Conductor asignado, esperando inicio del viaje
+  - `ON_THE_WAY`: Conductor en camino al punto de recogida
+  - `ARRIVED`: Conductor llegó al punto de recogida
+  - `TRAVELLING`: Viaje en curso
+  - `FINISHED`: Viaje finalizado, pendiente de pago
+  - `PAID`: Viaje pagado y completado
+  - `CANCELLED`: Solicitud cancelada
 
 **Respuesta:**
 Devuelve una lista de solicitudes de viaje del usuario autenticado con el estado especificado.
@@ -236,7 +244,7 @@ Devuelve una lista de solicitudes de viaje del usuario autenticado con el estado
 def get_client_requests_by_status(
     request: Request,
     session: SessionDep,
-    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Debe ser uno de: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, CANCELLED")
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Estados válidos: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID, CANCELLED")
 ):
     """
     Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estatus enviado en el parámetro.
