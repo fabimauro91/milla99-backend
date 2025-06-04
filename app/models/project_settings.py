@@ -30,3 +30,15 @@ class ProjectSettings(ProjectSettingsBase, table=True):
 
 class ProjectSettingsCreate(ProjectSettingsBase):
     pass
+
+class ProjectSettingsUpdate(SQLModel):
+    driver_dist: Optional[str] = None
+    referral_1: Optional[str] = None
+    referral_2: Optional[str] = None
+    referral_3: Optional[str] = None
+    referral_4: Optional[str] = None
+    referral_5: Optional[str] = None
+    driver_saving: Optional[str] = None
+    company: Optional[str] = None
+    bonus: Optional[str] = None
+    amount: Optional[str] = None

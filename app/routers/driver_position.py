@@ -156,7 +156,7 @@ def get_nearby_drivers(
         setting = session.get(ProjectSettings, 1)
         if setting is not None:
             try:
-                max_distance = float(setting.value)
+                max_distance = float(setting.driver_dist)
             except ValueError:
                 max_distance = 5  # fallback si el valor no es convertible
         else:

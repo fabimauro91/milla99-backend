@@ -1,5 +1,6 @@
-from fastapi import APIRouter, status, HTTPException, Query
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from typing import Optional, List
+from app.core.dependencies.admin_auth import get_current_admin
 from app.services.config_service_value_service import ConfigServiceValueService  # Importación absoluta
 from app.core.db import SessionDep  # Importación absoluta
 from app.models.config_service_value import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse,ConfigServiceValue
@@ -15,7 +16,7 @@ async def update_config_service_value(
     min_value: Optional[float] = Query(None, description="Valor por minuto"),
     tarifa_value: Optional[float] = Query(None, description="Valor de tarifa base"),
     weight_value: Optional[float] = Query(None, description="Valor de peso"),
-    
+    current_admin=Depends(get_current_admin)
 ):
     """
     Actualiza la configuración de tarifas  usando el ID de VehicleType.
@@ -65,7 +66,7 @@ async def update_config_service_value(
         )
     
 @router.get("/", response_model=List[ConfigServiceValue])
-def get_all_config_service_values(session: SessionDep):
+def get_all_config_service_values(session: SessionDep,current_admin=Depends(get_current_admin)):
     """
     Obtiene todos los registros de ConfigServiceValue
     """

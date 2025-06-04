@@ -43,4 +43,4 @@ class DriverInfoUpdate(SQLModel):
     last_name: Optional[str] = None
     birth_date: Optional[date] = None
     email: Optional[str] = None
-    selfie_url: Optional[str] = None  # Eliminado
+    # selfie_url: Optional[str] = None  # Eliminado
