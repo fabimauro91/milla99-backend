@@ -4,6 +4,7 @@ from app.models.transaction import Transaction, TransactionType
 from app.utils.withdrawal_utils import assert_can_withdraw, InsufficientFundsException
 from app.models.verify_mount import VerifyMount
 from fastapi import HTTPException
+from app.utils.balance_notifications import check_and_notify_low_balance
 
 
 class WithdrawalService:
@@ -31,6 +32,9 @@ class WithdrawalService:
         if verify_mount:
             verify_mount.mount -= amount
             self.session.add(verify_mount)
+            # Verificar saldo bajo usando la función utilitaria
+            check_and_notify_low_balance(
+                self.session, user_id, verify_mount.mount)
 
         # Crear el retiro en estado pending
         withdrawal = Withdrawal(user_id=user_id, amount=amount,
