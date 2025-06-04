@@ -5,19 +5,23 @@ import base64
 import os
 from typing import Union
 import logging
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class EncryptionService:
     def __init__(self):
-        # La clave de encriptación debe estar en variables de entorno en producción
-        self._key = os.getenv('ENCRYPTION_KEY')
+        # Intentar obtener la clave de la configuración primero
+        self._key = settings.ENCRYPTION_KEY
         if not self._key:
-            # En desarrollo, generamos una clave (NO USAR EN PRODUCCIÓN)
-            self._key = Fernet.generate_key()
-            logger.warning(
-                "Using generated encryption key. In production, set ENCRYPTION_KEY environment variable.")
+            # Si no está en la configuración, intentar obtenerla de variables de entorno
+            self._key = os.getenv('ENCRYPTION_KEY')
+            if not self._key:
+                # En desarrollo, generamos una clave (NO USAR EN PRODUCCIÓN)
+                self._key = Fernet.generate_key()
+                logger.warning(
+                    "Using generated encryption key. In production, set ENCRYPTION_KEY in settings or environment variable.")
 
         # Convertir la clave a bytes si es string
         if isinstance(self._key, str):

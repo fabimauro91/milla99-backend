@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Configuración de la base de datos
-    #DATABASE_URL: str = "sqlite:///./milla99.db"
+    # DATABASE_URL: str = "sqlite:///./milla99.db"
     DATABASE_URL: str = "mysql+pymysql://root:juandiego@localhost:3307/milla99"
     # Configuración CORS
     CORS_ORIGINS: List[str] = ["*"]
@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "efdfd804e424be4cd3d4c94f7769da129c45ff2a4a7a1c365e8641715f621000"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
+
+    # Clave de encriptación para datos sensibles (se toma del .env)
+    ENCRYPTION_KEY: str
 
     CLICK_SEND_USERNAME: str
     CLICK_SEND_PASSWORD: str

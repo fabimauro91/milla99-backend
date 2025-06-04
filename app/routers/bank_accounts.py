@@ -8,6 +8,8 @@ from app.models.bank_account import (
 from app.services.bank_account_service import BankAccountService
 from typing import List
 from uuid import UUID
+from app.core.dependencies.auth import get_current_user
+from app.models.user_has_roles import UserHasRole, RoleStatus
 
 router = APIRouter(prefix="/bank-accounts", tags=["bank-accounts"])
 bearer_scheme = HTTPBearer()
@@ -18,30 +20,52 @@ def create_bank_account(
     request: Request,
     bank_account: BankAccountCreate,
     session: Session = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+    current_user=Depends(get_current_user)
 ):
     """
     Crea una nueva cuenta bancaria para el usuario autenticado.
     Los datos sensibles (número de cuenta y cédula) se encriptan antes de guardar.
     """
     user_id = request.state.user_id
+    # Verificar que el usuario es DRIVER
+    user_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.id_rol == "DRIVER",
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+    if not user_role:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo los conductores aprobados pueden registrar cuentas bancarias"
+        )
     service = BankAccountService(session)
     return service.create_bank_account(user_id, bank_account)
 
 
-# @router.get("/", response_model=List[BankAccountRead])
-# def list_bank_accounts(
-#     request: Request,
-#     session: Session = Depends(get_session),
-#     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
-# ):
-#     """
-#     Lista todas las cuentas bancarias del usuario autenticado.
-#     Los datos sensibles se devuelven enmascarados.
-#     """
-#     user_id = request.state.user_id
-#     service = BankAccountService(session)
-#     return service.get_bank_accounts(user_id)
+@router.get("/me", response_model=List[BankAccountRead])
+def list_my_bank_accounts(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    """
+    Lista todas las cuentas bancarias del usuario autenticado.
+    Los datos sensibles se devuelven enmascarados.
+    """
+    user_id = request.state.user_id
+    # Verificar que el usuario es DRIVER
+    user_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.id_rol == "DRIVER",
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+    if not user_role:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo los conductores aprobados pueden ver sus cuentas bancarias"
+        )
+    service = BankAccountService(session)
+    return service.get_bank_accounts(user_id)
 
 
 # @router.get("/{account_id}", response_model=BankAccountRead)

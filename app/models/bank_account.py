@@ -55,9 +55,17 @@ class BankAccountRead(BankAccountBase):
     def from_orm(cls, obj):
         """Convierte el objeto ORM a modelo de lectura con datos enmascarados"""
         data = super().from_orm(obj)
-        # Enmascarar datos sensibles
-        data.account_number = f"****{obj.account_number[-4:]}" if obj.account_number else None
-        data.identification_number = f"***{obj.identification_number[-4:]}" if obj.identification_number else None
+        # Desencriptar y luego enmascarar datos sensibles
+        try:
+            decrypted_account = obj.get_decrypted_account_number()
+            decrypted_id = obj.get_decrypted_identification_number()
+            # Enmascarar los últimos 4 dígitos
+            data.account_number = f"****{decrypted_account[-4:]}" if decrypted_account else None
+            data.identification_number = f"***{decrypted_id[-4:]}" if decrypted_id else None
+        except Exception as e:
+            # Si hay error al desencriptar, mostrar todo enmascarado
+            data.account_number = "**********"
+            data.identification_number = "**********"
         return data
 
 
