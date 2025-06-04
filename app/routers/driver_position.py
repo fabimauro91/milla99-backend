@@ -174,7 +174,21 @@ def get_nearby_drivers(
 )
 def get_drivers_by_client_request(
     id_client_request: UUID,
-    session: Session = Depends(get_session)
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
 ):
+    user_id = request.state.user_id
+    # Consultar el rol real del usuario en la base de datos
+    user_has_role = session.query(UserHasRole).filter(
+        UserHasRole.id_user == user_id,
+        UserHasRole.status == RoleStatus.APPROVED
+    ).first()
+    if not user_has_role:
+        print(f"[ERROR] El usuario {user_id} no tiene rol aprobado")
+        raise HTTPException(
+            status_code=403, detail="No tiene rol asignado o aprobado")
+    user_role = user_has_role.id_rol  # 'DRIVER' o 'CLIENT'
+    print(f"[DEBUG] user_id: {user_id}, user_role: {user_role}")
     service = DriverPositionService(session)
-    return service.get_nearby_drivers_by_client_request(id_client_request)
+    return service.get_nearby_drivers_by_client_request(id_client_request, user_id, user_role)

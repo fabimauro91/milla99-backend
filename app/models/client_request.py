@@ -21,7 +21,10 @@ class ClientRequestCreate(SQLModel):
     pickup_lng: float
     destination_lat: float
     destination_lng: float
-    type_service_id: int  # Nuevo campo
+    type_service_id: int
+    payment_method_id: Optional[int] = Field(
+        # Nuevo campo con valor por defecto
+        default=1, description="ID del método de pago (1=cash, 2=nequi, 3=daviplata). Por defecto es 1 (cash)")
 
 
 class StatusEnum(str, enum.Enum):
@@ -41,18 +44,22 @@ class StatusEnum(str, enum.Enum):
 # Modelo de base de datos
 class ClientRequest(SQLModel, table=True):
     __tablename__ = "client_request"
-    
-    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+
+    id: Optional[UUID] = Field(
+        default_factory=uuid4, primary_key=True, unique=True)
     id_client: UUID = Field(foreign_key="user.id")
     id_driver_assigned: Optional[UUID] = Field(
         default=None, foreign_key="user.id")
     type_service_id: int = Field(
         foreign_key="type_service.id")  # Nueva relación
+    payment_method_id: Optional[int] = Field(
+        default=None, foreign_key="payment_method.id")  # Nuevo campo
     fare_offered: Optional[float] = Field(default=None)
     fare_assigned: Optional[float] = Field(default=None)
     pickup_description: Optional[str] = Field(default=None, max_length=255)
     destination_description: Optional[str] = Field(
         default=None, max_length=255)
+    review: Optional[str] = Field(default=None, max_length=255)  # Nuevo campo
     client_rating: Optional[float] = Field(default=None)
     driver_rating: Optional[float] = Field(default=None)
     status: StatusEnum = Field(
@@ -64,7 +71,8 @@ class ClientRequest(SQLModel, table=True):
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
     destination_position: Optional[object] = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326)))
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -81,10 +89,14 @@ class ClientRequest(SQLModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": "[ClientRequest.id_driver_assigned]"}
     )
-    transactions: List["Transaction"] = Relationship(back_populates="client_request")
-    company_accounts: List["CompanyAccount"] = Relationship(back_populates="client_request")
+    transactions: List["Transaction"] = Relationship(
+        back_populates="client_request")
+    company_accounts: List["CompanyAccount"] = Relationship(
+        back_populates="client_request")
 
     type_service: "TypeService" = Relationship(
+        back_populates="client_requests")  # Nueva relación
+    payment_method: Optional["PaymentMethod"] = Relationship(
         back_populates="client_requests")  # Nueva relación
 
 

@@ -33,6 +33,7 @@ from shapely.geometry import Point
 from uuid import UUID
 from app.models.administrador import Administrador
 from passlib.hash import bcrypt
+from app.models.payment_method import PaymentMethod
 
 
 def uuid_prueba(num: int) -> UUID:
@@ -438,151 +439,151 @@ def init_additional_clients():
         # Lista de clientes a crear con sus IDs específicos
         clients_data = [
             {
-                
+
                 "full_name": "María García",
                 "phone_number": "3001111111",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Juan Pérez",
                 "phone_number": "3002222222",
                 "selfie_url": None
             },
             {
-                
+
                 "full_name": "Ana Martínez",
                 "phone_number": "3003333333",
                 "selfie_url": None
             },
             {
-                
+
                 "full_name": "Carlos Rodríguez",
                 "phone_number": "3004444444",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Jhonatan Restrepo",
                 "phone_number": "3004442444",
                 "selfie_url": None
             },
             {
-                
+
                 "full_name": "Maricela Muños",
                 "phone_number": "3004444445",
                 "selfie_url": None
             },
             {
-                
+
                 "full_name": "Daniel Carrascal",
                 "phone_number": "3004444446",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Carlos Valderrama",
                 "phone_number": "3004444447",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Carmenza Coyazos",
                 "phone_number": "3004444448",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "juan hoyos",
                 "phone_number": "3009644448",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Marcela Jimenez",
                 "phone_number": "3004444449",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Paola Roa",
                 "phone_number": "3004994449",
                 "selfie_url": None
             },
             {
-        
+
                 "full_name": "Jason Avarez",
                 "phone_number": "3004884450",
                 "selfie_url": None
             },
             {
-        
+
                 "full_name": "Pedro Fernandez",
                 "phone_number": "3004444450",
                 "selfie_url": None
             },
             {
-             
+
                 "full_name": "Maritza Rodrigez",
                 "phone_number": "3004444451",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Estephany Pelaez",
                 "phone_number": "3004444452",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Angela ceballos",
                 "phone_number": "3334444452",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Diego Mojica",
                 "phone_number": "3004444453",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Diana Leane",
                 "phone_number": "3004444454",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Taliana Vega",
                 "phone_number": "3004444455",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Paulina Vargas",
                 "phone_number": "3004444456",
                 "selfie_url": None
             },
             {
-               
+
                 "full_name": "Angelina Fernandez",
                 "phone_number": "3004444457",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Cecilia Castrillon",
                 "phone_number": "3004444458",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Paulo Coelo",
                 "phone_number": "3004444459",
                 "selfie_url": None
             },
             {
-              
+
                 "full_name": "Cabriel Garcia",
                 "phone_number": "3004444460",
                 "selfie_url": None
@@ -596,13 +597,13 @@ def init_additional_clients():
         for client_data in clients_data:
             # Verificar si el cliente ya existe por ID específico
             existing_user = session.exec(select(User).where(
-                 User.phone_number == client_data["phone_number"]
-             )).first()
+                User.phone_number == client_data["phone_number"]
+            )).first()
 
             if not existing_user:
-                    # Crear nuevo usuario con ID específico
+                # Crear nuevo usuario con ID específico
                 user = User(
-                    #id=uuid_prueba(client_data["id"]),  # Usar uuid_prueba con el ID específico
+                    # id=uuid_prueba(client_data["id"]),  # Usar uuid_prueba con el ID específico
                     full_name=client_data["full_name"],
                     country_code="+57",
                     phone_number=client_data["phone_number"],
@@ -812,13 +813,13 @@ def init_additional_drivers():
                 session.refresh(driver_info)
 
                 transaction = Transaction(
-                user_id=user.id,
-                income=2000,
-                expense=0,
-                type="BONUS",
-                client_request_id=None
+                    user_id=user.id,
+                    income=2000,
+                    expense=0,
+                    type="BONUS",
+                    client_request_id=None
                 )
-                
+
                 session.add(transaction)
                 session.commit()
                 session.refresh(transaction)
@@ -913,7 +914,8 @@ def init_client_requests_and_driver_positions():
             # Verificar si ya existen solicitudes
             existing_requests = session.exec(select(ClientRequest)).first()
             if existing_requests:
-                print("Ya existen solicitudes en la base de datos, omitiendo creación de nuevas solicitudes.")
+                print(
+                    "Ya existen solicitudes en la base de datos, omitiendo creación de nuevas solicitudes.")
                 return
 
             # Coordenadas de prueba en Bogotá
@@ -1135,6 +1137,7 @@ def init_client_requests_and_driver_positions():
             session.rollback()
             raise
 
+
 def init_referral_data():
     """Inicializa los datos por defecto para la tabla Referral usando UUIDs"""
     with Session(engine) as session:
@@ -1168,8 +1171,10 @@ def init_referral_data():
             return
 
         for data in referral_data:
-            user = session.exec(select(User).where(User.phone_number == data["user_phone"])).first()
-            referrer = session.exec(select(User).where(User.phone_number == data["referrer_phone"])).first()
+            user = session.exec(select(User).where(
+                User.phone_number == data["user_phone"])).first()
+            referrer = session.exec(select(User).where(
+                User.phone_number == data["referrer_phone"])).first()
 
             if user and referrer:
                 referral = Referral(
@@ -1178,9 +1183,11 @@ def init_referral_data():
                 )
                 session.add(referral)
             else:
-                print(f"No se pudo crear referido: usuario {data['user_phone']} o referente {data['referrer_phone']} no existe.")
+                print(
+                    f"No se pudo crear referido: usuario {data['user_phone']} o referente {data['referrer_phone']} no existe.")
 
         session.commit()
+
 
 def init_project_settings():
     """Inicializa los datos por defecto para la tabla ProjectSettings"""
@@ -1190,7 +1197,7 @@ def init_project_settings():
         # Verificar si ya existen registros
         existing_settings = session.exec(select(ProjectSettings)).first()
         if existing_settings:
-            #print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
+            # print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
             return
 
         # Datos por defecto (un solo registro)
@@ -1204,12 +1211,13 @@ def init_project_settings():
             driver_saving="0.01",
             company="0.04",
             bonus="20000",
+            amount="50000",  # Monto mínimo para retiro de ahorros
             created_at=datetime(2025, 5, 20, 15, 35, 26),
             updated_at=datetime(2025, 5, 20, 15, 35, 26)
         )
         session.add(project_setting)
         session.commit()
-        #print("Datos de ProjectSettings inicializados correctamente.")        
+        # print("Datos de ProjectSettings inicializados correctamente.")
 
 
 def create_admin(session: Session):
@@ -1221,13 +1229,32 @@ def create_admin(session: Session):
         select(Administrador).where(Administrador.email == admin_email)
     ).first()
     if not admin:
-        admin = Administrador(email=admin_email, password=hashed_password, role=admin_role)
+        admin = Administrador(
+            email=admin_email, password=hashed_password, role=admin_role)
         session.add(admin)
         session.commit()
 
 
+def init_payment_methods(session: Session):
+    """Inicializa los métodos de pago básicos."""
+    payment_methods = [
+        {"id": 1, "name": "cash"},
+        {"id": 2, "name": "nequi"},
+        {"id": 3, "name": "daviplata"}
+    ]
+
+    for pm in payment_methods:
+        existing = session.query(PaymentMethod).filter(
+            PaymentMethod.id == pm["id"]).first()
+        if not existing:
+            payment_method = PaymentMethod(**pm)
+            session.add(payment_method)
+
+    session.commit()
+
+
 def init_data():
-    """Inicializa los datos por defecto de la aplicación"""
+    """Inicializa los datos básicos de la aplicación."""
     session = Session(engine)
 
     try:
@@ -1247,7 +1274,7 @@ def init_data():
         type_service_service.init_default_types()
 
         # Inicializar usuarios de prueba
-        
+
         init_additional_clients()  # Agregar 25 clientes a
         init_driver_documents()
         init_time_distance_values(engine)
@@ -1255,8 +1282,9 @@ def init_data():
         init_additional_drivers()  # Agregar 4 conductores adicionales
         # Agregar solicitudes y posiciones de conductores
         init_client_requests_and_driver_positions()
-        init_referral_data()    #agrega 19 referidos
-        init_project_settings() #anexa congiguraciones de porcentajes de negocio
+        init_referral_data()  # agrega 19 referidos
+        init_project_settings()  # anexa congiguraciones de porcentajes de negocio
+        init_payment_methods(session)
         create_admin(session)
 
     except Exception as e:

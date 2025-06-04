@@ -19,6 +19,7 @@ from app.utils.geo_utils import wkb_to_coords
 from app.models.type_service import TypeService
 from uuid import UUID
 from typing import Dict, Set
+from app.models.payment_method import PaymentMethod
 
 
 def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUID):
@@ -36,7 +37,8 @@ def create_client_request(db: Session, data: ClientRequestCreate, id_client: UUI
         driver_rating=data.driver_rating,
         pickup_position=pickup_point,
         destination_position=destination_point,
-        type_service_id=data.type_service_id
+        type_service_id=data.type_service_id,
+        payment_method_id=data.payment_method_id
     )
     db.add(db_obj)
     db.commit()
@@ -234,6 +236,17 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
                     "vehicle_type_id": vi.vehicle_type_id
                 }
 
+    # Buscar información del método de pago si existe
+    payment_method = None
+    if cr.payment_method_id:
+        pm = session.query(PaymentMethod).filter(
+            PaymentMethod.id == cr.payment_method_id).first()
+        if pm:
+            payment_method = {
+                "id": pm.id,
+                "name": pm.name
+            }
+
     return {
         "id": cr.id,
         "status": str(cr.status),
@@ -247,7 +260,9 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
         "pickup_position": wkb_to_coords(cr.pickup_position),
         "destination_position": wkb_to_coords(cr.destination_position),
         "driver_info": driver_info,
-        "vehicle_info": vehicle_info
+        "vehicle_info": vehicle_info,
+        "review": cr.review,
+        "payment_method": payment_method
     }
 
 
@@ -257,11 +272,27 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
     Solo devuelve las solicitudes del usuario autenticado.
     """
     from app.models.client_request import ClientRequest
+    from app.models.payment_method import PaymentMethod
+
+    # Obtener las solicitudes con sus métodos de pago
     results = session.query(ClientRequest).filter(
         ClientRequest.status == status,
         ClientRequest.id_client == user_id  # Filtrar por el usuario autenticado
     ).all()
-    # Puedes personalizar la respuesta según lo que quieras mostrar
+
+    # Crear un diccionario de métodos de pago para evitar múltiples consultas
+    payment_methods = {}
+    for cr in results:
+        if cr.payment_method_id and cr.payment_method_id not in payment_methods:
+            pm = session.query(PaymentMethod).filter(
+                PaymentMethod.id == cr.payment_method_id).first()
+            if pm:
+                payment_methods[cr.payment_method_id] = {
+                    "id": pm.id,
+                    "name": pm.name
+                }
+
+    # Construir la respuesta
     return [
         {
             "id": cr.id,
@@ -277,20 +308,62 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
             "pickup_position": wkb_to_coords(cr.pickup_position),
             "destination_position": wkb_to_coords(cr.destination_position),
             "created_at": cr.created_at.isoformat(),
-            "updated_at": cr.updated_at.isoformat()
+            "updated_at": cr.updated_at.isoformat(),
+            "review": cr.review,
+            "payment_method": payment_methods.get(cr.payment_method_id) if cr.payment_method_id else None
         }
         for cr in results
     ]
 
 
 def update_client_rating_service(session: Session, id_client_request: UUID, client_rating: float, user_id: UUID):
+    """
+    Permite al conductor asignado calificar al cliente de una solicitud específica.
+
+    Validaciones:
+    1. La solicitud debe existir
+    2. La solicitud debe estar en estado PAID
+    3. El usuario debe ser el conductor asignado a esta solicitud específica
+    4. La calificación debe estar entre 1 y 5
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud a calificar
+        client_rating: Calificación a asignar (1-5)
+        user_id: ID del usuario que intenta calificar (debe ser el conductor asignado)
+
+    Returns:
+        Mensaje de éxito si la calificación se actualiza correctamente
+
+    Raises:
+        HTTPException(404): Si la solicitud no existe
+        HTTPException(400): Si la solicitud no está en estado PAID o la calificación está fuera de rango
+        HTTPException(403): Si el usuario no es el conductor asignado a esta solicitud
+    """
+    # Validar rango de calificación
+    if not (1 <= client_rating <= 5):
+        raise HTTPException(
+            status_code=400,
+            detail="La calificación debe estar entre 1 y 5"
+        )
+
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Primero validar el estado
+    if client_request.status != StatusEnum.PAID:
+        raise HTTPException(
+            status_code=400, detail="Solo se puede calificar cuando el viaje está PAID")
+
+    # Luego validar que el usuario es el conductor asignado a esta solicitud específica
     if client_request.id_driver_assigned != user_id:
         raise HTTPException(
-            status_code=403, detail="Solo el conductor asignado puede calificar al cliente")
+            status_code=403,
+            detail="No tienes permiso para calificar esta solicitud. Solo el conductor asignado a esta solicitud puede calificar al cliente."
+        )
+
     client_request.client_rating = client_rating
     client_request.updated_at = datetime.utcnow()
     session.commit()
@@ -298,13 +371,53 @@ def update_client_rating_service(session: Session, id_client_request: UUID, clie
 
 
 def update_driver_rating_service(session: Session, id_client_request: UUID, driver_rating: float, user_id: UUID):
+    """
+    Permite al cliente calificar al conductor de una solicitud específica.
+
+    Validaciones:
+    1. La solicitud debe existir
+    2. La solicitud debe estar en estado PAID
+    3. El usuario debe ser el cliente que creó esta solicitud específica
+    4. La calificación debe estar entre 1 y 5
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud a calificar
+        driver_rating: Calificación a asignar (1-5)
+        user_id: ID del usuario que intenta calificar (debe ser el cliente que creó la solicitud)
+
+    Returns:
+        Mensaje de éxito si la calificación se actualiza correctamente
+
+    Raises:
+        HTTPException(404): Si la solicitud no existe
+        HTTPException(400): Si la solicitud no está en estado PAID o la calificación está fuera de rango
+        HTTPException(403): Si el usuario no es el cliente que creó esta solicitud
+    """
+    # Validar rango de calificación
+    if not (1 <= driver_rating <= 5):
+        raise HTTPException(
+            status_code=400,
+            detail="La calificación debe estar entre 1 y 5"
+        )
+
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Primero validar el estado
+    if client_request.status != StatusEnum.PAID:
+        raise HTTPException(
+            status_code=400, detail="Solo se puede calificar cuando el viaje está PAID")
+
+    # Luego validar que el usuario es el cliente que creó esta solicitud específica
     if client_request.id_client != user_id:
         raise HTTPException(
-            status_code=403, detail="Solo el cliente puede calificar al conductor")
+            status_code=403,
+            detail="No tienes permiso para calificar esta solicitud. Solo el cliente que creó esta solicitud puede calificar al conductor."
+        )
+
     client_request.driver_rating = driver_rating
     client_request.updated_at = datetime.utcnow()
     session.commit()
@@ -548,7 +661,8 @@ class ClientRequestStateMachine:
         StatusEnum.ACCEPTED: {StatusEnum.ON_THE_WAY},
         StatusEnum.ON_THE_WAY: {StatusEnum.ARRIVED},
         StatusEnum.ARRIVED: {StatusEnum.TRAVELLING},
-        StatusEnum.TRAVELLING: {StatusEnum.FINISHED}
+        StatusEnum.TRAVELLING: {StatusEnum.FINISHED},
+        StatusEnum.FINISHED: {StatusEnum.PAID}
     }
 
     CLIENT_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
@@ -562,9 +676,7 @@ class ClientRequestStateMachine:
         """
         Verifica si la transición de estado es válida para el rol especificado.
         """
-        # PAID es un estado especial que solo se puede establecer después de un pago exitoso
-        if new_state == StatusEnum.PAID:
-            return False  # No se permite cambiar directamente a PAID
+        # PAID ahora se permite desde FINISHED (para el rol DRIVER) (se quita la restricción anterior)
 
         # Si el nuevo estado es CANCELLED, verificar que el estado actual lo permita
         if new_state == StatusEnum.CANCELLED:
@@ -638,17 +750,11 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
     return {"success": True, "message": "Status actualizado correctamente"}
 
 
-def update_status_by_client_service(session: Session, id_client_request: int, status: str, user_id: int):
+def client_canceled_service(session: Session, id_client_request: int, user_id: int):
     """
-    Permite al cliente cambiar el estado de la solicitud solo a los estados permitidos.
+    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) únicamente si la solicitud está en CREATED o ACCEPTED.
     """
-    try:
-        new_status = StatusEnum(status)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Estado inválido. Estados válidos: {[s.value for s in StatusEnum]}")
-
-    # Validar rol del cliente
+    # Validar rol del cliente (que sea CLIENT y esté aprobado)
     user_role = session.query(UserHasRole).filter(
         UserHasRole.id_user == user_id,
         UserHasRole.id_rol == "CLIENT",
@@ -656,33 +762,29 @@ def update_status_by_client_service(session: Session, id_client_request: int, st
     ).first()
     if not user_role:
         raise HTTPException(
-            status_code=403, detail="Solo clientes aprobados pueden cambiar este estado")
+            status_code=403, detail="Solo clientes aprobados pueden cancelar su solicitud.")
 
-    # Obtener la solicitud actual
+    # Obtener la solicitud actual (por su id_client_request)
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request).first()
     if not client_request:
-        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada.")
 
-    # Validar que el cliente sea el dueño de la solicitud
-    if client_request.id_client != user_id:
+    # Validar que el cliente sea el dueño de la solicitud (es decir, que client_request.id_client == user_id)
+    if (client_request.id_client != user_id):
         raise HTTPException(
-            status_code=403, detail="Solo el cliente dueño de la solicitud puede cambiar el estado")
+            status_code=403, detail="Solo el cliente dueño de la solicitud puede cancelarla.")
 
-    # Validar la transición de estado
-    if not ClientRequestStateMachine.can_transition(client_request.status, new_status, "CLIENT"):
-        allowed = ClientRequestStateMachine.get_allowed_transitions(
-            client_request.status, "CLIENT")
+    # Validar que la solicitud esté en CREATED o ACCEPTED (es decir, que su estado actual esté en CANCELLABLE_STATES)
+    if (client_request.status not in ClientRequestStateMachine.CANCELLABLE_STATES):
         raise HTTPException(
-            status_code=400,
-            detail=f"Transición de estado no permitida. Desde {client_request.status.value} solo se puede cambiar a: {', '.join(s.value for s in allowed)}"
-        )
+            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED o ACCEPTED).")
 
-    # Actualizar el estado
-    client_request.status = new_status
+    # (Forzar) Actualizar el estado a CANCELLED (sin validar transición, ya que se verifica que el estado actual esté en CANCELLABLE_STATES)
+    client_request.status = StatusEnum.CANCELLED
     client_request.updated_at = datetime.utcnow()
     session.commit()
-    return {"success": True, "message": "Status actualizado correctamente"}
+    return {"success": True, "message": "Solicitud cancelada (estado actualizado a CANCELLED) correctamente."}
 
 
 def update_status_to_paid_service(session: Session, id_client_request: int, user_id: int):
@@ -723,3 +825,57 @@ def update_status_to_paid_service(session: Session, id_client_request: int, user
     client_request.updated_at = datetime.utcnow()
     session.commit()
     return {"success": True, "message": "Pago registrado correctamente"}
+
+
+def update_review_service(session: Session, id_client_request: UUID, review: str, user_id: UUID):
+    """
+    Permite al cliente actualizar el review de una solicitud específica.
+
+    Validaciones:
+    1. La solicitud debe existir
+    2. La solicitud debe estar en estado PAID
+    3. El usuario debe ser el cliente que creó esta solicitud específica
+    4. El review no debe exceder 255 caracteres
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud a actualizar
+        review: Review a asignar (máximo 255 caracteres)
+        user_id: ID del usuario que intenta actualizar (debe ser el cliente que creó la solicitud)
+
+    Returns:
+        Mensaje de éxito si el review se actualiza correctamente
+
+    Raises:
+        HTTPException(404): Si la solicitud no existe
+        HTTPException(400): Si la solicitud no está en estado PAID o el review excede el límite
+        HTTPException(403): Si el usuario no es el cliente que creó esta solicitud
+    """
+    # Validar longitud del review
+    if review and len(review) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="El review no puede exceder los 255 caracteres"
+        )
+
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request).first()
+    if not client_request:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    # Validar que el estado sea PAID
+    if client_request.status != StatusEnum.PAID:
+        raise HTTPException(
+            status_code=400, detail="Solo se puede agregar un review cuando el viaje está PAID")
+
+    # Validar que el usuario es el cliente que creó esta solicitud
+    if client_request.id_client != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para actualizar esta solicitud. Solo el cliente que creó esta solicitud puede agregar un review."
+        )
+
+    client_request.review = review
+    client_request.updated_at = datetime.utcnow()
+    session.commit()
+    return {"success": True, "message": "Review actualizado correctamente"}
