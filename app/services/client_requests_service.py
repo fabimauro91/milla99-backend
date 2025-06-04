@@ -215,7 +215,7 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
                 "first_name": di.first_name,
                 "last_name": di.last_name,
                 "email": di.email,
-                "selfie_url": di.selfie_url
+                "selfie_url": driver.selfie_url
             }
             if di.vehicle_info:
                 vi = di.vehicle_info
