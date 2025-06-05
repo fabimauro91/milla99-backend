@@ -95,5 +95,5 @@ class DriverSavingsService:
 
         # La transacción (y el "descuento" en la base de datos) ya se registra en create_transaction (que devuelve un diccionario). No se debe agregar (ni committear) de nuevo.
         transaction = self.transaction_service.create_transaction(
-            user_id, income=amount, type=TransactionType.SAVING_BALANCE)
+            user_id, income=amount, type=TransactionType.TRANSFER_SAVINGS)
         return transaction

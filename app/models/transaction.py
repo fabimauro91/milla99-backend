@@ -22,12 +22,13 @@ class TransactionType(str, Enum):
     REFERRAL_4 = "REFERRAL_4"
     REFERRAL_5 = "REFERRAL_5"
     WITHDRAWAL = "WITHDRAWAL"
-    SAVING_BALANCE = "SAVING_BALANCE"
+    TRANSFER_SAVINGS = "TRANSFER_SAVINGS"
     BALANCE = "BALANCE"
 
 
 class Transaction(SQLModel, table=True):
-    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id: Optional[UUID] = Field(
+        default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUID = Field(foreign_key="user.id")
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
@@ -38,7 +39,8 @@ class Transaction(SQLModel, table=True):
         default=None, foreign_key="withdrawal.id")
     is_confirmed: bool = Field(default=True)
     date: datetime = Field(default_factory=datetime.utcnow)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
