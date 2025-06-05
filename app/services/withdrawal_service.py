@@ -3,21 +3,40 @@ from app.models.withdrawal import Withdrawal, WithdrawalStatus
 from app.models.transaction import Transaction, TransactionType
 from app.utils.withdrawal_utils import assert_can_withdraw, InsufficientFundsException
 from app.models.verify_mount import VerifyMount
+from app.models.bank_account import BankAccount
 from fastapi import HTTPException
 from app.utils.balance_notifications import check_and_notify_low_balance
+from uuid import UUID
 
 
 class WithdrawalService:
     def __init__(self, session: Session):
         self.session = session
 
-    def request_withdrawal(self, user_id: int, amount: int):
+    def validate_bank_account(self, user_id: UUID, bank_account_id: UUID) -> BankAccount:
+        """
+        Valida que la cuenta bancaria exista y pertenezca al usuario.
+        """
+        bank_account = self.session.get(BankAccount, bank_account_id)
+        if not bank_account:
+            raise HTTPException(
+                status_code=404, detail="Bank account not found")
+        if bank_account.user_id != user_id:
+            raise HTTPException(
+                status_code=403, detail="Bank account does not belong to user")
+        if not bank_account.is_active:
+            raise HTTPException(
+                status_code=400, detail="Bank account is not active")
+        return bank_account
+
+    def request_withdrawal(self, user_id: UUID, amount: int, bank_account_id: UUID):
         """
         Solicita un retiro:
         1. Verifica el saldo
-        2. Descuenta el monto inmediatamente
-        3. Crea la transacción con is_confirmed=True
-        4. Crea el retiro en estado PENDING
+        2. Verifica la cuenta bancaria
+        3. Descuenta el monto inmediatamente
+        4. Crea la transacción con is_confirmed=True
+        5. Crea el retiro en estado PENDING asociado a la cuenta bancaria
         """
         # Verificar saldo suficiente
         try:
@@ -25,6 +44,9 @@ class WithdrawalService:
         except InsufficientFundsException:
             raise HTTPException(
                 status_code=400, detail="Insufficient funds for withdrawal")
+
+        # Verificar cuenta bancaria
+        bank_account = self.validate_bank_account(user_id, bank_account_id)
 
         # Descontar saldo inmediatamente
         verify_mount = self.session.query(VerifyMount).filter(
@@ -37,8 +59,12 @@ class WithdrawalService:
                 self.session, user_id, verify_mount.mount)
 
         # Crear el retiro en estado pending
-        withdrawal = Withdrawal(user_id=user_id, amount=amount,
-                                status=WithdrawalStatus.PENDING)
+        withdrawal = Withdrawal(
+            user_id=user_id,
+            amount=amount,
+            status=WithdrawalStatus.PENDING,
+            bank_account_id=bank_account_id
+        )
         self.session.add(withdrawal)
         self.session.flush()  # Para obtener el ID del withdrawal
 
