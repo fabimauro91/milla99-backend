@@ -66,7 +66,10 @@ class TransactionService:
                 check_and_notify_low_balance(
                     self.session, user_id, verify_mount.mount)
                 print("DEBUG verify_mount creado")
-        elif type == TransactionType.SERVICE or type == TransactionType.WITHDRAW:
+        elif type == TransactionType.SERVICE or type == TransactionType.WITHDRAWAL:
+            if income <= 0 or expense > 0:
+                raise HTTPException(
+                    status_code=400, detail=f"Las transacciones de tipo {type} (SERVICE o WITHDRAWAL) solo pueden ser ingresos (income > 0, expense == 0).")
             if verify_mount:
                 verify_mount.mount -= expense
                 self.session.commit()
