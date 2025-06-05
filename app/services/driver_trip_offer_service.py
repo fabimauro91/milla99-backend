@@ -9,6 +9,7 @@ from app.models.vehicle_info import VehicleInfo
 from app.models.driver_trip_offer import DriverTripOfferResponse
 from app.models.driver_response import UserResponse, DriverInfoResponse, VehicleInfoResponse
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
 from datetime import datetime
 from uuid import UUID
 
@@ -89,6 +90,8 @@ class DriverTripOfferService:
                 selfie_url=user.selfie_url
             ) if user else None
 
+            average_rating =get_average_rating(self.session,"driver", user.id) if user else 0.0
+
             result.append(DriverTripOfferResponse(
                 id=offer.id,
                 fare_offer=offer.fare_offer,
@@ -98,7 +101,8 @@ class DriverTripOfferService:
                 updated_at=str(offer.updated_at),
                 user=user_response,
                 driver_info=driver_info_response,
-                vehicle_info=vehicle_info_response
+                vehicle_info=vehicle_info_response,
+                average_rating=average_rating
             ))
 
         # Filtrado según el rol
@@ -122,3 +126,28 @@ class DriverTripOfferService:
             raise HTTPException(status_code=403, detail="No autorizado")
 
         return result
+
+def get_average_rating(session, role: str, id_user: UUID) -> float:
+        if role not in ["driver", "passenger"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El parámetro 'role' debe ser 'driver' o 'passenger'"
+            )
+
+        if role == "passenger":
+            # Buscar por id_client y calcular promedio de client_rating
+            avg_rating = session.query(func.avg(ClientRequest.client_rating))\
+                .filter(
+                    ClientRequest.id_client == id_user,
+                    ClientRequest.status == StatusEnum.PAID
+                ).scalar()
+        else:  # role == "driver"
+            # Buscar por id_driver_assigned y calcular promedio de driver_rating
+            avg_rating = session.query(func.avg(ClientRequest.driver_rating))\
+                .filter(
+                    ClientRequest.id_driver_assigned == id_user,
+                    ClientRequest.status == StatusEnum.PAID
+                ).scalar()
+
+        # Si no hay calificaciones, devolver 0 o None según prefieras
+        return avg_rating if avg_rating is not None else 0.0

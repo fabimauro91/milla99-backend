@@ -43,3 +43,4 @@ class DriverTripOfferResponse(BaseModel):
     user: UserResponse
     driver_info: DriverInfoResponse
     vehicle_info: Optional[VehicleInfoResponse] = None
+    average_rating: float

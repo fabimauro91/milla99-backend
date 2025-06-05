@@ -26,7 +26,7 @@ class VehicleInfoResponse(BaseModel):
 class DriverInfoResponse(BaseModel):
     first_name: str
     last_name: str
-    birth_date: str
+    birth_date: Optional[str] = None
     email: Optional[str]
 
 
@@ -42,4 +42,4 @@ class DriverFullResponse(BaseModel):
     user: UserResponse
     driver_info: DriverInfoResponse
     vehicle_info: VehicleInfoResponse
-    driver_documents: DriverDocumentsResponse
+    driver_documents: Optional[DriverDocumentsResponse] = None

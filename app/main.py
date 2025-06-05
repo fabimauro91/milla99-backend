@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import config_service_value_admin
+from app.routers import config_service_value_admin, project_settings
 from app.routers.transaction import router as transaction_router
 from app.routers.bank_accounts import router as bank_accounts_router
 
@@ -63,6 +63,7 @@ fastapi_app.include_router(login_admin.router)
 fastapi_app.include_router(verify_docs.router)
 fastapi_app.include_router(config_service_value_admin.router)
 fastapi_app.include_router(withdrawal_admin.router)
+fastapi_app.include_router(project_settings.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
