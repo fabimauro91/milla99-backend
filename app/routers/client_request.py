@@ -635,7 +635,9 @@ Actualiza el estado de una solicitud de viaje, solo permitido para conductores (
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje.
-- `status`: Nuevo estado a asignar (solo ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED).
+- `status`: Nuevo estado a asignar (solo ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID).
+
+**Nota:** El estado PAID puede ser asignado por el conductor cuando el viaje está en estado FINISHED.
 
 **Respuesta:**
 Devuelve un mensaje de éxito o error.
