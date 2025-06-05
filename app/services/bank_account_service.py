@@ -42,6 +42,15 @@ class BankAccountService:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Limitar a 3 cuentas bancarias por usuario
+        count_accounts = self.session.query(BankAccount).filter(
+            BankAccount.user_id == user_id).count()
+        if count_accounts >= 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Solo puede tener hasta 3 cuentas bancarias. Elimine una existente para agregar otra."
+            )
+
         # Verificar que no existe una cuenta idéntica para el mismo usuario, banco, tipo de cuenta y número de cuenta
         existing_account = self.session.query(BankAccount).filter(
             BankAccount.user_id == user_id,
