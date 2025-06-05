@@ -34,6 +34,7 @@ from uuid import UUID
 from app.models.administrador import Administrador
 from passlib.hash import bcrypt
 from app.models.payment_method import PaymentMethod
+from app.models.bank import Bank
 
 
 def uuid_prueba(num: int) -> UUID:
@@ -1253,6 +1254,44 @@ def init_payment_methods(session: Session):
     session.commit()
 
 
+def init_banks(session: Session):
+    # Verifica si ya existen bancos
+    existing = session.exec(select(Bank)).first()
+    if existing:
+        return
+
+    banks = [
+        {"bank_code": "001", "bank_name": "Banco de Bogotá"},
+        {"bank_code": "002", "bank_name": "Banco Popular"},
+        {"bank_code": "006", "bank_name": "Banco Itau"},
+        {"bank_code": "007", "bank_name": "Bancolombia"},
+        {"bank_code": "009", "bank_name": "Citibank"},
+        {"bank_code": "012", "bank_name": "Banco GNB Sudameris"},
+        {"bank_code": "013", "bank_name": "BBVA Colombia"},
+        {"bank_code": "019", "bank_name": "Scotiabank Colpatria"},
+        {"bank_code": "023", "bank_name": "Banco de Occidente"},
+        {"bank_code": "031", "bank_name": "Bancoldex"},
+        {"bank_code": "032", "bank_name": "Banco Caja Social BCSC"},
+        {"bank_code": "040", "bank_name": "Banco Agrario"},
+        {"bank_code": "041", "bank_name": "JP Morgan corporación Financión"},
+        {"bank_code": "042", "bank_name": "BNP Paribas"},
+        {"bank_code": "047", "bank_name": "Banco Mundo Mujer"},
+        {"bank_code": "051", "bank_name": "Davivienda"},
+        {"bank_code": "052", "bank_name": "Banco AVVillas"},
+        {"bank_code": "053", "bank_name": "Banco W S.A."},
+        {"bank_code": "059", "bank_name": "Bancamia S.A"},
+        {"bank_code": "060", "bank_name": "Banco Pichincha"},
+        {"bank_code": "061", "bank_name": "Bancoomeva"},
+        {"bank_code": "062", "bank_name": "Banco Fallabella"},
+        {"bank_code": "065", "bank_name": "Santander"},
+        {"bank_code": "066", "bank_name": "Banco Cooperativo Coopcentral"},
+        {"bank_code": "069", "bank_name": "Banco Serfinanza"},
+    ]
+    for bank in banks:
+        session.add(Bank(**bank))
+    session.commit()
+
+
 def init_data():
     """Inicializa los datos básicos de la aplicación."""
     session = Session(engine)
@@ -1285,6 +1324,7 @@ def init_data():
         init_referral_data()  # agrega 19 referidos
         init_project_settings()  # anexa congiguraciones de porcentajes de negocio
         init_payment_methods(session)
+        init_banks(session)
         create_admin(session)
 
     except Exception as e:
