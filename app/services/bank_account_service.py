@@ -42,11 +42,12 @@ class BankAccountService:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Verificar que no existe una cuenta idéntica
+        # Verificar que no existe una cuenta idéntica para el mismo usuario, banco, tipo de cuenta y número de cuenta
         existing_account = self.session.query(BankAccount).filter(
             BankAccount.user_id == user_id,
-            BankAccount.account_number == bank_account_data.account_number,
-            BankAccount.bank_name == bank_account_data.bank_name
+            BankAccount.bank_id == bank_account_data.bank_id,
+            BankAccount.account_type == bank_account_data.account_type,
+            BankAccount.account_number == bank_account_data.account_number
         ).first()
         if existing_account:
             raise HTTPException(

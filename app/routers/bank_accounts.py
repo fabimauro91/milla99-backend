@@ -25,6 +25,7 @@ def create_bank_account(
     Crea una nueva cuenta bancaria para el usuario autenticado.
     Los datos sensibles (número de cuenta y cédula) se encriptan antes de guardar.
     Solo usuarios aprobados (clientes o conductores) pueden crear cuentas.
+    Requiere: bank_id, type_identification, account_type, account_holder_name, account_number, identification_number
     """
     user_id = request.state.user_id
     service = BankAccountService(session)

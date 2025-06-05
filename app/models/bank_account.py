@@ -15,18 +15,21 @@ class AccountType(str, Enum):
     CHECKING = "checking"
 
 
+class IdentificationType(str, Enum):
+    CC = "CC"  # Cédula de Ciudadanía
+    CE = "CE"  # Cédula de Extranjería
+    NIT = "NIT"  # Número de Identificación Tributaria
+
+
 class BankAccountBase(SQLModel):
     """Modelo base con campos no sensibles"""
-    bank_name: str
+    bank_id: int = Field(foreign_key="bank.id")
     account_type: AccountType
     account_holder_name: str
-    bank_code: Optional[str] = None
-    branch_code: Optional[str] = None
-    currency: str = Field(default="COP")
     is_active: bool = Field(default=True)
-    is_verified: bool = Field(default=False)
     verification_date: Optional[datetime] = None
     last_used_at: Optional[datetime] = None
+    type_identification: IdentificationType
 
 
 class BankAccountCreate(BankAccountBase):
@@ -102,13 +105,11 @@ class BankAccount(BankAccountBase, table=True):
     class Config:
         schema_extra = {
             "example": {
-                "bank_name": "Bancolombia",
+                "bank_id": 4,
                 "account_number": "1234567890",
                 "account_type": "savings",
                 "identification_number": "1234567890",
                 "account_holder_name": "John Doe",
-                "bank_code": "BANCOLOM",
-                "branch_code": "001",
-                "currency": "COP"
+                "type_identification": "CC"
             }
         }
