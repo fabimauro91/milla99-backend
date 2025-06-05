@@ -9,7 +9,6 @@ from app.services.bank_account_service import BankAccountService
 from typing import List
 from uuid import UUID
 from app.core.dependencies.auth import get_current_user
-from app.models.user_has_roles import UserHasRole, RoleStatus
 
 router = APIRouter(prefix="/bank-accounts", tags=["bank-accounts"])
 bearer_scheme = HTTPBearer()
@@ -25,19 +24,9 @@ def create_bank_account(
     """
     Crea una nueva cuenta bancaria para el usuario autenticado.
     Los datos sensibles (número de cuenta y cédula) se encriptan antes de guardar.
+    Solo usuarios aprobados (clientes o conductores) pueden crear cuentas.
     """
     user_id = request.state.user_id
-    # Verificar que el usuario es DRIVER
-    user_role = session.query(UserHasRole).filter(
-        UserHasRole.id_user == user_id,
-        UserHasRole.id_rol == "DRIVER",
-        UserHasRole.status == RoleStatus.APPROVED
-    ).first()
-    if not user_role:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo los conductores aprobados pueden registrar cuentas bancarias"
-        )
     service = BankAccountService(session)
     return service.create_bank_account(user_id, bank_account)
 
@@ -51,19 +40,9 @@ def list_my_bank_accounts(
     """
     Lista todas las cuentas bancarias del usuario autenticado.
     Los datos sensibles se devuelven enmascarados.
+    Solo usuarios aprobados (clientes o conductores) pueden ver sus cuentas.
     """
     user_id = request.state.user_id
-    # Verificar que el usuario es DRIVER
-    user_role = session.query(UserHasRole).filter(
-        UserHasRole.id_user == user_id,
-        UserHasRole.id_rol == "DRIVER",
-        UserHasRole.status == RoleStatus.APPROVED
-    ).first()
-    if not user_role:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo los conductores aprobados pueden ver sus cuentas bancarias"
-        )
     service = BankAccountService(session)
     return service.get_bank_accounts(user_id)
 
@@ -73,7 +52,7 @@ def list_my_bank_accounts(
 #     request: Request,
 #     account_id: UUID,
 #     session: Session = Depends(get_session),
-#     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+#     current_user=Depends(get_current_user)
 # ):
 #     """
 #     Obtiene los detalles de una cuenta bancaria específica.
@@ -91,7 +70,7 @@ def list_my_bank_accounts(
 #     account_id: UUID,
 #     bank_account: BankAccountCreate,
 #     session: Session = Depends(get_session),
-#     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+#     current_user=Depends(get_current_user)
 # ):
 #     """
 #     Actualiza una cuenta bancaria existente.
@@ -108,7 +87,7 @@ def list_my_bank_accounts(
 #     request: Request,
 #     account_id: UUID,
 #     session: Session = Depends(get_session),
-#     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+#     current_user=Depends(get_current_user)
 # ):
 #     """
 #     Desactiva una cuenta bancaria.
@@ -123,7 +102,7 @@ def list_my_bank_accounts(
 # def list_active_bank_accounts(
 #     request: Request,
 #     session: Session = Depends(get_session),
-#     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+#     current_user=Depends(get_current_user)
 # ):
 #     """
 #     Lista solo las cuentas bancarias activas del usuario autenticado.
@@ -138,7 +117,7 @@ def list_my_bank_accounts(
 # def list_verified_bank_accounts(
 #     request: Request,
 #     session: Session = Depends(get_session),
-#     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
+#     current_user=Depends(get_current_user)
 # ):
 #     """
 #     Lista solo las cuentas bancarias verificadas del usuario autenticado.
