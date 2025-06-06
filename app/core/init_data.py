@@ -188,7 +188,7 @@ def create_admin(session: Session):
 
 def create_all_users(session: Session):
     """1. Crear todos los usuarios (clientes y conductores)"""
-    
+
     # Datos de clientes
     clients_data = [
         {"full_name": "María García", "phone_number": "3001111111"},
@@ -265,7 +265,8 @@ def create_all_users(session: Session):
                 session.add(user_has_role)
 
             # Crear selfie
-            selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+            selfie_dir = os.path.join(
+                "static", "uploads", "users", str(user.id))
             os.makedirs(selfie_dir, exist_ok=True)
             selfie_path = os.path.join(selfie_dir, "selfie.jpg")
             shutil.copyfile("img/demo/front foto.jpg", selfie_path)
@@ -304,7 +305,8 @@ def create_all_users(session: Session):
                 session.add(user_has_role)
 
             # Crear selfie
-            selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+            selfie_dir = os.path.join(
+                "static", "uploads", "users", str(user.id))
             os.makedirs(selfie_dir, exist_ok=True)
             selfie_path = os.path.join(selfie_dir, "selfie.jpg")
             shutil.copyfile("img/demo/front foto.jpg", selfie_path)
@@ -315,14 +317,16 @@ def create_all_users(session: Session):
 
     session.commit()
     print(f"✅ Creados {len(clients)} clientes y {len(drivers)} conductores")
+    print(
+        f"DEBUG: Lista de clientes creados: {[c.phone_number for c in clients]}")
     return {'clients': clients, 'drivers': drivers}
 
 
 def create_all_drivers(session: Session, users):
     """2. Crear y definir todos los drivers con documentos, transacciones y monto"""
-    
+
     drivers = users['drivers']
-    
+
     # Configuración de vehículos por conductor
     driver_configs = [
         # demo_driver - Carro
@@ -364,24 +368,32 @@ def create_all_drivers(session: Session, users):
     ]
 
     # Obtener tipos de vehículo y documentos
-    car_type = session.exec(select(VehicleType).where(VehicleType.name == "Car")).first()
-    moto_type = session.exec(select(VehicleType).where(VehicleType.name == "Motorcycle")).first()
-    
-    license_type = session.exec(select(DocumentType).where(DocumentType.name == "license")).first()
-    soat_type = session.exec(select(DocumentType).where(DocumentType.name == "soat")).first()
-    tech_type = session.exec(select(DocumentType).where(DocumentType.name == "technical_inspections")).first()
-    card_type = session.exec(select(DocumentType).where(DocumentType.name == "property_card")).first()
+    car_type = session.exec(select(VehicleType).where(
+        VehicleType.name == "Car")).first()
+    moto_type = session.exec(select(VehicleType).where(
+        VehicleType.name == "Motorcycle")).first()
+
+    license_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "license")).first()
+    soat_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "soat")).first()
+    tech_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "technical_inspections")).first()
+    card_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "property_card")).first()
 
     completed_drivers = []
 
     for config in driver_configs:
         # Buscar el usuario por teléfono
-        user = session.exec(select(User).where(User.phone_number == config["phone"])).first()
+        user = session.exec(select(User).where(
+            User.phone_number == config["phone"])).first()
         if not user:
             continue
 
         # Verificar si ya tiene DriverInfo
-        existing_driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == user.id)).first()
+        existing_driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.user_id == user.id)).first()
         if existing_driver_info:
             continue
 
@@ -490,41 +502,56 @@ def create_all_drivers(session: Session, users):
         completed_drivers.append(user)
 
     session.commit()
-    print(f"✅ Configurados {len(completed_drivers)} conductores con documentos, transacciones y montos")
+    print(
+        f"✅ Configurados {len(completed_drivers)} conductores con documentos, transacciones y montos")
     return completed_drivers
 
 
 def create_client_requests(session: Session, users, drivers):
     """3. Crear 12 client_request (6 moto, 6 carro)"""
-    
+
     # Coordenadas de prueba en Bogotá
     TEST_COORDINATES = {
         "pickup_points": [
             {"lat": 4.718136, "lng": -74.073170, "description": "Suba Bogotá"},
-            {"lat": 4.702468, "lng": -74.109776, "description": "Santa Rosita Engativa"},
-            {"lat": 4.648270, "lng": -74.061890, "description": "Chapinero Centro"},
+            {"lat": 4.702468, "lng": -74.109776,
+                "description": "Santa Rosita Engativa"},
+            {"lat": 4.648270, "lng": -74.061890,
+                "description": "Chapinero Centro"},
             {"lat": 4.609710, "lng": -74.151750, "description": "Kennedy Central"},
             {"lat": 4.760032, "lng": -74.037677, "description": "Zona Rosa"},
-            {"lat": 4.628594, "lng": -74.064865, "description": "Universidad Nacional"},
+            {"lat": 4.628594, "lng": -74.064865,
+                "description": "Universidad Nacional"},
             {"lat": 4.686419, "lng": -74.055969, "description": "Zona T"},
             {"lat": 4.570868, "lng": -74.297333, "description": "Fontibón"},
             {"lat": 4.638618, "lng": -74.082618, "description": "La Candelaria"},
             {"lat": 4.595447, "lng": -74.166527, "description": "Corabastos"},
-            {"lat": 4.711486, "lng": -74.072502, "description": "Plaza de las Américas"},
+            {"lat": 4.711486, "lng": -74.072502,
+                "description": "Plaza de las Américas"},
             {"lat": 4.624335, "lng": -74.063611, "description": "Museo del Oro"}
         ],
         "destinations": [
-            {"lat": 4.598100, "lng": -74.076100, "description": "Centro Internacional"},
-            {"lat": 4.798100, "lng": -74.046100, "description": "Centro Comercial Andino"},
-            {"lat": 4.698100, "lng": -74.126100, "description": "Centro Comercial Metrópolis"},
+            {"lat": 4.598100, "lng": -74.076100,
+                "description": "Centro Internacional"},
+            {"lat": 4.798100, "lng": -74.046100,
+                "description": "Centro Comercial Andino"},
+            {"lat": 4.698100, "lng": -74.126100,
+                "description": "Centro Comercial Metrópolis"},
             {"lat": 4.558100, "lng": -74.146100, "description": "Portal Sur"},
-            {"lat": 4.676220, "lng": -74.048066, "description": "Aeropuerto El Dorado"},
-            {"lat": 4.601009, "lng": -74.065863, "description": "Terminal de Transporte"},
-            {"lat": 4.711111, "lng": -74.072222, "description": "Centro Comercial Titán Plaza"},
-            {"lat": 4.590278, "lng": -74.132500, "description": "Hospital Kennedy"},
-            {"lat": 4.657889, "lng": -74.054167, "description": "Universidad Javeriana"},
-            {"lat": 4.628056, "lng": -74.064722, "description": "Palacio de Justicia"},
-            {"lat": 4.715278, "lng": -74.036111, "description": "Centro Comercial Santafé"},
+            {"lat": 4.676220, "lng": -74.048066,
+                "description": "Aeropuerto El Dorado"},
+            {"lat": 4.601009, "lng": -74.065863,
+                "description": "Terminal de Transporte"},
+            {"lat": 4.711111, "lng": -74.072222,
+                "description": "Centro Comercial Titán Plaza"},
+            {"lat": 4.590278, "lng": -74.132500,
+                "description": "Hospital Kennedy"},
+            {"lat": 4.657889, "lng": -74.054167,
+                "description": "Universidad Javeriana"},
+            {"lat": 4.628056, "lng": -74.064722,
+                "description": "Palacio de Justicia"},
+            {"lat": 4.715278, "lng": -74.036111,
+                "description": "Centro Comercial Santafé"},
             {"lat": 4.624722, "lng": -74.063889, "description": "Plaza Bolívar"}
         ]
     }
@@ -544,70 +571,82 @@ def create_client_requests(session: Session, users, drivers):
     if not car_service or not moto_service:
         raise Exception("No se encontraron los tipos de servicio")
 
-    clients = users['clients'][:12]  # Primeros 12 clientes
+    clients = users['clients']  # Usar todos los clientes disponibles
+    num_requests = len(clients)  # Crear una solicitud por cada cliente
     requests = []
 
-    for i in range(12):
+    for i in range(num_requests):
         client = clients[i]
-        pickup = TEST_COORDINATES["pickup_points"][i]
-        destination = TEST_COORDINATES["destinations"][i]
-        
-        # 6 de moto (índices pares) y 6 de carro (índices impares)
+        pickup = TEST_COORDINATES["pickup_points"][i % len(
+            # Usar módulo para ciclar las coordenadas
+            TEST_COORDINATES["pickup_points"])]
+        destination = TEST_COORDINATES["destinations"][i % len(
+            TEST_COORDINATES["destinations"])]
+
+        # Alternar entre moto y carro
         type_service_id = moto_service.id if i % 2 == 0 else car_service.id
-        
+
         request = ClientRequest(
             id_client=client.id,
             type_service_id=type_service_id,
             fare_offered=random.randint(15000, 25000),
             pickup_description=pickup["description"],
             destination_description=destination["description"],
-            pickup_position=from_shape(Point(pickup["lng"], pickup["lat"]), srid=4326),
-            destination_position=from_shape(Point(destination["lng"], destination["lat"]), srid=4326),
+            pickup_position=from_shape(
+                Point(pickup["lng"], pickup["lat"]), srid=4326),
+            destination_position=from_shape(
+                Point(destination["lng"], destination["lat"]), srid=4326),
             payment_method_id=random.randint(1, 3),
             status=StatusEnum.CREATED
         )
-        
+
         session.add(request)
         requests.append(request)
 
     session.commit()
     for req in requests:
         session.refresh(req)
-    
-    print(f"✅ Creadas {len(requests)} solicitudes (6 moto, 6 carro)")
+
+    print(
+        f"✅ Creadas {len(requests)} solicitudes ({len([r for r in requests if r.type_service_id == moto_service.id])} moto, {len([r for r in requests if r.type_service_id == car_service.id])} carro)")
     return requests
 
 
 def create_driver_offers(session: Session, drivers, requests):
     """4. Drivers realizan ofertas sobre los requests"""
-    
+
     # Obtener información de vehículos de los conductores
     driver_vehicle_types = {}
     for driver in drivers:
-        driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == driver.id)).first()
+        driver_info = session.exec(select(DriverInfo).where(
+            DriverInfo.user_id == driver.id)).first()
         if driver_info:
-            vehicle_info = session.exec(select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)).first()
+            vehicle_info = session.exec(select(VehicleInfo).where(
+                VehicleInfo.driver_info_id == driver_info.id)).first()
             if vehicle_info:
-                vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == vehicle_info.vehicle_type_id)).first()
+                vehicle_type = session.exec(select(VehicleType).where(
+                    VehicleType.id == vehicle_info.vehicle_type_id)).first()
                 driver_vehicle_types[driver.id] = vehicle_type.name
 
     offers_created = 0
-    
+
     for request in requests:
         # Obtener el tipo de servicio del request
-        type_service = session.exec(select(TypeService).where(TypeService.id == request.type_service_id)).first()
-        vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == type_service.vehicle_type_id)).first()
-        
+        type_service = session.exec(select(TypeService).where(
+            TypeService.id == request.type_service_id)).first()
+        vehicle_type = session.exec(select(VehicleType).where(
+            VehicleType.id == type_service.vehicle_type_id)).first()
+
         # Filtrar conductores que pueden atender este tipo de servicio
         eligible_drivers = [
-            driver for driver in drivers 
+            driver for driver in drivers
             if driver.id in driver_vehicle_types and driver_vehicle_types[driver.id] == vehicle_type.name
         ]
-        
+
         # Cada request recibe ofertas de 1-3 conductores elegibles
         num_offers = random.randint(1, min(3, len(eligible_drivers)))
         selected_drivers = random.sample(eligible_drivers, num_offers)
-        
+
         for driver in selected_drivers:
             fare_offer = request.fare_offered + random.randint(1000, 5000)
             trip_offer = DriverTripOffer(
@@ -626,15 +665,18 @@ def create_driver_offers(session: Session, drivers, requests):
 
 def complete_some_requests(session: Session, drivers, requests):
     """5. Completar 5 client_request (asignar driver, marcar como PAID, etc)"""
-    
+
     # Obtener información de vehículos de los conductores
     driver_vehicle_types = {}
     for driver in drivers:
-        driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == driver.id)).first()
+        driver_info = session.exec(select(DriverInfo).where(
+            DriverInfo.user_id == driver.id)).first()
         if driver_info:
-            vehicle_info = session.exec(select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)).first()
+            vehicle_info = session.exec(select(VehicleInfo).where(
+                VehicleInfo.driver_info_id == driver_info.id)).first()
             if vehicle_info:
-                vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == vehicle_info.vehicle_type_id)).first()
+                vehicle_type = session.exec(select(VehicleType).where(
+                    VehicleType.id == vehicle_info.vehicle_type_id)).first()
                 driver_vehicle_types[driver.id] = vehicle_type.name
 
     # Seleccionar 5 requests para completar
@@ -644,13 +686,14 @@ def complete_some_requests(session: Session, drivers, requests):
     for request in requests_to_complete:
         # Obtener ofertas para este request
         offers = session.exec(
-            select(DriverTripOffer).where(DriverTripOffer.id_client_request == request.id)
+            select(DriverTripOffer).where(
+                DriverTripOffer.id_client_request == request.id)
         ).all()
-        
+
         if offers:
             # Seleccionar una oferta aleatoria
             selected_offer = random.choice(offers)
-            
+
             # Completar la solicitud
             request.id_driver_assigned = selected_offer.id_driver
             request.fare_assigned = selected_offer.fare_offer
@@ -665,7 +708,7 @@ def complete_some_requests(session: Session, drivers, requests):
                 "Muy profesional"
             ])
             request.status = StatusEnum.PAID
-            
+
             session.add(request)
             completed_count += 1
 
@@ -702,8 +745,10 @@ def init_referral_data(session: Session, users):
         return
 
     for data in referral_data:
-        user = session.exec(select(User).where(User.phone_number == data["user_phone"])).first()
-        referrer = session.exec(select(User).where(User.phone_number == data["referrer_phone"])).first()
+        user = session.exec(select(User).where(
+            User.phone_number == data["user_phone"])).first()
+        referrer = session.exec(select(User).where(
+            User.phone_number == data["referrer_phone"])).first()
 
         if user and referrer:
             referral = Referral(
@@ -732,7 +777,8 @@ def create_driver_positions(session: Session, drivers):
             coords = driver_positions[driver.phone_number]
             position = DriverPosition(
                 id_driver=driver.id,
-                position=from_shape(Point(coords["lng"], coords["lat"]), srid=4326)
+                position=from_shape(
+                    Point(coords["lng"], coords["lat"]), srid=4326)
             )
             session.merge(position)
 
@@ -750,12 +796,12 @@ def init_data():
 
     try:
         print("🚀 Iniciando configuración de datos...")
-        
+
         # Configuración básica
         init_roles()
         init_document_types()
         init_vehicle_types(engine)
-        
+
         # Inicializar tipos de servicio
         type_service_service = TypeServiceService(session)
         type_service_service.init_default_types()
