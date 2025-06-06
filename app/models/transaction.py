@@ -3,13 +3,14 @@ from typing import Optional, TYPE_CHECKING, ClassVar, List
 from sqlalchemy.orm import relationship
 from enum import Enum
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .user import User
     from .client_request import ClientRequest
     from .withdrawal import Withdrawal
+    from .bank_account import BankAccount
 
 
 class TransactionType(str, Enum):
@@ -24,6 +25,8 @@ class TransactionType(str, Enum):
     WITHDRAWAL = "WITHDRAWAL"
     TRANSFER_SAVINGS = "TRANSFER_SAVINGS"
     BALANCE = "BALANCE"
+    PAYMENT = "PAYMENT"
+    COMMISSION = "COMMISSION"
 
 
 class Transaction(SQLModel, table=True):
@@ -46,12 +49,27 @@ class Transaction(SQLModel, table=True):
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.utcnow}
     )
+    commission: int = Field(default=0)
+    description: Optional[str] = None
+    bank_account_id: Optional[UUID] = Field(
+        foreign_key="bank_account.id",
+        nullable=True
+    )
 
     # Relaciones
     user: Optional["User"] = Relationship(back_populates="transactions")
     client_request: Optional["ClientRequest"] = Relationship(
         back_populates="transactions")
     withdrawal: Optional["Withdrawal"] = Relationship()
+    bank_account: Optional["BankAccount"] = Relationship()
+
+    @validator('bank_account_id')
+    def validate_bank_account_id(cls, v, values):
+        """Valida que bank_account_id sea requerido para transacciones de tipo WITHDRAWAL"""
+        if 'type' in values and values['type'] == TransactionType.WITHDRAWAL and v is None:
+            raise ValueError(
+                'bank_account_id is required for WITHDRAWAL transactions')
+        return v
 
 
 class TransactionCreate(BaseModel):
@@ -59,3 +77,12 @@ class TransactionCreate(BaseModel):
     expense: Optional[int] = 0
     type: TransactionType
     client_request_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
+
+    @validator('bank_account_id')
+    def validate_bank_account_id(cls, v, values):
+        """Valida que bank_account_id sea requerido para transacciones de tipo WITHDRAWAL"""
+        if 'type' in values and values['type'] == TransactionType.WITHDRAWAL and v is None:
+            raise ValueError(
+                'bank_account_id is required for WITHDRAWAL transactions')
+        return v
