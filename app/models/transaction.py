@@ -49,7 +49,6 @@ class Transaction(SQLModel, table=True):
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.utcnow}
     )
-    commission: int = Field(default=0)
     description: Optional[str] = None
     bank_account_id: Optional[UUID] = Field(
         foreign_key="bank_account.id",

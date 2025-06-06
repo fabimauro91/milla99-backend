@@ -21,7 +21,7 @@ class Withdrawal(SQLModel, table=True):
     id: Optional[UUID] = Field(
         default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUID = Field(foreign_key="user.id")
-    amount: int
+    amount: int  # Monto total del retiro (incluye comisión si aplica)
     status: WithdrawalStatus = Field(default=WithdrawalStatus.PENDING)
     withdrawal_date: datetime = Field(default_factory=datetime.utcnow)
     # Relación con la cuenta bancaria
@@ -37,7 +37,7 @@ class WithdrawalRead(SQLModel):
     """Modelo para leer retiros con información relacionada"""
     id: UUID
     user_id: UUID
-    amount: int
+    amount: int  # Monto total del retiro
     status: WithdrawalStatus
     withdrawal_date: datetime
     bank_account_id: UUID
