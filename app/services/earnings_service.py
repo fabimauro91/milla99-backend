@@ -174,6 +174,7 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
 
         print(f"[DEBUG] earnings a agregar: {earnings}")
         session.add_all(earnings)
+        session.commit()
         print("[DEBUG] Fin de distribute_earnings")
     except Exception as e:
         print("[ERROR] Exception en distribute_earnings:", e)
