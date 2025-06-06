@@ -119,6 +119,28 @@ async def update_status_trip(sid, data):
 
 @sio.event
 async def client_to_driver_message(sid, data):
+    """
+    Cliente envía mensaje al conductor.
+    - Evento: client_to_driver_message
+    - El conductor debe escuchar: client_message/{id_driver} (reemplaza {id_driver} por el ID real del conductor)
+    - JSON de ejemplo para enviar:
+        {
+            "id_driver": 20,
+            "message": "te demoras mucho?",
+            "client_id": 5,
+            "client_name": "Cliente Ejemplo",
+            "id_client_request": "req_456"
+        }
+    - El conductor recibe:
+        {
+            "id_socket": "g4FrvjlHyMEWc71EAAAB",
+            "message": "te demoras mucho?",
+            "client_id": 5,
+            "client_name": "Cliente Ejemplo",
+            "id_client_request": "req_456",
+            "timestamp": "2025-06-06T16:10:43.170016"  # Formato ISO 8601
+        }
+    """
     # Si data es string, conviértelo a dict
     if isinstance(data, str):
         data = json.loads(data)
@@ -138,6 +160,28 @@ async def client_to_driver_message(sid, data):
 
 @sio.event
 async def driver_to_client_message(sid, data):
+    """
+    Conductor envía mensaje al cliente.
+    - Evento: driver_to_client_message
+    - El cliente debe escuchar: driver_message/{id_client} (reemplaza {id_client} por el ID real del cliente)
+    - JSON de ejemplo para enviar:
+        {
+            "id_client": 5,
+            "message": "estoy a 5 minutos",
+            "driver_id": 20,
+            "driver_name": "Conductor Ejemplo",
+            "id_client_request": "req_456"
+        }
+    - El cliente recibe:
+        {
+            "id_socket": "JQ51eDnz2gxBGz7eAAAD",
+            "message": "estoy a 5 minutos",
+            "driver_id": 20,
+            "driver_name": "Conductor Ejemplo",
+            "id_client_request": "req_456",
+            "timestamp": "2025-06-06T16:13:14.784023"  # Formato ISO 8601
+        }
+    """
     # Si data es string, conviértelo a dict
     if isinstance(data, str):
         data = json.loads(data)

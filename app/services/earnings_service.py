@@ -1,5 +1,5 @@
 # app/services/earnings_service.py
-from typing import List, Optional 
+from typing import List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select, SQLModel, Field, Session
 from app.models.client_request import ClientRequest, StatusEnum
@@ -14,6 +14,7 @@ from uuid import UUID
 from datetime import datetime
 from app.services.transaction_service import TransactionService
 from sqlalchemy.orm import Session as SQLAlchemySession
+import traceback
 
 # Id especial (o None) para la empresa
 COMPANY_ID: int | None = None
@@ -24,9 +25,11 @@ def get_config_percentages(session: SQLAlchemySession):
     Devuelve un diccionario con los porcentajes configurados en la tabla project_settings.
     Ahora busca la configuración con ID = 1.
     """
-    config = session.query(ProjectSettings).get(1)  # Asume que la configuración está en la fila con ID 1
+    config = session.query(ProjectSettings).get(
+        1)  # Asume que la configuración está en la fila con ID 1
     if not config:
-        raise ValueError("No se encontró la configuración del proyecto con ID 1")
+        raise ValueError(
+            "No se encontró la configuración del proyecto con ID 1")
 
     config_dict = {
         "driver_dist": Decimal(config.driver_dist),
@@ -50,7 +53,8 @@ def _get_referral_chain(session: SQLAlchemySession, user_id: UUID, levels: int) 
     current_user_id = user_id
 
     for _ in range(levels):
-        referral = session.query(Referral).filter(Referral.user_id == current_user_id).first()
+        referral = session.query(Referral).filter(
+            Referral.user_id == current_user_id).first()
         if referral and referral.referred_by_id:
             chain.append(referral.referred_by_id)
             current_user_id = referral.referred_by_id
@@ -61,106 +65,121 @@ def _get_referral_chain(session: SQLAlchemySession, user_id: UUID, levels: int) 
 
 
 def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> None:
-    if request.status != StatusEnum.PAID:
-        return
+    print("[DEBUG] Entrando a distribute_earnings para request:", request.id)
+    try:
+        if request.status != StatusEnum.PAID:
+            print("[DEBUG] Estado no es PAID, saliendo de distribute_earnings")
+            return
 
-    fare = Decimal(str(request.fare_assigned or 0))
-    if fare <= 0:
-        return
+        fare = Decimal(str(request.fare_assigned or 0))
+        print(f"[DEBUG] fare_assigned: {fare}")
+        if fare <= 0:
+            print("[DEBUG] fare <= 0, saliendo de distribute_earnings")
+            return
 
-    # Obtener los porcentajes desde la tabla de configuración
-    config = get_config_percentages(session)
-    driver_saving_pct = config["driver_saving"]
-    company_pct = config["company"]
-    referral_pcts = [
-        config["referral_1"],
-        config["referral_2"],
-        config["referral_3"],
-        config["referral_4"],
-        config["referral_5"],
-    ]
+        config = get_config_percentages(session)
+        print(f"[DEBUG] Config porcentajes: {config}")
+        driver_saving_pct = config["driver_saving"]
+        company_pct = config["company"]
+        referral_pcts = [
+            config["referral_1"],
+            config["referral_2"],
+            config["referral_3"],
+            config["referral_4"],
+            config["referral_5"],
+        ]
 
-    # Inicializar el servicio de transacciones
-    transaction_service = TransactionService(session)
+        transaction_service = TransactionService(session)
 
-    # 1. Transacción de egreso para el conductor (10% del fare)
-    driver_expense_pct = Decimal("0.10")  # 10%
-    driver_expense = (fare * driver_expense_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        driver_expense_pct = Decimal("0.10")  # 10%
+        driver_expense = (
+            fare * driver_expense_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        print(f"[DEBUG] driver_expense: {driver_expense}")
 
-    # No hay bonus, usar solo SERVICE
-    transaction_service.create_transaction(
-        user_id=request.id_driver_assigned,
-        expense=int(driver_expense),
-        type="SERVICE",
-        client_request_id=request.id
-    )
-
-    # 2. Ganancia del conductor (driver_saving)
-    driver_saving = (fare * driver_saving_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    earnings = []  # No es necesario acumular en una lista para luego usar add_all
-    # Verificar si ya existe un registro de DriverSavings para este usuario y tipo
-    existing_driver_saving = session.query(DriverSavings).filter(
-        DriverSavings.user_id == request.id_driver_assigned,
-        DriverSavings.type == "SAVING"
-    ).first()
-    if existing_driver_saving:
-        # Si existe, sumar el nuevo monto al existente
-        existing_driver_saving.mount += driver_saving
-        print(f"DriverSavings actualizado: usuario {request.id_driver_assigned}, nuevo monto: {existing_driver_saving.mount}")
-    else:
-        # Si no existe, crear un nuevo registro
-        new_driver_saving = DriverSavings(
+        print(
+            f"[DEBUG] Creando transacción SERVICE_FEE egreso para conductor: user_id={request.id_driver_assigned}, expense={int(driver_expense)}")
+        transaction_service.create_transaction(
             user_id=request.id_driver_assigned,
-            mount=driver_saving,
-            type="SAVING",
-            client_request_id=request.id
+            expense=int(driver_expense),
+            type="SERVICE_FEE",
+            client_request_id=request.id,
+            description=f"Comisión por uso de la plataforma para el viaje {request.id}"
         )
-        earnings.append(new_driver_saving)
-        print(f"DriverSavings creado: usuario {request.id_driver_assigned}, monto: {driver_saving}")
-    
-    # earnings.append(DriverSavings(
-    #     user_id=request.id_driver_assigned,
-    #     mount=driver_saving,
-    #     type="SERVICE",
-    #     client_request_id=request.id
-    # ))
-    
-    # 3. Ganancias de referidos
-    chain_ids = _get_referral_chain(session, request.id_client, levels=5)
 
-    company_share = (fare * company_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    earnings.append(CompanyAccount(
-        client_request_id=request.id,
-        income=company_share,
-        type="SERVICE"
-    ))
+        # Calcular el ahorro (1% del valor del viaje)
+        driver_saving = (
+            fare * driver_saving_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        print(f"[DEBUG] driver_saving: {driver_saving}")
 
-    company_share = Decimal("0.00")
-    for idx, pct in enumerate(referral_pcts):
-        if idx < len(chain_ids):
-            ref_amount = (fare * pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            # Usar create_transaction para el referido
-            transaction_service.create_transaction(
-                user_id=chain_ids[idx],
-                income=int(ref_amount),
-                type=f"REFERRAL_{idx+1}",
+        # Buscar el registro de ahorro existente
+        driver_savings = session.query(DriverSavings).filter(
+            DriverSavings.user_id == request.id_driver_assigned
+        ).first()
+
+        if driver_savings:
+            print(
+                f"[DEBUG] Suma ahorro existente: {driver_savings.mount} + {driver_saving}")
+            driver_savings.mount += driver_saving
+        else:
+            print(f"[DEBUG] Crea nuevo ahorro con mount: {driver_saving}")
+            driver_savings = DriverSavings(
+                user_id=request.id_driver_assigned,
+                mount=driver_saving,
+                type="SAVING",
                 client_request_id=request.id
             )
-        else:
-            # Si no hay referido, ese porcentaje se suma a la compañía
-            company_share += (fare * pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            session.add(driver_savings)
 
-    # 4. Ganancia de la compañía adicional
-    if company_share > 0:
+        earnings = []
+        
+
+        chain_ids = _get_referral_chain(session, request.id_client, levels=5)
+        print(f"[DEBUG] chain_ids: {chain_ids}")
+
+        company_share = (
+            fare * company_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        print(f"[DEBUG] company_share inicial: {company_share}")
         earnings.append(CompanyAccount(
             client_request_id=request.id,
             income=company_share,
-            type="ADDITIONAL"
+            type="SERVICE"
         ))
-        
 
-    session.add_all(earnings)  
-    session.commit()
+        company_share = Decimal("0.00")
+        for idx, pct in enumerate(referral_pcts):
+            if idx < len(chain_ids):
+                ref_amount = (fare * pct).quantize(Decimal("0.01"),
+                                                   rounding=ROUND_HALF_UP)
+                print(
+                    f"[DEBUG] Creando transacción REFERRAL_{idx+1}: user_id={chain_ids[idx]}, income={int(ref_amount)}")
+                transaction_service.create_transaction(
+                    user_id=chain_ids[idx],
+                    income=int(ref_amount),
+                    type=f"REFERRAL_{idx+1}",
+                    client_request_id=request.id
+                )
+            else:
+                company_share += (fare * pct).quantize(Decimal("0.01"),
+                                                       rounding=ROUND_HALF_UP)
+                print(
+                    f"[DEBUG] Suma a company_share por falta de referido: {company_share}")
+
+        if company_share > 0:
+            print(f"[DEBUG] company_share adicional: {company_share}")
+            earnings.append(CompanyAccount(
+                client_request_id=request.id,
+                income=company_share,
+                type="ADDITIONAL"
+            ))
+
+        print(f"[DEBUG] earnings a agregar: {earnings}")
+        session.add_all(earnings)
+        print("[DEBUG] Fin de distribute_earnings")
+    except Exception as e:
+        print("[ERROR] Exception en distribute_earnings:", e)
+        print(traceback.format_exc())
+        raise
+
 
 def get_referral_earnings_structured(session, user_id: UUID):
 

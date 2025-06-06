@@ -63,9 +63,12 @@ class User(UserBase, table=True):
     transactions: List["Transaction"] = Relationship(back_populates="user")
     driver_savings: List["DriverSavings"] = Relationship(back_populates="user")
     verify_mount: Optional["VerifyMount"] = Relationship(back_populates="user")
+    bank_accounts: List["BankAccount"] = Relationship(back_populates="user")
+    withdrawals: List["Withdrawal"] = Relationship(back_populates="user")
 
 
 class UserCreate(SQLModel):
+
     full_name: str = Field(
         description="Nombre completo del usuario",
         min_length=3

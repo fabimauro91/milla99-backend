@@ -3,13 +3,14 @@ from typing import Optional, TYPE_CHECKING, ClassVar, List
 from sqlalchemy.orm import relationship
 from enum import Enum
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .user import User
     from .client_request import ClientRequest
     from .withdrawal import Withdrawal
+    from .bank_account import BankAccount
 
 
 class TransactionType(str, Enum):
@@ -22,12 +23,16 @@ class TransactionType(str, Enum):
     REFERRAL_4 = "REFERRAL_4"
     REFERRAL_5 = "REFERRAL_5"
     WITHDRAWAL = "WITHDRAWAL"
-    SAVING_BALANCE = "SAVING_BALANCE"
+    TRANSFER_SAVINGS = "TRANSFER_SAVINGS"
     BALANCE = "BALANCE"
+    PAYMENT = "PAYMENT"
+    COMMISSION = "COMMISSION"
+    SERVICE_FEE = "SERVICE_FEE"  # Comisión por uso de la plataforma
 
 
 class Transaction(SQLModel, table=True):
-    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
+    id: Optional[UUID] = Field(
+        default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUID = Field(foreign_key="user.id")
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
@@ -38,11 +43,17 @@ class Transaction(SQLModel, table=True):
         default=None, foreign_key="withdrawal.id")
     is_confirmed: bool = Field(default=True)
     date: datetime = Field(default_factory=datetime.utcnow)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.utcnow}
+    )
+    description: Optional[str] = None
+    bank_account_id: Optional[UUID] = Field(
+        foreign_key="bank_account.id",
+        nullable=True
     )
 
     # Relaciones
@@ -50,6 +61,15 @@ class Transaction(SQLModel, table=True):
     client_request: Optional["ClientRequest"] = Relationship(
         back_populates="transactions")
     withdrawal: Optional["Withdrawal"] = Relationship()
+    bank_account: Optional["BankAccount"] = Relationship()
+
+    @validator('bank_account_id')
+    def validate_bank_account_id(cls, v, values):
+        """Valida que bank_account_id sea requerido para transacciones de tipo WITHDRAWAL"""
+        if 'type' in values and values['type'] == TransactionType.WITHDRAWAL and v is None:
+            raise ValueError(
+                'bank_account_id is required for WITHDRAWAL transactions')
+        return v
 
 
 class TransactionCreate(BaseModel):
@@ -57,3 +77,12 @@ class TransactionCreate(BaseModel):
     expense: Optional[int] = 0
     type: TransactionType
     client_request_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
+
+    @validator('bank_account_id')
+    def validate_bank_account_id(cls, v, values):
+        """Valida que bank_account_id sea requerido para transacciones de tipo WITHDRAWAL"""
+        if 'type' in values and values['type'] == TransactionType.WITHDRAWAL and v is None:
+            raise ValueError(
+                'bank_account_id is required for WITHDRAWAL transactions')
+        return v

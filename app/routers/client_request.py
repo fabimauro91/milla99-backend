@@ -650,14 +650,25 @@ def get_nearby_drivers(
 @router.get("/{client_request_id}", tags=["Passengers"], description="""
 Consulta el estado y la información detallada de una solicitud de viaje específica.
 
+**Permisos de Acceso:**
+- El cliente que creó la solicitud puede ver todos los detalles de su solicitud
+- El conductor asignado a la solicitud puede ver todos los detalles de la solicitud que le fue asignada
+- Otros usuarios no tienen acceso a esta información
+
 **Parámetros:**
 - `client_request_id`: ID de la solicitud de viaje.
 
 **Respuesta:**
-Incluye el detalle de la solicitud, información del usuario, conductor y vehículo si aplica.
+Incluye el detalle completo de la solicitud, incluyendo:
+- Información básica de la solicitud (estado, tarifas, ubicaciones)
+- Información del cliente (nombre, teléfono, calificación)
+- Información del conductor asignado (si existe)
+- Información del vehículo (si hay conductor asignado)
+- Método de pago seleccionado
+- Review del viaje (si existe)
 
-**Nota:**
-Solo el cliente dueño de la solicitud o el conductor asignado pueden ver los detalles.
+**Nota de Seguridad:**
+Este endpoint implementa validación de permisos para asegurar que solo el cliente dueño de la solicitud o el conductor asignado puedan acceder a la información.
 """)
 def get_client_request_detail(
     request: Request,
@@ -677,7 +688,9 @@ Actualiza el estado de una solicitud de viaje, solo permitido para conductores (
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje.
-- `status`: Nuevo estado a asignar (solo ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED).
+- `status`: Nuevo estado a asignar (solo ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID).
+
+**Nota:** El estado PAID puede ser asignado por el conductor cuando el viaje está en estado FINISHED.
 
 **Respuesta:**
 Devuelve un mensaje de éxito o error.

@@ -101,7 +101,8 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
     query_results = base_query.all()
     for row in query_results:
         cr, full_name, country_code, phone_number, type_service_name, distance, time_difference = row
-        average_rating = get_average_rating(session,"passenger", cr.id_client) if cr.id_client else 0.0
+        average_rating = get_average_rating(
+            session, "passenger", cr.id_client) if cr.id_client else 0.0
         result = {
             "id": str(cr.id),
             "id_client": str(cr.id_client),
@@ -120,7 +121,7 @@ def get_nearby_client_requests_service(driver_lat, driver_lng, session: Session,
                 "full_name": full_name,
                 "country_code": country_code,
                 "phone_number": phone_number,
-                "average_rating":average_rating
+                "average_rating": average_rating
             }
         }
         results.append(result)
@@ -197,8 +198,9 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
         )
 
     # Buscar el usuario que la creó
-    user = session.query(User).filter(User.id == cr.id_client).first() 
-    average_rating = get_average_rating(session,"passenger", user.id) if user else 0.0
+    user = session.query(User).filter(User.id == cr.id_client).first()
+    average_rating = get_average_rating(
+        session, "passenger", user.id) if user else 0.0
     client_data = {
         "id": user.id,
         "full_name": user.full_name,
@@ -214,16 +216,16 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
         driver = session.query(User).filter(
             User.id == cr.id_driver_assigned).first()
         if driver and driver.driver_info:
-            average_rating = get_average_rating(session,"driver", cr.id_driver_assigned) if  cr.id_driver_assigned else 0.0
+            average_rating = get_average_rating(
+                session, "driver", cr.id_driver_assigned) if cr.id_driver_assigned else 0.0
             di = driver.driver_info
             driver_info = {
                 "id": di.id,
                 "first_name": di.first_name,
                 "last_name": di.last_name,
                 "email": di.email,
-                #"selfie_url": di.selfie_url
                 "selfie_url": driver.selfie_url,
-                "average_rating":average_rating
+                "average_rating": average_rating
             }
             if di.vehicle_info:
                 vi = di.vehicle_info
@@ -247,10 +249,12 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
                 "name": pm.name
             }
 
-    return {
+    # Construir la respuesta completa
+    response = {
         "id": cr.id,
         "status": str(cr.status),
         "fare_offered": cr.fare_offered,
+        "fare_assigned": cr.fare_assigned,  # Aseguramos que fare_assigned esté incluido
         "pickup_description": cr.pickup_description,
         "destination_description": cr.destination_description,
         "created_at": cr.created_at.isoformat(),
@@ -262,8 +266,17 @@ def get_client_request_detail_service(session: Session, client_request_id: UUID,
         "driver_info": driver_info,
         "vehicle_info": vehicle_info,
         "review": cr.review,
-        "payment_method": payment_method
+        "payment_method": payment_method,
+        "type_service_id": cr.type_service_id
     }
+
+    # Obtener el nombre del tipo de servicio
+    type_service = session.query(TypeService).filter(
+        TypeService.id == cr.type_service_id).first()
+    if type_service:
+        response["type_service_name"] = type_service.name
+
+    return response
 
 
 def get_client_requests_by_status_service(session: Session, status: str, user_id: UUID):
@@ -774,11 +787,22 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
             detail=f"Transición de estado no permitida. Desde {client_request.status.value} solo se puede cambiar a: {', '.join(s.value for s in allowed)}"
         )
 
-    # Actualizar el estado
-    client_request.status = new_status
-    client_request.updated_at = datetime.utcnow()
-    session.commit()
-    return {"success": True, "message": "Status actualizado correctamente"}
+    # Validar que solo se pueda pasar a PAID si el estado actual es FINISHED
+    if new_status == StatusEnum.PAID and client_request.status != StatusEnum.FINISHED:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede pasar a PAID desde FINISHED"
+        )
+
+    try:
+        client_request.status = new_status
+        client_request.updated_at = datetime.utcnow()
+        session.commit()
+        return {"success": True, "message": "Status actualizado correctamente"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error al actualizar el estado: {str(e)}")
 
 
 def client_canceled_service(session: Session, id_client_request: int, user_id: int):

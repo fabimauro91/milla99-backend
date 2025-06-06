@@ -6,6 +6,8 @@ from typing import Optional, List
 from pydantic import Field as PydanticField  # Renombrar para evitar conflictos
 from geoalchemy2 import Geometry
 from uuid import UUID, uuid4
+from sqlalchemy.orm import Session
+from sqlalchemy import inspect
 
 # Modelo de entrada (lo que el usuario envía)
 
@@ -103,29 +105,20 @@ class ClientRequest(SQLModel, table=True):
 # Definir el listener para el evento after_update
 def after_update_listener(mapper, connection, target):
     from app.services.earnings_service import distribute_earnings  # Import aquí, no arriba
-    from sqlalchemy.orm import Session
-    from sqlalchemy import inspect
     # Obtener el estado del objeto para verificar cambios
     state = inspect(target)
     attr = state.attrs.status
-    print("entro al listener")
     # Verificar si el status cambió y si el nuevo valor es PAID
     if attr.history.has_changes():
         old_value = attr.history.deleted[0] if attr.history.deleted else None
         new_value = attr.value
-
         if new_value == StatusEnum.PAID and old_value != StatusEnum.PAID:
-            # Crear una sesión para el proceso
             session = Session(bind=connection)
             try:
-                # Llamar a la función distribute_earnings
                 distribute_earnings(session, target)
-                session.commit()
             except Exception as e:
-                session.rollback()
                 print(f"Error en distribute_earnings: {e}")
-            finally:
-                session.close()
+                raise
 
 
 # Registrar el evento después de definir la clase
