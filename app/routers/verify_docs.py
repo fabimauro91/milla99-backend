@@ -13,7 +13,7 @@ from app.core.dependencies.admin_auth import get_current_admin
 bearer_scheme = HTTPBearer()
 
 router = APIRouter(prefix="/verify-docs",
-                   tags=["ADMIN: document verification"],
+                   tags=["ADMIN"],
                     dependencies=[Depends(get_current_admin)])
 
 

@@ -36,7 +36,6 @@ bearer_scheme = HTTPBearer()
 
 router = APIRouter(
     prefix="/client-request",
-    tags=["client-request"],
     dependencies=[Depends(get_current_user)]
 )
 
@@ -118,7 +117,7 @@ def get_time_and_distance(
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
 
-@router.get("/nearby", description="""
+@router.get("/nearby",  tags=["Drivers"], description="""
 Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5 km, filtrando por el tipo de servicio del vehículo del conductor.
 """)
 def get_nearby_client_requests(
@@ -225,7 +224,7 @@ def get_nearby_client_requests(
             status_code=500, detail=f"Error al buscar solicitudes cercanas: {str(e)}")
 
 
-@router.get("/by-status/{status}", description="""
+@router.get("/by-status/{status}", tags=["Passengers"], description="""
 Devuelve una lista de solicitudes de viaje del usuario autenticado filtradas por el estado enviado en el parámetro.
 
 **Parámetros:**
@@ -265,7 +264,7 @@ def get_client_requests_by_status(
 
 
 
-@router.get("/by-driver-status/{status}", description="""
+@router.get("/by-driver-status/{status}", tags=["Drivers"], description="""
 Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
 
 **Parámetros:**
@@ -306,7 +305,7 @@ def get_driver_requests_by_status(
 
 
 
-@router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""
+@router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, tags=["Passengers"], description="""
 Crea una nueva solicitud de viaje para un cliente.
 
 **Parámetros:**
@@ -383,7 +382,7 @@ def create_request(
         )
 
 
-@router.patch("/updateDriverAssigned", description="""
+@router.patch("/updateDriverAssigned", tags=["Passengers"], description="""
 Asigna un conductor a una solicitud de viaje existente y actualiza el estado y la tarifa si se proporciona.
 
 **Parámetros:**
@@ -510,7 +509,7 @@ def update_status(
             status_code=500, detail=f"Error al actualizar el status: {str(e)}")
 
 
-@router.patch("/updateClientRating", description="""
+@router.patch("/updateClientRating", tags=["Drivers"], description="""
 Actualiza la calificación del cliente para una solicitud de viaje. Solo el conductor asignado puede calificar al cliente.
 Solo se permite calificar cuando el viaje está en estado PAID.
 
@@ -538,7 +537,7 @@ def update_client_rating(
     return update_client_rating_service(session, id_client_request, client_rating, user_id)
 
 
-@router.patch("/updateDriverRating", description="""
+@router.patch("/updateDriverRating", tags=["Passengers"], description="""
 Actualiza la calificación del conductor para una solicitud de viaje. Solo el cliente puede calificar al conductor.
 Solo se permite calificar cuando el viaje está en estado PAID.
 
@@ -648,7 +647,7 @@ def get_nearby_drivers(
         )
 
 
-@router.get("/{client_request_id}", description="""
+@router.get("/{client_request_id}", tags=["Passengers"], description="""
 Consulta el estado y la información detallada de una solicitud de viaje específica.
 
 **Parámetros:**
@@ -673,7 +672,7 @@ def get_client_request_detail(
     return get_client_request_detail_service(session, client_request_id, user_id)
 
 
-@router.patch("/updateStatusByDriver", description="""
+@router.patch("/updateStatusByDriver", tags=["Drivers"], description="""
 Actualiza el estado de una solicitud de viaje, solo permitido para conductores (DRIVER).
 
 **Parámetros:**
@@ -699,7 +698,7 @@ def update_status_by_driver(
     return update_status_by_driver_service(session, id_client_request, status, user_id)
 
 
-@router.patch("/clientCanceled", description="""
+@router.patch("/clientCanceled", tags=["Passengers"], description="""
 Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
 
 **Parámetros:**
@@ -724,7 +723,7 @@ def update_status_by_client(
     return client_canceled_service(session, id_client_request, user_id)
 
 
-@router.patch("/updateReview", description="""
+@router.patch("/updateReview", tags=["Passengers"], description="""
 Actualiza el review de una solicitud de viaje. Solo el cliente puede agregar un review.
 Solo se permite agregar un review cuando el viaje está en estado PAID.
 

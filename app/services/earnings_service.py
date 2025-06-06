@@ -98,14 +98,33 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
     # 2. Ganancia del conductor (driver_saving)
     driver_saving = (fare * driver_saving_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     earnings = []  # No es necesario acumular en una lista para luego usar add_all
-    earnings.append(DriverSavings(
-        user_id=request.id_driver_assigned,
-        income=driver_saving,
-        expense=0,
-        type="SERVICE",
-        client_request_id=request.id
-    ))
-
+    # Verificar si ya existe un registro de DriverSavings para este usuario y tipo
+    existing_driver_saving = session.query(DriverSavings).filter(
+        DriverSavings.user_id == request.id_driver_assigned,
+        DriverSavings.type == "SAVING"
+    ).first()
+    if existing_driver_saving:
+        # Si existe, sumar el nuevo monto al existente
+        existing_driver_saving.mount += driver_saving
+        print(f"DriverSavings actualizado: usuario {request.id_driver_assigned}, nuevo monto: {existing_driver_saving.mount}")
+    else:
+        # Si no existe, crear un nuevo registro
+        new_driver_saving = DriverSavings(
+            user_id=request.id_driver_assigned,
+            mount=driver_saving,
+            type="SAVING",
+            client_request_id=request.id
+        )
+        earnings.append(new_driver_saving)
+        print(f"DriverSavings creado: usuario {request.id_driver_assigned}, monto: {driver_saving}")
+    
+    # earnings.append(DriverSavings(
+    #     user_id=request.id_driver_assigned,
+    #     mount=driver_saving,
+    #     type="SERVICE",
+    #     client_request_id=request.id
+    # ))
+    
     # 3. Ganancias de referidos
     chain_ids = _get_referral_chain(session, request.id_client, levels=5)
 
@@ -124,7 +143,7 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
             transaction_service.create_transaction(
                 user_id=chain_ids[idx],
                 income=int(ref_amount),
-                type="REFERRAL_{idx+1}",
+                type=f"REFERRAL_{idx+1}",
                 client_request_id=request.id
             )
         else:

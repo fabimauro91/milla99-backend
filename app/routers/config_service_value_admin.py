@@ -5,7 +5,7 @@ from app.services.config_service_value_service import ConfigServiceValueService 
 from app.core.db import SessionDep  # Importación absoluta
 from app.models.config_service_value import  VehicleTypeConfigurationUpdate, VehicleTypeConfigurationResponse,ConfigServiceValue
 
-router = APIRouter(prefix="/config-service-value", tags=["ADMIN: config-service-value"])
+router = APIRouter(prefix="/config-service-value", tags=["ADMIN"])
 
 
 @router.patch("/{vehicle_type_id}", response_model=VehicleTypeConfigurationResponse)

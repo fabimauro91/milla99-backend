@@ -1,22 +1,17 @@
 from sqlmodel import Session, select
 from datetime import datetime, timedelta, date
-from datetime import datetime
 from app.models.role import Role
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionType
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.document_type import DocumentType
 from app.models.driver_documents import DriverDocuments, DriverStatus
-from app.models.user_has_roles import UserHasRole, RoleStatus
-from app.models.document_type import DocumentType
-from app.models.user import User, UserCreate
+from app.models.user import User
 from app.models.vehicle_type import VehicleType
 from app.models.driver_info import DriverInfo
 from app.core.db import engine
 from app.core.config import settings
-from app.models.driver import DriverDocumentsInput
-from app.services.driver_service import DriverService
-from app.models.driver_info import DriverInfoCreate
-from app.models.vehicle_info import VehicleInfo, VehicleInfoCreate
+from app.models.verify_mount import VerifyMount
+from app.models.vehicle_info import VehicleInfo
 from app.models.referral_chain import Referral
 from app.models.project_settings import ProjectSettings
 from app.utils.uploads import uploader
@@ -28,12 +23,14 @@ from app.services.type_service_service import TypeServiceService
 from app.models.type_service import TypeService
 from app.models.client_request import ClientRequest, StatusEnum
 from app.models.driver_position import DriverPosition
+from app.models.driver_trip_offer import DriverTripOffer
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from uuid import UUID
 from app.models.administrador import Administrador
 from passlib.hash import bcrypt
 from app.models.payment_method import PaymentMethod
+import random
 
 
 def uuid_prueba(num: int) -> UUID:
@@ -74,12 +71,10 @@ def init_document_types():
 
 def init_vehicle_types(engine):
     with Session(engine) as session:
-        # Verificar si ya existen tipos de vehículos
         existing_types = session.exec(select(VehicleType)).all()
         if existing_types:
-            return
+            return existing_types
 
-        # Crear tipos de vehículos con sus capacidades
         vehicle_types = [
             VehicleType(
                 name="Car",
@@ -97,26 +92,23 @@ def init_vehicle_types(engine):
             session.add(vehicle_type)
 
         session.commit()
-        session.refresh(vehicle_types[0])  # Refrescar para obtener el ID
-        session.refresh(vehicle_types[1])  # Refrescar para obtener el ID
-        return vehicle_types  # Retornar los tipos de vehículos creados
+        for vt in vehicle_types:
+            session.refresh(vt)
+        return vehicle_types
 
 
 def init_time_distance_values(engine):
     with Session(engine) as session:
-        # Verificar si ya existen registros
         existing_values = session.exec(select(ConfigServiceValue)).all()
         if existing_values:
             return
 
-        # Crear valores iniciales y asociarlos a VehicleType
         time_distance_values = [
             ConfigServiceValue(
                 km_value=1200.0,
                 min_value=150.0,
                 tarifa_value=6000.0,
                 weight_value=350.5,
-                # Asociar al primer VehicleType (car)
                 service_type_id=1,
             ),
             ConfigServiceValue(
@@ -124,255 +116,324 @@ def init_time_distance_values(engine):
                 min_value=100.0,
                 tarifa_value=3000.0,
                 weight_value=350.0,
-                # Asociar al segundo VehicleType (moto)
                 service_type_id=2,
             )
         ]
 
         for value in time_distance_values:
             session.add(value)
-
         session.commit()
 
 
-def init_driver_documents():
+def init_project_settings():
     with Session(engine) as session:
-        # Obtener el conductor de prueba (ahora dentro de la misma sesión)
-        driver = session.exec(
-            select(User).where(User.full_name == "prueba_conductor")
-        ).first()
+        existing_settings = session.exec(select(ProjectSettings)).first()
+        if existing_settings:
+            return
 
-        if not driver:
-            driver = User(
-                full_name="prueba_conductor",
+        project_setting = ProjectSettings(
+            driver_dist="2",
+            referral_1="0.02",
+            referral_2="0.0125",
+            referral_3="0.0075",
+            referral_4="0.005",
+            referral_5="0.005",
+            driver_saving="0.01",
+            company="0.04",
+            bonus="20000",
+            amount="50000",
+            created_at=datetime(2025, 5, 20, 15, 35, 26),
+            updated_at=datetime(2025, 5, 20, 15, 35, 26)
+        )
+        session.add(project_setting)
+        session.commit()
+
+
+def init_payment_methods(session: Session):
+    """Inicializa los métodos de pago básicos."""
+    payment_methods = [
+        {"id": 1, "name": "cash"},
+        {"id": 2, "name": "nequi"},
+        {"id": 3, "name": "daviplata"}
+    ]
+
+    for pm in payment_methods:
+        existing = session.exec(select(PaymentMethod).where(
+            PaymentMethod.id == pm["id"])).first()
+        if not existing:
+            payment_method = PaymentMethod(**pm)
+            session.add(payment_method)
+    session.commit()
+
+
+def create_admin(session: Session):
+    admin_email = "admin"
+    admin_password = "admin"
+    admin_role = 1
+    hashed_password = bcrypt.hash(admin_password)
+    admin = session.exec(
+        select(Administrador).where(Administrador.email == admin_email)
+    ).first()
+    if not admin:
+        admin = Administrador(
+            email=admin_email, password=hashed_password, role=admin_role)
+        session.add(admin)
+        session.commit()
+
+
+# ============================================================================
+# NUEVAS FUNCIONES REORGANIZADAS
+# ============================================================================
+
+def create_all_users(session: Session):
+    """1. Crear todos los usuarios (clientes y conductores)"""
+    
+    # Datos de clientes
+    clients_data = [
+        {"full_name": "María García", "phone_number": "3001111111"},
+        {"full_name": "Juan Pérez", "phone_number": "3002222222"},
+        {"full_name": "Ana Martínez", "phone_number": "3003333333"},
+        {"full_name": "Carlos Rodríguez", "phone_number": "3004444444"},
+        {"full_name": "Jhonatan Restrepo", "phone_number": "3004442444"},
+        {"full_name": "Maricela Muños", "phone_number": "3004444445"},
+        {"full_name": "Daniel Carrascal", "phone_number": "3004444446"},
+        {"full_name": "Carlos Valderrama", "phone_number": "3004444447"},
+        {"full_name": "Carmenza Coyazos", "phone_number": "3004444448"},
+        {"full_name": "juan hoyos", "phone_number": "3009644448"},
+        {"full_name": "Marcela Jimenez", "phone_number": "3004444449"},
+        {"full_name": "Paola Roa", "phone_number": "3004994449"},
+        {"full_name": "Jason Avarez", "phone_number": "3004884450"},
+        {"full_name": "Pedro Fernandez", "phone_number": "3004444450"},
+        {"full_name": "Maritza Rodrigez", "phone_number": "3004444451"},
+        {"full_name": "Estephany Pelaez", "phone_number": "3004444452"},
+        {"full_name": "Angela ceballos", "phone_number": "3334444452"},
+        {"full_name": "Diego Mojica", "phone_number": "3004444453"},
+        {"full_name": "Diana Leane", "phone_number": "3004444454"},
+        {"full_name": "Taliana Vega", "phone_number": "3004444455"},
+        {"full_name": "Paulina Vargas", "phone_number": "3004444456"},
+        {"full_name": "Angelina Fernandez", "phone_number": "3004444457"},
+        {"full_name": "Cecilia Castrillon", "phone_number": "3004444458"},
+        {"full_name": "Paulo Coelo", "phone_number": "3004444459"},
+        {"full_name": "Gabriel Garcia", "phone_number": "3004444460"}
+    ]
+
+    # Datos de conductores
+    drivers_data = [
+        {"full_name": "demo_driver", "phone_number": "3009999999"},
+        {"full_name": "prueba_conductor", "phone_number": "3148780278"},
+        {"full_name": "Roberto Sánchez", "phone_number": "3005555555"},
+        {"full_name": "Laura Torres", "phone_number": "3006666666"},
+        {"full_name": "Pedro Gómez", "phone_number": "3007777777"},
+        {"full_name": "Sofía Ramírez", "phone_number": "3008888888"}
+    ]
+
+    # Obtener roles
+    client_role = session.exec(select(Role).where(Role.id == "CLIENT")).first()
+    driver_role = session.exec(select(Role).where(Role.id == "DRIVER")).first()
+
+    clients = []
+    drivers = []
+
+    # Crear clientes
+    for client_data in clients_data:
+        existing_user = session.exec(select(User).where(
+            User.phone_number == client_data["phone_number"]
+        )).first()
+
+        if not existing_user:
+            user = User(
+                full_name=client_data["full_name"],
                 country_code="+57",
-                phone_number="3148780278",
+                phone_number=client_data["phone_number"],
                 is_verified_phone=True,
                 is_active=True
             )
-            session.add(driver)
+            session.add(user)
             session.commit()
-            session.refresh(driver)
+            session.refresh(user)
 
-            # Asignar el rol DRIVER
-            driver_role = session.exec(
-                select(Role).where(Role.id == "DRIVER")
-            ).first()
+            # Asignar rol CLIENT
+            if client_role:
+                user_has_role = UserHasRole(
+                    id_user=user.id,
+                    id_rol=client_role.id,
+                    is_verified=True,
+                    status=RoleStatus.APPROVED,
+                    verified_at=datetime.utcnow()
+                )
+                session.add(user_has_role)
+
+            # Crear selfie
+            selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+            os.makedirs(selfie_dir, exist_ok=True)
+            selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+            shutil.copyfile("img/demo/front foto.jpg", selfie_path)
+            user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
+            session.add(user)
+
+            clients.append(user)
+
+    # Crear conductores (solo usuarios, sin documentos aún)
+    for driver_data in drivers_data:
+        existing_user = session.exec(select(User).where(
+            User.phone_number == driver_data["phone_number"]
+        )).first()
+
+        if not existing_user:
+            user = User(
+                full_name=driver_data["full_name"],
+                country_code="+57",
+                phone_number=driver_data["phone_number"],
+                is_verified_phone=True,
+                is_active=True
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+            # Asignar rol DRIVER
             if driver_role:
                 user_has_role = UserHasRole(
-                    id_user=driver.id,
+                    id_user=user.id,
                     id_rol=driver_role.id,
                     is_verified=True,
                     status=RoleStatus.APPROVED,
                     verified_at=datetime.utcnow()
                 )
                 session.add(user_has_role)
-                session.commit()
-        # Verificar si ya existen tipos de vehículos
-        existing_types = session.exec(select(VehicleType)).all()
-        if existing_types:
-            return
 
-        # Crear tipos de vehículos
-        vehicle_types = [
-            VehicleType(name="car", capacity=4),
-            VehicleType(name="moto", capacity=1)
-        ]
+            # Crear selfie
+            selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+            os.makedirs(selfie_dir, exist_ok=True)
+            selfie_path = os.path.join(selfie_dir, "selfie.jpg")
+            shutil.copyfile("img/demo/front foto.jpg", selfie_path)
+            user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
+            session.add(user)
 
-        for vehicle_type in vehicle_types:
-            session.add(vehicle_type)
+            drivers.append(user)
 
-        session.commit()
-
-        # Obtener los tipos de documentos
-        license_type = session.exec(
-            select(DocumentType).where(DocumentType.name == "license")
-        ).first()
-        soat_type = session.exec(
-            select(DocumentType).where(DocumentType.name == "soat")
-        ).first()
-        tech_type = session.exec(
-            select(DocumentType).where(
-                DocumentType.name == "technical_inspections")
-        ).first()
-        card_type = session.exec(
-            select(DocumentType).where(DocumentType.name == "property_card")
-        ).first()
-
-        if driver:
-            # Verificar si ya existe un DriverInfo para este usuario
-            driver_info = session.exec(
-                select(DriverInfo).where(DriverInfo.user_id == driver.id)
-            ).first()
-
-            if not driver_info:
-                # Crear el DriverInfo
-                driver_info = DriverInfo(
-                    user_id=driver.id,
-                    first_name="prueva",
-                    last_name="conductor",
-                    birth_date=date(1990, 1, 1),  # Fecha de ejemplo
-                    email="conductor.prueba@example.com",
-                    selfie_url="https://example.com/selfie.jpg"
-                )
-                session.add(driver_info)
-                session.commit()
-                session.refresh(driver_info)
-
-            # Crear VehicleInfo para el driver de prueba si no existe
-            vehicle_info = session.exec(
-                select(VehicleInfo).where(
-                    VehicleInfo.driver_info_id == driver_info.id)
-            ).first()
-
-            if not vehicle_info:
-                vehicle_type = session.exec(select(VehicleType).where(
-                    VehicleType.name == "car")).first()
-                vehicle_info = VehicleInfo(
-                    brand="Tesla",
-                    model="Tracker",
-                    model_year=2024,
-                    color="Azul",
-                    plate="XYZ987",
-                    vehicle_type_id=vehicle_type.id if vehicle_type else 1,
-                    driver_info_id=driver_info.id
-                )
-                session.add(vehicle_info)
-                session.commit()
-                session.refresh(vehicle_info)
-
-        # Crear documentos por defecto si no existen
-        default_docs = [
-            {
-                "doc_type": license_type,
-                "front_url": "https://example.com/license_front.jpg",
-                "back_url": "https://example.com/license_back.jpg",
-                "expiration_date": datetime.utcnow() + timedelta(days=65)
-            },
-            {
-                "doc_type": soat_type,
-                "front_url": "https://example.com/soat_front.jpg",
-                "back_url": None,
-                "expiration_date": datetime.utcnow() + timedelta(days=5)
-            },
-            {
-                "doc_type": tech_type,
-                "front_url": "https://example.com/tech_front.jpg",
-                "back_url": None,
-                "expiration_date": datetime.utcnow() + timedelta(days=3)
-            },
-            {
-                "doc_type": card_type,
-                "front_url": "https://example.com/card_front.jpg",
-                "back_url": "https://example.com/card_front.jpg",
-                "expiration_date": datetime.utcnow() + timedelta(days=365)
-            }
-        ]
-
-        for doc in default_docs:
-            if doc["doc_type"]:  # Verificar que el tipo de documento existe
-                # Verificar si el documento ya existe
-                existing_doc = session.exec(
-                    select(DriverDocuments).where(
-                        DriverDocuments.driver_info_id == driver_info.id,
-                        DriverDocuments.document_type_id == doc["doc_type"].id
-                    )
-                ).first()
-
-                if not existing_doc:
-                    new_doc = DriverDocuments(
-                        document_type_id=doc["doc_type"].id,
-                        document_front_url=doc["front_url"],
-                        document_back_url=doc["back_url"],
-                        status=DriverStatus.PENDING,
-                        expiration_date=doc["expiration_date"],
-                        driver_info_id=driver_info.id
-                    )
-                    session.add(new_doc)
-
-        session.commit()
+    session.commit()
+    print(f"✅ Creados {len(clients)} clientes y {len(drivers)} conductores")
+    return {'clients': clients, 'drivers': drivers}
 
 
-def init_demo_driver():
-    with Session(engine) as session:
-        # 1. Crear o buscar usuario demo
-        user = session.exec(select(User).where(
-            User.full_name == "demo_driver")).first()
+def create_all_drivers(session: Session, users):
+    """2. Crear y definir todos los drivers con documentos, transacciones y monto"""
+    
+    drivers = users['drivers']
+    
+    # Configuración de vehículos por conductor
+    driver_configs = [
+        # demo_driver - Carro
+        {
+            "phone": "3009999999",
+            "driver_info": {"first_name": "John", "last_name": "Doe", "birth_date": date(1990, 1, 1), "email": "john@example.com"},
+            "vehicle_info": {"brand": "Toyota", "model": "Corolla", "model_year": 2004, "color": "Red", "plate": "ABC123", "vehicle_type": "Car"}
+        },
+        # prueba_conductor - Carro
+        {
+            "phone": "3148780278",
+            "driver_info": {"first_name": "prueva", "last_name": "conductor", "birth_date": date(1990, 1, 1), "email": "conductor.prueba@example.com"},
+            "vehicle_info": {"brand": "Tesla", "model": "Tracker", "model_year": 2024, "color": "Azul", "plate": "XYZ987", "vehicle_type": "Car"}
+        },
+        # Roberto Sánchez - Carro
+        {
+            "phone": "3005555555",
+            "driver_info": {"first_name": "Roberto", "last_name": "Sánchez", "birth_date": date(1985, 5, 15), "email": "roberto.sanchez@example.com"},
+            "vehicle_info": {"brand": "Chevrolet", "model": "Onix", "model_year": 2023, "color": "Blanco", "plate": "ROB123", "vehicle_type": "Car"}
+        },
+        # Laura Torres - Carro
+        {
+            "phone": "3006666666",
+            "driver_info": {"first_name": "Laura", "last_name": "Torres", "birth_date": date(1990, 8, 20), "email": "laura.torres@example.com"},
+            "vehicle_info": {"brand": "Renault", "model": "Kwid", "model_year": 2022, "color": "Rojo", "plate": "LAU456", "vehicle_type": "Car"}
+        },
+        # Pedro Gómez - Moto
+        {
+            "phone": "3007777777",
+            "driver_info": {"first_name": "Pedro", "last_name": "Gómez", "birth_date": date(1988, 3, 10), "email": "pedro.gomez@example.com"},
+            "vehicle_info": {"brand": "Yamaha", "model": "FZ 2.0", "model_year": 2023, "color": "Negro", "plate": "PED789", "vehicle_type": "Motorcycle"}
+        },
+        # Sofía Ramírez - Moto
+        {
+            "phone": "3008888888",
+            "driver_info": {"first_name": "Sofía", "last_name": "Ramírez", "birth_date": date(1992, 11, 25), "email": "sofia.ramirez@example.com"},
+            "vehicle_info": {"brand": "Honda", "model": "CB 190R", "model_year": 2022, "color": "Azul", "plate": "SOF012", "vehicle_type": "Motorcycle"}
+        }
+    ]
+
+    # Obtener tipos de vehículo y documentos
+    car_type = session.exec(select(VehicleType).where(VehicleType.name == "Car")).first()
+    moto_type = session.exec(select(VehicleType).where(VehicleType.name == "Motorcycle")).first()
+    
+    license_type = session.exec(select(DocumentType).where(DocumentType.name == "license")).first()
+    soat_type = session.exec(select(DocumentType).where(DocumentType.name == "soat")).first()
+    tech_type = session.exec(select(DocumentType).where(DocumentType.name == "technical_inspections")).first()
+    card_type = session.exec(select(DocumentType).where(DocumentType.name == "property_card")).first()
+
+    completed_drivers = []
+
+    for config in driver_configs:
+        # Buscar el usuario por teléfono
+        user = session.exec(select(User).where(User.phone_number == config["phone"])).first()
         if not user:
-            user = User(
-                full_name="demo_driver",
-                country_code="+57",
-                phone_number="3009999999",
-                is_verified_phone=True,
-                is_active=True
-            )
-            session.add(user)
-            session.commit()
-            session.refresh(user)
+            continue
 
-        # 2. Asignar el rol DRIVER si no lo tiene
-        driver_role = session.exec(
-            select(Role).where(Role.id == "DRIVER")).first()
-        if driver_role and driver_role not in user.roles:
-            user.roles.append(driver_role)
-            session.add(user)
-            session.commit()
-            session.refresh(user)
+        # Verificar si ya tiene DriverInfo
+        existing_driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == user.id)).first()
+        if existing_driver_info:
+            continue
 
-        # 3. Crear o buscar DriverInfo
-        driver_info = session.exec(select(DriverInfo).where(
-            DriverInfo.user_id == user.id)).first()
-        if not driver_info:
-            driver_info = DriverInfo(
-                user_id=user.id,
-                first_name="John",
-                last_name="Doe",
-                birth_date=date(1990, 1, 1),
-                email="john@example.com"
-            )
-            session.add(driver_info)
-            session.commit()
-            session.refresh(driver_info)
+        # Crear DriverInfo
+        driver_info = DriverInfo(
+            user_id=user.id,
+            first_name=config["driver_info"]["first_name"],
+            last_name=config["driver_info"]["last_name"],
+            birth_date=config["driver_info"]["birth_date"],
+            email=config["driver_info"]["email"],
+            selfie_url=user.selfie_url
+        )
+        session.add(driver_info)
+        session.commit()
+        session.refresh(driver_info)
 
-        # Guardar selfie demo en static/uploads/users/{user.id}/selfie.jpg y asignar url a user.selfie_url
-        selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
-        os.makedirs(selfie_dir, exist_ok=True)
-        selfie_path = os.path.join(selfie_dir, "selfie.jpg")
-        shutil.copyfile("img/demo/front foto.jpg", selfie_path)
-        user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
-        session.add(user)
+        # Crear transacción BONUS
+        bonus_transaction = Transaction(
+            user_id=user.id,
+            income=20000,
+            expense=0,
+            type=TransactionType.BONUS,
+            client_request_id=None,
+            id_withdrawal=None,
+            is_confirmed=True,
+            date=datetime.utcnow()
+        )
+        session.add(bonus_transaction)
+
+        # Crear registro de monto verificado
+        verify_mount = VerifyMount(
+            user_id=user.id,
+            mount=20000
+        )
+        session.add(verify_mount)
         session.commit()
 
-        # 4. Crear o buscar VehicleInfo
-        vehicle_type = session.exec(select(VehicleType).where(
-            VehicleType.name == "car")).first()
-        vehicle_info = session.exec(select(VehicleInfo).where(
-            VehicleInfo.driver_info_id == driver_info.id)).first()
-        if not vehicle_info:
-            vehicle_info = VehicleInfo(
-                brand="Toyota",
-                model="Corolla",
-                model_year=2004,
-                color="Red",
-                plate="ABC123",
-                vehicle_type_id=vehicle_type.id if vehicle_type else 1,
-                driver_info_id=driver_info.id
-            )
-            session.add(vehicle_info)
-            session.commit()
-            session.refresh(vehicle_info)
+        # Crear VehicleInfo
+        vehicle_type_id = car_type.id if config["vehicle_info"]["vehicle_type"] == "Car" else moto_type.id
+        vehicle_info = VehicleInfo(
+            brand=config["vehicle_info"]["brand"],
+            model=config["vehicle_info"]["model"],
+            model_year=config["vehicle_info"]["model_year"],
+            color=config["vehicle_info"]["color"],
+            plate=config["vehicle_info"]["plate"],
+            vehicle_type_id=vehicle_type_id,
+            driver_info_id=driver_info.id
+        )
+        session.add(vehicle_info)
+        session.commit()
+        session.refresh(vehicle_info)
 
-        # 5. Obtener tipos de documentos
-        license_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "license")).first()
-        soat_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "soat")).first()
-        tech_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "technical_inspections")).first()
-        card_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "property_card")).first()
-
-        # 6. Crear documentos demo con rutas reales y URLs completas
+        # Crear documentos del conductor
         demo_docs = [
             {
                 "doc_type": license_type,
@@ -402,893 +463,331 @@ def init_demo_driver():
 
         for doc in demo_docs:
             if doc["doc_type"]:
-                existing_doc = session.exec(
-                    select(DriverDocuments).where(
-                        DriverDocuments.driver_info_id == driver_info.id,
-                        DriverDocuments.document_type_id == doc["doc_type"].id
-                    )
-                ).first()
-                if not existing_doc:
-                    new_doc = DriverDocuments(
-                        document_type_id=doc["doc_type"].id,
-                        document_front_url=doc["front_url"],
-                        document_back_url=doc["back_url"],
-                        status=DriverStatus.PENDING,
-                        expiration_date=doc["expiration_date"],
-                        driver_info_id=driver_info.id,
-                        vehicle_info_id=vehicle_info.id
-                    )
-                    session.add(new_doc)
-                    # Copiar archivo demo si no existe
-                    if doc["front_url"]:
-                        dest_path = os.path.join(
-                            "static/uploads", doc["front_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
-                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                        shutil.copyfile("img/demo/front foto.jpg", dest_path)
-                    if doc["back_url"]:
-                        dest_path = os.path.join(
-                            "static/uploads", doc["back_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
-                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                        shutil.copyfile("img/demo/back foto.jpg", dest_path)
-        session.commit()
-
-
-def init_additional_clients():
-    """Inicializa clientes adicionales con datos de prueba"""
-    with Session(engine) as session:
-        # Lista de clientes a crear con sus IDs específicos
-        clients_data = [
-            {
-
-                "full_name": "María García",
-                "phone_number": "3001111111",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Juan Pérez",
-                "phone_number": "3002222222",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Ana Martínez",
-                "phone_number": "3003333333",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Carlos Rodríguez",
-                "phone_number": "3004444444",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Jhonatan Restrepo",
-                "phone_number": "3004442444",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Maricela Muños",
-                "phone_number": "3004444445",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Daniel Carrascal",
-                "phone_number": "3004444446",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Carlos Valderrama",
-                "phone_number": "3004444447",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Carmenza Coyazos",
-                "phone_number": "3004444448",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "juan hoyos",
-                "phone_number": "3009644448",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Marcela Jimenez",
-                "phone_number": "3004444449",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Paola Roa",
-                "phone_number": "3004994449",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Jason Avarez",
-                "phone_number": "3004884450",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Pedro Fernandez",
-                "phone_number": "3004444450",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Maritza Rodrigez",
-                "phone_number": "3004444451",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Estephany Pelaez",
-                "phone_number": "3004444452",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Angela ceballos",
-                "phone_number": "3334444452",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Diego Mojica",
-                "phone_number": "3004444453",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Diana Leane",
-                "phone_number": "3004444454",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Taliana Vega",
-                "phone_number": "3004444455",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Paulina Vargas",
-                "phone_number": "3004444456",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Angelina Fernandez",
-                "phone_number": "3004444457",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Cecilia Castrillon",
-                "phone_number": "3004444458",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Paulo Coelo",
-                "phone_number": "3004444459",
-                "selfie_url": None
-            },
-            {
-
-                "full_name": "Cabriel Garcia",
-                "phone_number": "3004444460",
-                "selfie_url": None
-            }
-        ]
-
-        # Obtener el rol CLIENT
-        client_role = session.exec(
-            select(Role).where(Role.id == "CLIENT")).first()
-
-        for client_data in clients_data:
-            # Verificar si el cliente ya existe por ID específico
-            existing_user = session.exec(select(User).where(
-                User.phone_number == client_data["phone_number"]
-            )).first()
-
-            if not existing_user:
-                # Crear nuevo usuario con ID específico
-                user = User(
-                    # id=uuid_prueba(client_data["id"]),  # Usar uuid_prueba con el ID específico
-                    full_name=client_data["full_name"],
-                    country_code="+57",
-                    phone_number=client_data["phone_number"],
-                    is_verified_phone=True,
-                    is_active=True
+                new_doc = DriverDocuments(
+                    document_type_id=doc["doc_type"].id,
+                    document_front_url=doc["front_url"],
+                    document_back_url=doc["back_url"],
+                    status=DriverStatus.APPROVED,
+                    expiration_date=doc["expiration_date"],
+                    driver_info_id=driver_info.id,
+                    vehicle_info_id=vehicle_info.id
                 )
-                session.add(user)
-                session.commit()
-                session.refresh(user)
+                session.add(new_doc)
 
-                # Asignar rol CLIENT
-                if client_role and client_role not in user.roles:
-                    user.roles.append(client_role)
-                    session.add(user)
-                    session.commit()
+                # Copiar archivos demo
+                if doc["front_url"]:
+                    dest_path = os.path.join(
+                        "static/uploads", doc["front_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    shutil.copyfile("img/demo/front foto.jpg", dest_path)
+                if doc["back_url"]:
+                    dest_path = os.path.join(
+                        "static/uploads", doc["back_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    shutil.copyfile("img/demo/back foto.jpg", dest_path)
 
-                    # Actualizar estado del rol
-                    user_has_role = session.exec(
-                        select(UserHasRole).where(
-                            UserHasRole.id_user == user.id,
-                            UserHasRole.id_rol == client_role.id
-                        )
-                    ).first()
-
-                    if user_has_role:
-                        user_has_role.is_verified = True
-                        user_has_role.status = RoleStatus.APPROVED
-                        user_has_role.verified_at = datetime.utcnow()
-                        session.add(user_has_role)
-                        session.commit()
-
-                # Guardar selfie demo
-                selfie_dir = os.path.join(
-                    "static", "uploads", "users", str(user.id))
-                os.makedirs(selfie_dir, exist_ok=True)
-                selfie_path = os.path.join(selfie_dir, "selfie.jpg")
-                shutil.copyfile("img/demo/front foto.jpg", selfie_path)
-                user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
-                session.add(user)
-                session.commit()
-
-
-def init_additional_drivers():
-    """Inicializa 4 conductores adicionales (2 con carro y 2 con moto)"""
-    with Session(engine) as session:
-        # Datos de los conductores
-        drivers_data = [
-            # Conductores con carro
-            {
-                "user": {
-                    "full_name": "Roberto Sánchez",
-                    "phone_number": "3005555555"
-                },
-                "driver_info": {
-                    "first_name": "Roberto",
-                    "last_name": "Sánchez",
-                    "birth_date": date(1985, 5, 15),
-                    "email": "roberto.sanchez@example.com"
-                },
-                "vehicle_info": {
-                    "brand": "Chevrolet",
-                    "model": "Onix",
-                    "model_year": 2023,
-                    "color": "Blanco",
-                    "plate": "ABC123"
-                }
-            },
-            {
-                "user": {
-                    "full_name": "Laura Torres",
-                    "phone_number": "3006666666"
-                },
-                "driver_info": {
-                    "first_name": "Laura",
-                    "last_name": "Torres",
-                    "birth_date": date(1990, 8, 20),
-                    "email": "laura.torres@example.com"
-                },
-                "vehicle_info": {
-                    "brand": "Renault",
-                    "model": "Kwid",
-                    "model_year": 2022,
-                    "color": "Rojo",
-                    "plate": "DEF456"
-                }
-            },
-            # Conductores con moto
-            {
-                "user": {
-                    "full_name": "Pedro Gómez",
-                    "phone_number": "3007777777"
-                },
-                "driver_info": {
-                    "first_name": "Pedro",
-                    "last_name": "Gómez",
-                    "birth_date": date(1988, 3, 10),
-                    "email": "pedro.gomez@example.com"
-                },
-                "vehicle_info": {
-                    "brand": "Yamaha",
-                    "model": "FZ 2.0",
-                    "model_year": 2023,
-                    "color": "Negro",
-                    "plate": "GHI789"
-                }
-            },
-            {
-                "user": {
-                    "full_name": "Sofía Ramírez",
-                    "phone_number": "3008888888"
-                },
-                "driver_info": {
-                    "first_name": "Sofía",
-                    "last_name": "Ramírez",
-                    "birth_date": date(1992, 11, 25),
-                    "email": "sofia.ramirez@example.com"
-                },
-                "vehicle_info": {
-                    "brand": "Honda",
-                    "model": "CB 190R",
-                    "model_year": 2022,
-                    "color": "Azul",
-                    "plate": "JKL012"
-                }
-            }
-        ]
-
-        # Obtener roles y tipos necesarios
-        driver_role = session.exec(
-            select(Role).where(Role.id == "DRIVER")).first()
-        car_type = session.exec(select(VehicleType).where(
-            VehicleType.name == "Car")).first()
-        moto_type = session.exec(select(VehicleType).where(
-            VehicleType.name == "Motorcycle")).first()
-
-        # Obtener tipos de documentos
-        license_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "license")).first()
-        soat_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "soat")).first()
-        tech_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "technical_inspections")).first()
-        card_type = session.exec(select(DocumentType).where(
-            DocumentType.name == "property_card")).first()
-
-        for i, driver_data in enumerate(drivers_data):
-            # Verificar si el conductor ya existe
-            existing_user = session.exec(select(User).where(
-                User.phone_number == driver_data["user"]["phone_number"]
-            )).first()
-
-            if not existing_user:
-                # Crear usuario
-                user = User(
-                    full_name=driver_data["user"]["full_name"],
-                    country_code="+57",
-                    phone_number=driver_data["user"]["phone_number"],
-                    is_verified_phone=True,
-                    is_active=True
-                )
-                session.add(user)
-                session.commit()
-                session.refresh(user)
-
-                # Asignar rol DRIVER
-                if driver_role and driver_role not in user.roles:
-                    user.roles.append(driver_role)
-                    session.add(user)
-                    session.commit()
-
-                    # Actualizar estado del rol a APPROVED
-                    user_has_role = session.exec(
-                        select(UserHasRole).where(
-                            UserHasRole.id_user == user.id,
-                            UserHasRole.id_rol == driver_role.id
-                        )
-                    ).first()
-
-                    if user_has_role:
-                        user_has_role.is_verified = True
-                        user_has_role.status = RoleStatus.APPROVED
-                        user_has_role.verified_at = datetime.utcnow()
-                        session.add(user_has_role)
-                        session.commit()
-
-                # Guardar selfie
-                selfie_dir = os.path.join(
-                    "static", "uploads", "users", str(user.id))
-                os.makedirs(selfie_dir, exist_ok=True)
-                selfie_path = os.path.join(selfie_dir, "selfie.jpg")
-                shutil.copyfile("img/demo/front foto.jpg", selfie_path)
-                user.selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{user.id}/selfie.jpg"
-                session.add(user)
-                session.commit()
-
-                # Crear DriverInfo
-                driver_info = DriverInfo(
-                    user_id=user.id,
-                    first_name=driver_data["driver_info"]["first_name"],
-                    last_name=driver_data["driver_info"]["last_name"],
-                    birth_date=driver_data["driver_info"]["birth_date"],
-                    email=driver_data["driver_info"]["email"],
-                    selfie_url=user.selfie_url
-                )
-                session.add(driver_info)
-                session.commit()
-                session.refresh(driver_info)
-
-                transaction = Transaction(
-                    user_id=user.id,
-                    income=2000,
-                    expense=0,
-                    type="BONUS",
-                    client_request_id=None
-                )
-
-                session.add(transaction)
-                session.commit()
-                session.refresh(transaction)
-
-                # Crear VehicleInfo
-                vehicle_type_id = car_type.id if i < 2 else moto_type.id
-                vehicle_info = VehicleInfo(
-                    brand=driver_data["vehicle_info"]["brand"],
-                    model=driver_data["vehicle_info"]["model"],
-                    model_year=driver_data["vehicle_info"]["model_year"],
-                    color=driver_data["vehicle_info"]["color"],
-                    plate=driver_data["vehicle_info"]["plate"],
-                    vehicle_type_id=vehicle_type_id,
-                    driver_info_id=driver_info.id
-                )
-                session.add(vehicle_info)
-                session.commit()
-                session.refresh(vehicle_info)
-
-                # Crear documentos del conductor
-                demo_docs = [
-                    {
-                        "doc_type": license_type,
-                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/license/demo_license_front.jpg"),
-                        "back_url": uploader.get_file_url(f"drivers/{driver_info.id}/license/demo_license_back.jpg"),
-                        "expiration_date": date(2025, 1, 1)
-                    },
-                    {
-                        "doc_type": soat_type,
-                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/soat/demo_soat_front.jpg"),
-                        "back_url": None,
-                        "expiration_date": date(2024, 12, 31)
-                    },
-                    {
-                        "doc_type": tech_type,
-                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/technical_inspections/demo_tech_front.jpg"),
-                        "back_url": None,
-                        "expiration_date": date(2024, 12, 31)
-                    },
-                    {
-                        "doc_type": card_type,
-                        "front_url": uploader.get_file_url(f"drivers/{driver_info.id}/property_card/demo_card_front.jpg"),
-                        "back_url": uploader.get_file_url(f"drivers/{driver_info.id}/property_card/demo_card_back.jpg"),
-                        "expiration_date": date(2025, 12, 31)
-                    }
-                ]
-
-                for doc in demo_docs:
-                    if doc["doc_type"]:
-                        new_doc = DriverDocuments(
-                            document_type_id=doc["doc_type"].id,
-                            document_front_url=doc["front_url"],
-                            document_back_url=doc["back_url"],
-                            status=DriverStatus.APPROVED,  # Establecer como APPROVED
-                            expiration_date=doc["expiration_date"],
-                            driver_info_id=driver_info.id,
-                            vehicle_info_id=vehicle_info.id
-                        )
-                        session.add(new_doc)
-
-                        # Copiar archivos demo
-                        if doc["front_url"]:
-                            dest_path = os.path.join(
-                                "static/uploads", doc["front_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
-                            os.makedirs(os.path.dirname(
-                                dest_path), exist_ok=True)
-                            shutil.copyfile(
-                                "img/demo/front foto.jpg", dest_path)
-                        if doc["back_url"]:
-                            dest_path = os.path.join(
-                                "static/uploads", doc["back_url"].replace(f"{settings.STATIC_URL_PREFIX}/", ""))
-                            os.makedirs(os.path.dirname(
-                                dest_path), exist_ok=True)
-                            shutil.copyfile(
-                                "img/demo/back foto.jpg", dest_path)
-
-                session.commit()
-
-
-def init_client_requests_and_driver_positions():
-    """Inicializa solicitudes de viaje y posiciones de conductores"""
-    # Primero crear las solicitudes de clientes
-    with Session(engine) as session:
-        try:
-            # Importar modelos necesarios
-            from app.models.type_service import TypeService
-            from app.models.client_request import ClientRequest, StatusEnum
-            from app.models.driver_position import DriverPosition
-            from geoalchemy2.shape import from_shape
-            from shapely.geometry import Point
-
-            # Verificar si ya existen solicitudes
-            existing_requests = session.exec(select(ClientRequest)).first()
-            if existing_requests:
-                print(
-                    "Ya existen solicitudes en la base de datos, omitiendo creación de nuevas solicitudes.")
-                return
-
-            # Coordenadas de prueba en Bogotá
-            TEST_COORDINATES = {
-                # Conductores
-                "drivers": {
-                    "roberto_sanchez": {  # Conductor de carro
-                        "lat": 4.708822,
-                        "lng": -74.076542
-                    },
-                    "laura_torres": {  # Conductor de carro
-                        "lat": 4.712345,
-                        "lng": -74.078901
-                    },
-                    "pedro_gomez": {  # Conductor de moto
-                        "lat": 4.715678,
-                        "lng": -74.081234
-                    },
-                    "sofia_ramirez": {  # Conductor de moto
-                        "lat": 4.719012,
-                        "lng": -74.083567
-                    }
-                },
-                # Puntos de recogida
-                "pickup_points": {
-                    "suba": {
-                        "lat": 4.718136,
-                        "lng": -74.073170,
-                        "description": "Suba Bogotá"
-                    },
-                    "engativa": {
-                        "lat": 4.702468,
-                        "lng": -74.109776,
-                        "description": "Santa Rosita Engativa"
-                    },
-                    "chapinero": {
-                        "lat": 4.648270,
-                        "lng": -74.061890,
-                        "description": "Chapinero Centro"
-                    },
-                    "kennedy": {
-                        "lat": 4.609710,
-                        "lng": -74.151750,
-                        "description": "Kennedy Central"
-                    }
-                },
-                # Destinos
-                "destinations": {
-                    "centro": {
-                        "lat": 4.598100,
-                        "lng": -74.076100,
-                        "description": "Centro Internacional"
-                    },
-                    "norte": {
-                        "lat": 4.798100,
-                        "lng": -74.046100,
-                        "description": "Centro Comercial Andino"
-                    },
-                    "occidente": {
-                        "lat": 4.698100,
-                        "lng": -74.126100,
-                        "description": "Centro Comercial Metrópolis"
-                    },
-                    "sur": {
-                        "lat": 4.558100,
-                        "lng": -74.146100,
-                        "description": "Portal Sur"
-                    }
-                }
-            }
-
-            # Obtener IDs de tipos de servicio
-            car_service = session.exec(
-                select(TypeService)
-                .join(VehicleType)
-                .where(VehicleType.name == "Car")
-            ).first()
-            moto_service = session.exec(
-                select(TypeService)
-                .join(VehicleType)
-                .where(VehicleType.name == "Motorcycle")
-            ).first()
-
-            if not car_service or not moto_service:
-                raise Exception("No se encontraron los tipos de servicio")
-
-            # Obtener usuarios (clientes)
-            clients = {}
-            for phone in ["3001111111", "3002222222", "3003333333", "3004444444"]:
-                client = session.exec(select(User).where(
-                    User.phone_number == phone)).first()
-                if not client:
-                    continue
-                clients[phone] = client
-
-            if not clients:
-                raise Exception(
-                    "No se encontraron clientes para crear solicitudes")
-
-            # Crear solicitudes de viaje solo para los clientes encontrados
-            requests_data = []
-            if "3001111111" in clients:  # María García (carro)
-                requests_data.extend([
-                    {"client": clients["3001111111"], "type": car_service.id,
-                        "pickup": "suba", "destination": "centro"},
-                    {"client": clients["3001111111"], "type": car_service.id,
-                        "pickup": "engativa", "destination": "norte"}
-                ])
-            if "3002222222" in clients:  # Juan Pérez (carro)
-                requests_data.extend([
-                    {"client": clients["3002222222"], "type": car_service.id,
-                        "pickup": "chapinero", "destination": "occidente"},
-                    {"client": clients["3002222222"], "type": car_service.id,
-                        "pickup": "kennedy", "destination": "sur"}
-                ])
-            if "3003333333" in clients:  # Ana Martínez (moto)
-                requests_data.extend([
-                    {"client": clients["3003333333"], "type": moto_service.id,
-                        "pickup": "suba", "destination": "norte"},
-                    {"client": clients["3003333333"], "type": moto_service.id,
-                        "pickup": "engativa", "destination": "centro"}
-                ])
-            if "3004444444" in clients:  # Carlos Rodríguez (moto)
-                requests_data.extend([
-                    {"client": clients["3004444444"], "type": moto_service.id,
-                        "pickup": "chapinero", "destination": "sur"},
-                    {"client": clients["3004444444"], "type": moto_service.id,
-                        "pickup": "kennedy", "destination": "occidente"}
-                ])
-
-            # Crear las solicitudes
-            created_requests = []  # Lista para almacenar las solicitudes creadas
-            for req_data in requests_data:
-                if not req_data["client"] or not req_data["client"].id:
-                    continue
-
-                pickup = TEST_COORDINATES["pickup_points"][req_data["pickup"]]
-                dest = TEST_COORDINATES["destinations"][req_data["destination"]]
-
-                try:
-                    id_client = req_data["client"].id
-
-                    # Crear solicitud con validación explícita
-                    request = ClientRequest(
-                        id_client=id_client,
-                        type_service_id=req_data["type"],
-                        fare_offered=20000,
-                        pickup_description=pickup["description"],
-                        destination_description=dest["description"],
-                        pickup_position=from_shape(
-                            Point(pickup["lng"], pickup["lat"]), srid=4326),
-                        destination_position=from_shape(
-                            Point(dest["lng"], dest["lat"]), srid=4326),
-                        status=StatusEnum.CREATED
-                    )
-
-                    # Validar que el id_client se mantuvo
-                    if request.id_client != id_client:
-                        continue
-
-                    session.add(request)
-                    created_requests.append(request)
-                except Exception as e:
-                    continue
-
-            # Commit de las solicitudes
-            session.commit()
-            print(f"Se crearon {len(created_requests)} solicitudes de prueba.")
-        except Exception as e:
-            session.rollback()
-            raise
-
-    # Luego actualizar las posiciones de los conductores en una transacción separada
-    with Session(engine) as session:
-        try:
-            # Obtener conductores
-            drivers = {}
-            for phone in ["3005555555", "3006666666", "3007777777", "3008888888"]:
-                driver = session.exec(select(User).where(
-                    User.phone_number == phone)).first()
-                if not driver:
-                    continue
-                drivers[phone] = driver
-
-            if not drivers:
-                raise Exception(
-                    "No se encontraron conductores para actualizar posiciones")
-
-            # Actualizar posiciones de conductores
-            for phone, driver in drivers.items():
-                if not driver or not driver.id:
-                    continue
-
-                driver_coords = None
-                if phone == "3005555555":
-                    driver_coords = TEST_COORDINATES["drivers"]["roberto_sanchez"]
-                elif phone == "3006666666":
-                    driver_coords = TEST_COORDINATES["drivers"]["laura_torres"]
-                elif phone == "3007777777":
-                    driver_coords = TEST_COORDINATES["drivers"]["pedro_gomez"]
-                elif phone == "3008888888":
-                    driver_coords = TEST_COORDINATES["drivers"]["sofia_ramirez"]
-
-                if driver_coords:
-                    try:
-                        with session.no_autoflush:
-                            position = DriverPosition(
-                                id_driver=driver.id,
-                                position=from_shape(
-                                    Point(driver_coords["lng"], driver_coords["lat"]), srid=4326)
-                            )
-                            session.merge(position)
-                    except Exception as e:
-                        continue
-
-            # Commit de las posiciones
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            raise
-
-
-def init_referral_data():
-    """Inicializa los datos por defecto para la tabla Referral usando UUIDs"""
-    with Session(engine) as session:
-        # Datos de referidos usando phone_number
-        referral_data = [
-            {"user_phone": "3003333333", "referrer_phone": "3002222222"},
-            {"user_phone": "3004444444", "referrer_phone": "3001111111"},
-            {"user_phone": "3004444445", "referrer_phone": "3001111111"},
-            {"user_phone": "3004444446", "referrer_phone": "3003333333"},
-            {"user_phone": "3004444447", "referrer_phone": "3004444446"},
-            {"user_phone": "3004444448", "referrer_phone": "3004442444"},
-            {"user_phone": "3004444449", "referrer_phone": "3004442444"},
-            {"user_phone": "3004444450", "referrer_phone": "3004884450"},
-            {"user_phone": "3004444451", "referrer_phone": "3004444450"},
-            {"user_phone": "3004444452", "referrer_phone": "3004444451"},
-            {"user_phone": "3334444452", "referrer_phone": "3004444452"},
-            {"user_phone": "3004444453", "referrer_phone": "3004444446"},
-            {"user_phone": "3004444454", "referrer_phone": "3004444449"},
-            {"user_phone": "3004444455", "referrer_phone": "3004444453"},
-            {"user_phone": "3004444456", "referrer_phone": "3004444447"},
-            {"user_phone": "3004444457", "referrer_phone": "3004444448"},
-            {"user_phone": "3004444458", "referrer_phone": "3001111111"},
-            {"user_phone": "3004444459", "referrer_phone": "3004444454"},
-            {"user_phone": "3004444460", "referrer_phone": "3004444449"},
-            # ...agrega el resto según tu lógica anterior
-        ]
-
-        # Verificar si ya existen registros en la tabla Referral
-        existing_referrals = session.exec(select(Referral)).all()
-        if existing_referrals:
-            return
-
-        for data in referral_data:
-            user = session.exec(select(User).where(
-                User.phone_number == data["user_phone"])).first()
-            referrer = session.exec(select(User).where(
-                User.phone_number == data["referrer_phone"])).first()
-
-            if user and referrer:
-                referral = Referral(
-                    user_id=user.id,  # UUID
-                    referred_by_id=referrer.id  # UUID
-                )
-                session.add(referral)
-            else:
-                print(
-                    f"No se pudo crear referido: usuario {data['user_phone']} o referente {data['referrer_phone']} no existe.")
-
-        session.commit()
-
-
-def init_project_settings():
-    """Inicializa los datos por defecto para la tabla ProjectSettings"""
-    from datetime import datetime
-
-    with Session(engine) as session:
-        # Verificar si ya existen registros
-        existing_settings = session.exec(select(ProjectSettings)).first()
-        if existing_settings:
-            # print("Ya existen datos en la tabla ProjectSettings, omitiendo inicialización.")
-            return
-
-        # Datos por defecto (un solo registro)
-        project_setting = ProjectSettings(
-            driver_dist="2",
-            referral_1="0.02",
-            referral_2="0.0125",
-            referral_3="0.0075",
-            referral_4="0.005",
-            referral_5="0.005",
-            driver_saving="0.01",
-            company="0.04",
-            bonus="20000",
-            amount="50000",  # Monto mínimo para retiro de ahorros
-            created_at=datetime(2025, 5, 20, 15, 35, 26),
-            updated_at=datetime(2025, 5, 20, 15, 35, 26)
-        )
-        session.add(project_setting)
-        session.commit()
-        # print("Datos de ProjectSettings inicializados correctamente.")
-
-
-def create_admin(session: Session):
-    admin_email = "admin"
-    admin_password = "admin"
-    admin_role = 1
-    hashed_password = bcrypt.hash(admin_password)
-    admin = session.exec(
-        select(Administrador).where(Administrador.email == admin_email)
-    ).first()
-    if not admin:
-        admin = Administrador(
-            email=admin_email, password=hashed_password, role=admin_role)
-        session.add(admin)
-        session.commit()
-
-
-def init_payment_methods(session: Session):
-    """Inicializa los métodos de pago básicos."""
-    payment_methods = [
-        {"id": 1, "name": "cash"},
-        {"id": 2, "name": "nequi"},
-        {"id": 3, "name": "daviplata"}
-    ]
-
-    for pm in payment_methods:
-        existing = session.query(PaymentMethod).filter(
-            PaymentMethod.id == pm["id"]).first()
-        if not existing:
-            payment_method = PaymentMethod(**pm)
-            session.add(payment_method)
+        completed_drivers.append(user)
 
     session.commit()
+    print(f"✅ Configurados {len(completed_drivers)} conductores con documentos, transacciones y montos")
+    return completed_drivers
 
+
+def create_client_requests(session: Session, users, drivers):
+    """3. Crear 12 client_request (6 moto, 6 carro)"""
+    
+    # Coordenadas de prueba en Bogotá
+    TEST_COORDINATES = {
+        "pickup_points": [
+            {"lat": 4.718136, "lng": -74.073170, "description": "Suba Bogotá"},
+            {"lat": 4.702468, "lng": -74.109776, "description": "Santa Rosita Engativa"},
+            {"lat": 4.648270, "lng": -74.061890, "description": "Chapinero Centro"},
+            {"lat": 4.609710, "lng": -74.151750, "description": "Kennedy Central"},
+            {"lat": 4.760032, "lng": -74.037677, "description": "Zona Rosa"},
+            {"lat": 4.628594, "lng": -74.064865, "description": "Universidad Nacional"},
+            {"lat": 4.686419, "lng": -74.055969, "description": "Zona T"},
+            {"lat": 4.570868, "lng": -74.297333, "description": "Fontibón"},
+            {"lat": 4.638618, "lng": -74.082618, "description": "La Candelaria"},
+            {"lat": 4.595447, "lng": -74.166527, "description": "Corabastos"},
+            {"lat": 4.711486, "lng": -74.072502, "description": "Plaza de las Américas"},
+            {"lat": 4.624335, "lng": -74.063611, "description": "Museo del Oro"}
+        ],
+        "destinations": [
+            {"lat": 4.598100, "lng": -74.076100, "description": "Centro Internacional"},
+            {"lat": 4.798100, "lng": -74.046100, "description": "Centro Comercial Andino"},
+            {"lat": 4.698100, "lng": -74.126100, "description": "Centro Comercial Metrópolis"},
+            {"lat": 4.558100, "lng": -74.146100, "description": "Portal Sur"},
+            {"lat": 4.676220, "lng": -74.048066, "description": "Aeropuerto El Dorado"},
+            {"lat": 4.601009, "lng": -74.065863, "description": "Terminal de Transporte"},
+            {"lat": 4.711111, "lng": -74.072222, "description": "Centro Comercial Titán Plaza"},
+            {"lat": 4.590278, "lng": -74.132500, "description": "Hospital Kennedy"},
+            {"lat": 4.657889, "lng": -74.054167, "description": "Universidad Javeriana"},
+            {"lat": 4.628056, "lng": -74.064722, "description": "Palacio de Justicia"},
+            {"lat": 4.715278, "lng": -74.036111, "description": "Centro Comercial Santafé"},
+            {"lat": 4.624722, "lng": -74.063889, "description": "Plaza Bolívar"}
+        ]
+    }
+
+    # Obtener tipos de servicio
+    car_service = session.exec(
+        select(TypeService)
+        .join(VehicleType)
+        .where(VehicleType.name == "Car")
+    ).first()
+    moto_service = session.exec(
+        select(TypeService)
+        .join(VehicleType)
+        .where(VehicleType.name == "Motorcycle")
+    ).first()
+
+    if not car_service or not moto_service:
+        raise Exception("No se encontraron los tipos de servicio")
+
+    clients = users['clients'][:12]  # Primeros 12 clientes
+    requests = []
+
+    for i in range(12):
+        client = clients[i]
+        pickup = TEST_COORDINATES["pickup_points"][i]
+        destination = TEST_COORDINATES["destinations"][i]
+        
+        # 6 de moto (índices pares) y 6 de carro (índices impares)
+        type_service_id = moto_service.id if i % 2 == 0 else car_service.id
+        
+        request = ClientRequest(
+            id_client=client.id,
+            type_service_id=type_service_id,
+            fare_offered=random.randint(15000, 25000),
+            pickup_description=pickup["description"],
+            destination_description=destination["description"],
+            pickup_position=from_shape(Point(pickup["lng"], pickup["lat"]), srid=4326),
+            destination_position=from_shape(Point(destination["lng"], destination["lat"]), srid=4326),
+            payment_method_id=random.randint(1, 3),
+            status=StatusEnum.CREATED
+        )
+        
+        session.add(request)
+        requests.append(request)
+
+    session.commit()
+    for req in requests:
+        session.refresh(req)
+    
+    print(f"✅ Creadas {len(requests)} solicitudes (6 moto, 6 carro)")
+    return requests
+
+
+def create_driver_offers(session: Session, drivers, requests):
+    """4. Drivers realizan ofertas sobre los requests"""
+    
+    # Obtener información de vehículos de los conductores
+    driver_vehicle_types = {}
+    for driver in drivers:
+        driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == driver.id)).first()
+        if driver_info:
+            vehicle_info = session.exec(select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)).first()
+            if vehicle_info:
+                vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == vehicle_info.vehicle_type_id)).first()
+                driver_vehicle_types[driver.id] = vehicle_type.name
+
+    offers_created = 0
+    
+    for request in requests:
+        # Obtener el tipo de servicio del request
+        type_service = session.exec(select(TypeService).where(TypeService.id == request.type_service_id)).first()
+        vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == type_service.vehicle_type_id)).first()
+        
+        # Filtrar conductores que pueden atender este tipo de servicio
+        eligible_drivers = [
+            driver for driver in drivers 
+            if driver.id in driver_vehicle_types and driver_vehicle_types[driver.id] == vehicle_type.name
+        ]
+        
+        # Cada request recibe ofertas de 1-3 conductores elegibles
+        num_offers = random.randint(1, min(3, len(eligible_drivers)))
+        selected_drivers = random.sample(eligible_drivers, num_offers)
+        
+        for driver in selected_drivers:
+            fare_offer = request.fare_offered + random.randint(1000, 5000)
+            trip_offer = DriverTripOffer(
+                id_driver=driver.id,
+                id_client_request=request.id,
+                fare_offer=fare_offer,
+                time=random.randint(10, 30),
+                distance=random.randint(3, 15)
+            )
+            session.add(trip_offer)
+            offers_created += 1
+
+    session.commit()
+    print(f"✅ Creadas {offers_created} ofertas de conductores")
+
+
+def complete_some_requests(session: Session, drivers, requests):
+    """5. Completar 5 client_request (asignar driver, marcar como PAID, etc)"""
+    
+    # Obtener información de vehículos de los conductores
+    driver_vehicle_types = {}
+    for driver in drivers:
+        driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == driver.id)).first()
+        if driver_info:
+            vehicle_info = session.exec(select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)).first()
+            if vehicle_info:
+                vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == vehicle_info.vehicle_type_id)).first()
+                driver_vehicle_types[driver.id] = vehicle_type.name
+
+    # Seleccionar 5 requests para completar
+    requests_to_complete = requests[:5]
+    completed_count = 0
+
+    for request in requests_to_complete:
+        # Obtener ofertas para este request
+        offers = session.exec(
+            select(DriverTripOffer).where(DriverTripOffer.id_client_request == request.id)
+        ).all()
+        
+        if offers:
+            # Seleccionar una oferta aleatoria
+            selected_offer = random.choice(offers)
+            
+            # Completar la solicitud
+            request.id_driver_assigned = selected_offer.id_driver
+            request.fare_assigned = selected_offer.fare_offer
+            request.client_rating = round(random.uniform(4.0, 5.0), 1)
+            request.driver_rating = round(random.uniform(4.0, 5.0), 1)
+            request.review = random.choice([
+                "Excelente servicio",
+                "Muy buen conductor",
+                "Puntual y amable",
+                "Viaje cómodo y seguro",
+                "Recomendado",
+                "Muy profesional"
+            ])
+            request.status = StatusEnum.PAID
+            
+            session.add(request)
+            completed_count += 1
+
+    session.commit()
+    print(f"✅ Completadas {completed_count} solicitudes con estado PAID")
+
+
+def init_referral_data(session: Session, users):
+    """Inicializa los datos de referidos"""
+    referral_data = [
+        {"user_phone": "3003333333", "referrer_phone": "3002222222"},
+        {"user_phone": "3004444444", "referrer_phone": "3001111111"},
+        {"user_phone": "3004444445", "referrer_phone": "3001111111"},
+        {"user_phone": "3004444446", "referrer_phone": "3003333333"},
+        {"user_phone": "3004444447", "referrer_phone": "3004444446"},
+        {"user_phone": "3004444448", "referrer_phone": "3004442444"},
+        {"user_phone": "3004444449", "referrer_phone": "3004442444"},
+        {"user_phone": "3004444450", "referrer_phone": "3004884450"},
+        {"user_phone": "3004444451", "referrer_phone": "3004444450"},
+        {"user_phone": "3004444452", "referrer_phone": "3004444451"},
+        {"user_phone": "3334444452", "referrer_phone": "3004444452"},
+        {"user_phone": "3004444453", "referrer_phone": "3004444446"},
+        {"user_phone": "3004444454", "referrer_phone": "3004444449"},
+        {"user_phone": "3004444455", "referrer_phone": "3004444453"},
+        {"user_phone": "3004444456", "referrer_phone": "3004444447"},
+        {"user_phone": "3004444457", "referrer_phone": "3004444448"},
+        {"user_phone": "3004444458", "referrer_phone": "3001111111"},
+        {"user_phone": "3004444459", "referrer_phone": "3004444454"},
+        {"user_phone": "3004444460", "referrer_phone": "3004444449"},
+    ]
+
+    existing_referrals = session.exec(select(Referral)).all()
+    if existing_referrals:
+        return
+
+    for data in referral_data:
+        user = session.exec(select(User).where(User.phone_number == data["user_phone"])).first()
+        referrer = session.exec(select(User).where(User.phone_number == data["referrer_phone"])).first()
+
+        if user and referrer:
+            referral = Referral(
+                user_id=user.id,
+                referred_by_id=referrer.id
+            )
+            session.add(referral)
+
+    session.commit()
+    print("✅ Datos de referidos inicializados")
+
+
+def create_driver_positions(session: Session, drivers):
+    """Crear posiciones de conductores"""
+    driver_positions = {
+        "3009999999": {"lat": 4.708822, "lng": -74.076542},  # demo_driver
+        "3148780278": {"lat": 4.712345, "lng": -74.078901},  # prueba_conductor
+        "3005555555": {"lat": 4.715678, "lng": -74.081234},  # Roberto
+        "3006666666": {"lat": 4.719012, "lng": -74.083567},  # Laura
+        "3007777777": {"lat": 4.722345, "lng": -74.085890},  # Pedro
+        "3008888888": {"lat": 4.725678, "lng": -74.088123},  # Sofía
+    }
+
+    for driver in drivers:
+        if driver.phone_number in driver_positions:
+            coords = driver_positions[driver.phone_number]
+            position = DriverPosition(
+                id_driver=driver.id,
+                position=from_shape(Point(coords["lng"], coords["lat"]), srid=4326)
+            )
+            session.merge(position)
+
+    session.commit()
+    print("✅ Posiciones de conductores creadas")
+
+
+# ============================================================================
+# FUNCIÓN PRINCIPAL
+# ============================================================================
 
 def init_data():
     """Inicializa los datos básicos de la aplicación."""
     session = Session(engine)
 
     try:
-        # Primero inicializar roles y tipos de documento
+        print("🚀 Iniciando configuración de datos...")
+        
+        # Configuración básica
         init_roles()
         init_document_types()
-
-        # Luego inicializar tipos de vehículo
-        vehicle_types = init_vehicle_types(engine)
-        if not vehicle_types:
-            # Si ya existen, obténlos de la base de datos
-            with Session(engine) as session:
-                vehicle_types = session.exec(select(VehicleType)).all()
-
-        # Después inicializar tipos de servicio (que dependen de los tipos de vehículo)
+        init_vehicle_types(engine)
+        
+        # Inicializar tipos de servicio
         type_service_service = TypeServiceService(session)
         type_service_service.init_default_types()
 
-        # Inicializar usuarios de prueba
-
-        init_additional_clients()  # Agregar 25 clientes a
-        init_driver_documents()
         init_time_distance_values(engine)
-        init_demo_driver()
-        init_additional_drivers()  # Agregar 4 conductores adicionales
-        # Agregar solicitudes y posiciones de conductores
-        init_client_requests_and_driver_positions()
-        init_referral_data()  # agrega 19 referidos
-        init_project_settings()  # anexa congiguraciones de porcentajes de negocio
+        init_project_settings()
         init_payment_methods(session)
+        # 1. Crear todos los usuarios (clientes y conductores)
+        users = create_all_users(session)
+
+        # 2. Crear y definir todos los drivers con documentos, transacciones y monto
+        drivers = create_all_drivers(session, users)
+
+        # 3. Crear 12 client_request (6 moto, 6 carro)
+        requests = create_client_requests(session, users, drivers)
+
+        # 4. Drivers realizan ofertas sobre los requests
+        create_driver_offers(session, drivers, requests)
+
+        # 5. Completar 5 client_request (asignar driver, marcar como PAID, etc)
+        complete_some_requests(session, drivers, requests)
+
+        # Datos adicionales
+        init_referral_data(session, users)
+        create_driver_positions(session, drivers)
         create_admin(session)
+
+        session.commit()
+        print("✅ Inicialización completada correctamente.")
 
     except Exception as e:
         session.rollback()
+        print(f"❌ Error en la inicialización: {e}")
         raise
     finally:
         session.close()

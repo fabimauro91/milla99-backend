@@ -8,7 +8,7 @@ from app.services.withdrawal_service import WithdrawalService
 
 router = APIRouter(
     prefix="/withdrawals",
-    tags=["ADMIN: withdrawals"]
+    tags=["ADMIN"]
 )
 
 

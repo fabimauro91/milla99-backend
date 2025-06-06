@@ -23,7 +23,7 @@ from app.models.document_type import DocumentType
 from app.core.config import settings
 from app.core.dependencies.auth import get_current_user
 
-router = APIRouter(prefix="/drivers", tags=["drivers"])
+router = APIRouter(prefix="/drivers", tags=["Drivers"])
 
 bearer_scheme = HTTPBearer()
 

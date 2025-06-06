@@ -10,7 +10,7 @@ from app.services.project_settings_service import (
     create_project_settings_service
 )
 
-router = APIRouter(prefix="/project-settings", tags=["ADMIN: Project Settings"])
+router = APIRouter(prefix="/project-settings", tags=["ADMIN"])
 
 
 @router.get("/", response_model=ProjectSettings, description="""
