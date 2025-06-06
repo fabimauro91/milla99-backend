@@ -315,6 +315,37 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
         for cr in results
     ]
 
+def get_driver_requests_by_status_service(session: Session, id_driver_assigned: str, status: str):
+    from app.models.client_request import ClientRequest
+
+    # Consulta las solicitudes
+    results = session.query(ClientRequest).filter(
+        ClientRequest.id_driver_assigned == id_driver_assigned,
+        ClientRequest.status == status
+    ).all()
+
+    # Construir la respuesta con conversión de campos geoespaciales
+    return [
+        {
+            "id": cr.id,
+            "id_client": cr.id_client,
+            "id_driver_assigned": cr.id_driver_assigned,
+            "fare_offered": cr.fare_offered,
+            "fare_assigned": cr.fare_assigned,
+            "pickup_description": cr.pickup_description,
+            "destination_description": cr.destination_description,
+            "client_rating": cr.client_rating,
+            "driver_rating": cr.driver_rating,
+            "status": str(cr.status),
+            "pickup_position": wkb_to_coords(cr.pickup_position),
+            "destination_position": wkb_to_coords(cr.destination_position),
+            "created_at": cr.created_at.isoformat(),
+            "updated_at": cr.updated_at.isoformat(),
+            "review": cr.review
+        }
+        for cr in results
+    ]
+
 
 def update_client_rating_service(session: Session, id_client_request: UUID, client_rating: float, user_id: UUID):
     """

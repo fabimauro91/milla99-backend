@@ -17,7 +17,8 @@ from app.services.client_requests_service import (
     get_nearby_drivers_service,
     update_status_by_driver_service,
     client_canceled_service,
-    update_review_service
+    update_review_service,
+    get_driver_requests_by_status_service
 )
 from sqlalchemy.orm import Session
 import traceback
@@ -261,6 +262,48 @@ def get_client_requests_by_status(
 
     # Obtener las solicitudes filtradas por status y user_id
     return get_client_requests_by_status_service(session, status, user_id)
+
+
+
+@router.get("/by-driver-status/{status}", description="""
+Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
+
+**Parámetros:**
+- `status`: Estado por el cual filtrar las solicitudes. Debe ser uno de:
+  - `CREATED`: Solicitud recién creada, esperando conductor
+  - `ACCEPTED`: Conductor asignado, esperando inicio del viaje
+  - `ON_THE_WAY`: Conductor en camino al punto de recogida
+  - `ARRIVED`: Conductor llegó al punto de recogida
+  - `TRAVELLING`: Viaje en curso
+  - `FINISHED`: Viaje finalizado, pendiente de pago
+  - `PAID`: Viaje pagado y completado
+  - `CANCELLED`: Solicitud cancelada
+            
+**Respuesta:**
+Devuelve una lista de solicitudes de viaje asociadas al conductor con el estado especificado.
+""")
+def get_driver_requests_by_status(
+    request: Request,
+    session: SessionDep,
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Estados válidos: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID, CANCELLED")
+):
+    """
+    Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
+    """
+
+    # Obtener el user_id del token
+    user_id = request.state.user_id
+
+    # Validar que el status sea uno de los permitidos
+    if status not in StatusEnum.__members__:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
+        )
+
+    # Obtener las solicitudes filtradas por id_driver_assigned y status
+    return get_driver_requests_by_status_service(session, user_id, status)
+
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, description="""
