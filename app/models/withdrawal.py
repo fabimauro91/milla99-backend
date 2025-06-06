@@ -1,8 +1,10 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, List
 from enum import Enum
 from datetime import datetime
 from uuid import UUID, uuid4
+from .bank_account import BankAccountRead
+from .user import UserRead
 
 if TYPE_CHECKING:
     from .bank_account import BankAccount
@@ -29,3 +31,18 @@ class Withdrawal(SQLModel, table=True):
     bank_account: Optional["BankAccount"] = Relationship(
         back_populates="withdrawals")
     user: Optional["User"] = Relationship(back_populates="withdrawals")
+
+
+class WithdrawalRead(SQLModel):
+    """Modelo para leer retiros con información relacionada"""
+    id: UUID
+    user_id: UUID
+    amount: int
+    status: WithdrawalStatus
+    withdrawal_date: datetime
+    bank_account_id: UUID
+    user: UserRead
+    bank_account: BankAccountRead
+
+    class Config:
+        from_attributes = True

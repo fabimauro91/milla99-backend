@@ -14,7 +14,8 @@ from fastapi import HTTPException
 from app.utils.balance_notifications import check_and_notify_low_balance
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+from sqlalchemy.orm import joinedload
 
 
 class WithdrawalService:
@@ -186,3 +187,30 @@ class WithdrawalService:
         self.session.add(withdrawal)
         self.session.commit()
         return {"message": "Withdrawal rejected and funds returned."}
+
+    def list_withdrawals(
+        self,
+        status: Optional[WithdrawalStatus] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Withdrawal]:
+        """
+        Lista los retiros con opción de filtrar por status.
+
+        Args:
+            status: Status opcional para filtrar los retiros
+            skip: Número de registros a saltar
+            limit: Número máximo de registros a retornar
+
+        Returns:
+            List[Withdrawal]: Lista de retiros con información relacionada
+        """
+        query = select(Withdrawal).options(
+            joinedload(Withdrawal.user),
+            joinedload(Withdrawal.bank_account)
+        ).order_by(Withdrawal.withdrawal_date.desc())
+
+        if status:
+            query = query.where(Withdrawal.status == status)
+
+        return self.session.exec(query.offset(skip).limit(limit)).all()
