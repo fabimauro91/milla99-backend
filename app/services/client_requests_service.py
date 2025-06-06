@@ -756,11 +756,22 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
             detail=f"Transición de estado no permitida. Desde {client_request.status.value} solo se puede cambiar a: {', '.join(s.value for s in allowed)}"
         )
 
-    # Actualizar el estado
-    client_request.status = new_status
-    client_request.updated_at = datetime.utcnow()
-    session.commit()
-    return {"success": True, "message": "Status actualizado correctamente"}
+    # Validar que solo se pueda pasar a PAID si el estado actual es FINISHED
+    if new_status == StatusEnum.PAID and client_request.status != StatusEnum.FINISHED:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede pasar a PAID desde FINISHED"
+        )
+
+    try:
+        client_request.status = new_status
+        client_request.updated_at = datetime.utcnow()
+        session.commit()
+        return {"success": True, "message": "Status actualizado correctamente"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error al actualizar el estado: {str(e)}")
 
 
 def client_canceled_service(session: Session, id_client_request: int, user_id: int):
