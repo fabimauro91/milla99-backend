@@ -698,7 +698,7 @@ class ClientRequestStateMachine:
     Máquina de estados para controlar las transiciones válidas en una solicitud de viaje.
     """
     # Estados que permiten cancelación
-    CANCELLABLE_STATES = {StatusEnum.CREATED, StatusEnum.ACCEPTED}
+    CANCELLABLE_STATES = {StatusEnum.CREATED, StatusEnum.ACCEPTED, StatusEnum.ON_THE_WAY}
 
     # Transiciones permitidas por rol
     DRIVER_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
@@ -712,6 +712,7 @@ class ClientRequestStateMachine:
     CLIENT_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
         StatusEnum.CREATED: {StatusEnum.CANCELLED},
         StatusEnum.ACCEPTED: {StatusEnum.CANCELLED},
+        StatusEnum.ON_THE_WAY: {StatusEnum.CANCELLED},
         # PAID solo se puede establecer después de un pago exitoso, no por cambio directo de estado
     }
 
@@ -807,7 +808,8 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
 
 def client_canceled_service(session: Session, id_client_request: int, user_id: int):
     """
-    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) únicamente si la solicitud está en CREATED o ACCEPTED.
+    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) 
+    únicamente si la solicitud está en CREATED, ACCEPTED o ON_THE_WAY.
     """
     # Validar rol del cliente (que sea CLIENT y esté aprobado)
     user_role = session.query(UserHasRole).filter(
@@ -830,10 +832,10 @@ def client_canceled_service(session: Session, id_client_request: int, user_id: i
         raise HTTPException(
             status_code=403, detail="Solo el cliente dueño de la solicitud puede cancelarla.")
 
-    # Validar que la solicitud esté en CREATED o ACCEPTED (es decir, que su estado actual esté en CANCELLABLE_STATES)
+    # Validar que la solicitud esté en CREATED, ACCEPTED o ON_THE_WAY (es decir, que su estado actual esté en CANCELLABLE_STATES)
     if (client_request.status not in ClientRequestStateMachine.CANCELLABLE_STATES):
         raise HTTPException(
-            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED o ACCEPTED).")
+            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED, ACCEPTED o ON_THE_WAY).")
 
     # (Forzar) Actualizar el estado a CANCELLED (sin validar transición, ya que se verifica que el estado actual esté en CANCELLABLE_STATES)
     client_request.status = StatusEnum.CANCELLED

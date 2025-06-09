@@ -263,7 +263,6 @@ def get_client_requests_by_status(
     return get_client_requests_by_status_service(session, status, user_id)
 
 
-
 @router.get("/by-driver-status/{status}", tags=["Drivers"], description="""
 Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
 
@@ -302,7 +301,6 @@ def get_driver_requests_by_status(
 
     # Obtener las solicitudes filtradas por id_driver_assigned y status
     return get_driver_requests_by_status_service(session, user_id, status)
-
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, tags=["Passengers"], description="""
@@ -712,7 +710,7 @@ def update_status_by_driver(
 
 
 @router.patch("/clientCanceled", tags=["Passengers"], description="""
-Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
+Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED o ON_THE_WAY.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje a cancelar.
@@ -728,7 +726,7 @@ def update_status_by_client(
 ):
     """
     Permite al cliente cancelar su solicitud de viaje.
-    Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
+    Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED o ON_THE_WAY.
     """
     user_id = getattr(request.state, 'user_id', None)
     if user_id is None:
