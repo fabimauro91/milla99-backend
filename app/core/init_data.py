@@ -953,11 +953,13 @@ def init_data():
         # 13. Crear ofertas de conductores
         create_driver_offers(session, users['drivers'], requests)
 
+        
+        # 15. Inicializar datos de referidos
+        init_referral_data(session, users)
+
         # 14. Completar algunas solicitudes
         complete_some_requests(session, users['drivers'], requests)
 
-        # 15. Inicializar datos de referidos
-        init_referral_data(session, users)
 
         # 16. Crear posiciones de conductores
         create_driver_positions(session, users['drivers'])

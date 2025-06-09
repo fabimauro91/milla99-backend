@@ -91,11 +91,11 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
             fare * driver_expense_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         print(
-            f"[DEBUG] Creando transacción SERVICE_FEE egreso para conductor: user_id={request.id_driver_assigned}, expense={int(driver_expense)}")
+            f"[DEBUG] Creando transacción SERVICE egreso para conductor: user_id={request.id_driver_assigned}, expense={int(driver_expense)}")
         transaction_service.create_transaction(
             user_id=request.id_driver_assigned,
             expense=int(driver_expense),
-            type="SERVICE_FEE",
+            type="SERVICE",
             client_request_id=request.id,
             description=f"Comisión por uso de la plataforma para el viaje {request.id}"
         )
