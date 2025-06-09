@@ -49,8 +49,8 @@ class TransactionService:
             check_and_notify_low_balance(
                 self.session, user_id, verify_mount.mount)
 
-        # Permitir egresos para SERVICE_FEE
-        elif type == TransactionType.SERVICE_FEE:
+        # Permitir egresos para SERVICE
+        elif type == TransactionType.SERVICE:
             if not verify_mount or verify_mount.mount < expense:
                 raise HTTPException(
                     status_code=400,
