@@ -6,6 +6,7 @@ from app.models.type_service import TypeService
 from app.core.db import SessionDep
 from app.services.client_requests_service import (
     create_client_request,
+    driver_canceled_service,
     get_time_and_distance_service,
     get_nearby_client_requests_service,
     assign_driver_service,
@@ -73,6 +74,13 @@ class AssignDriverRequest(BaseModel):
 
 
 class CancelClientRequestRequest(BaseModel):
+    id_client_request: UUID = Field(...,
+                                    description="ID de la solicitud de viaje a cancelar")
+    reason: str | None = Field(
+        None, description="Razón de la cancelación (opcional)")
+
+
+class DriverCancelRequest(BaseModel):
     id_client_request: UUID = Field(...,
                                     description="ID de la solicitud de viaje a cancelar")
     reason: str | None = Field(
@@ -759,3 +767,34 @@ def update_review(
     """
     user_id = request.state.user_id
     return update_review_service(session, id_client_request, review, user_id)
+
+
+@router.patch("/driver-canceled", tags=["Drivers"], description="""
+Permite al conductor cancelar una solicitud de viaje. Este endpoint debe usarse cuando el conductor ha llegado al punto de recogida (estado ARRIVED) 
+y el cliente no aparece. El conductor solo puede cancelar solicitudes que estén en estado ARRIVED.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje a cancelar
+- `reason`: Razón opcional de la cancelación
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def driver_cancel_request(
+    request: Request,
+    cancel_data: DriverCancelRequest = Body(...,
+                                            example={
+                                                "id_client_request": "00000000-0000-0000-0000-000000000000",
+                                                "reason": "Cliente no apareció en el punto de recogida"
+                                            }
+                                            ),
+    session: Session = Depends(get_session)
+):
+    """
+    Permite al conductor cancelar una solicitud de viaje.
+    Solo se pueden cancelar solicitudes en estado ARRIVED (cuando el conductor ha llegado al punto de recogida).
+    """
+    user_id = getattr(request.state, 'user_id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    return driver_canceled_service(session, cancel_data.id_client_request, user_id, cancel_data.reason)
