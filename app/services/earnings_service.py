@@ -3,6 +3,7 @@ from typing import List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select, SQLModel, Field, Session
 from app.models.client_request import ClientRequest, StatusEnum
+from app.models.penality_user import PenalityUser, statusEnum
 from app.models.referral_chain import Referral
 from app.models.transaction import Transaction
 from app.models.project_settings import ProjectSettings
@@ -95,7 +96,7 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
         transaction_service.create_transaction(
             user_id=request.id_driver_assigned,
             expense=int(driver_expense),
-            type="SERVICE_FEE",
+            type="SERVICE",
             client_request_id=request.id,
             description=f"Comisión por uso de la plataforma para el viaje {request.id}"
         )
@@ -154,6 +155,9 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
                 type="ADDITIONAL"
             ))
 
+        if request.penality > 0:
+            penality = pay_penality_user(session, request.id_client)
+            
         session.add_all(earnings)
         session.commit()
     except Exception as e:
@@ -239,3 +243,50 @@ def get_referral_earnings_structured(session, user_id: UUID):
         "phone_number": user.phone_number,
         "levels": levels_structured
     }
+
+
+def pay_penality_user(session: SQLAlchemySession, request:ClientRequest)->None:
+    """
+    Paga una penalidad de usuario y actualiza su estado a PAID.
+    """
+    try:
+        penalties = session.query(PenalityUser).filter(
+            PenalityUser.user_id == request.id_client,
+            PenalityUser.status == statusEnum.PENDING
+            ).all()
+        
+        if not penalties:
+            return None
+
+        transaction_service = TransactionService(session)
+
+        for penality in penalties:
+            if penality.amount <= 0:
+                continue
+
+            # Crear transacción de pago de penalidad
+            
+            transaction_service.create_transaction(
+                user_id=penality.id_driver_assigned,
+                income=int(penality.amount),
+                type="PENALITY_COMPENSATION",
+                client_request_id=request.id,
+                description=f"Pago de penalidad por solicitud {request.id}"
+            )
+            penality.status = statusEnum.PAID
+            penality.id_driver_get_money = request.id_driver_assigned
+            penality.updated_at = datetime.utcnow()
+
+        transaction_service.create_transaction(
+            user_id=request.id_driver_assigned,
+            expense=request.penality,
+            type="PENALITY_DEDUCTION",
+            client_request_id=request.id,
+            description=f"Pago de penalidades por solicitud {request.id}"
+        )
+        session.commit()
+        return penality
+    except Exception as e:
+        session.rollback()
+        traceback.print_exc()
+        raise Exception(f"Error al pagar penalidades: {str(e)}")

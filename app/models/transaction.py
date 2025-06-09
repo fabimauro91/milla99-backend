@@ -27,7 +27,8 @@ class TransactionType(str, Enum):
     BALANCE = "BALANCE"
     PAYMENT = "PAYMENT"
     COMMISSION = "COMMISSION"
-    SERVICE_FEE = "SERVICE_FEE"  # Comisión por uso de la plataforma
+    PENALITY_COMPENSATION = "PENALITY_COMPENSATION"
+    PENALITY_DEDUCTION = "PENALITY_DEDUCTION"
 
 
 class Transaction(SQLModel, table=True):
