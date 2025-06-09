@@ -718,7 +718,7 @@ def update_status_by_driver(
 
 
 @router.patch("/clientCanceled", tags=["Passengers"], description="""
-Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED o ON_THE_WAY.
+Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED, ON_THE_WAY o ARRIVED.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje a cancelar.
@@ -734,7 +734,7 @@ def update_status_by_client(
 ):
     """
     Permite al cliente cancelar su solicitud de viaje.
-    Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED o ON_THE_WAY.
+    Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED, ON_THE_WAY o ARRIVED.
     """
     user_id = getattr(request.state, 'user_id', None)
     if user_id is None:

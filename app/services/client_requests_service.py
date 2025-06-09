@@ -700,7 +700,8 @@ class ClientRequestStateMachine:
     """
     # Estados que permiten cancelación
     CANCELLABLE_STATES = {StatusEnum.CREATED,
-                          StatusEnum.ACCEPTED, StatusEnum.ON_THE_WAY}
+                          StatusEnum.ACCEPTED, StatusEnum.ON_THE_WAY,
+                          StatusEnum.ARRIVED}
 
     # Transiciones permitidas por rol
     DRIVER_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
@@ -811,7 +812,7 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
 def client_canceled_service(session: Session, id_client_request: int, user_id: int):
     """
     Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) 
-    únicamente si la solicitud está en CREATED, ACCEPTED o ON_THE_WAY.
+    únicamente si la solicitud está en CREATED, ACCEPTED, ON_THE_WAY o ARRIVED.
     """
     # Validar rol del cliente (que sea CLIENT y esté aprobado)
     user_role = session.query(UserHasRole).filter(
@@ -834,10 +835,10 @@ def client_canceled_service(session: Session, id_client_request: int, user_id: i
         raise HTTPException(
             status_code=403, detail="Solo el cliente dueño de la solicitud puede cancelarla.")
 
-    # Validar que la solicitud esté en CREATED, ACCEPTED o ON_THE_WAY (es decir, que su estado actual esté en CANCELLABLE_STATES)
+    # Validar que la solicitud esté en CREATED, ACCEPTED, ON_THE_WAY o ARRIVED (es decir, que su estado actual esté en CANCELLABLE_STATES)
     if (client_request.status not in ClientRequestStateMachine.CANCELLABLE_STATES):
         raise HTTPException(
-            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED, ACCEPTED o ON_THE_WAY).")
+            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED, ACCEPTED, ON_THE_WAY o ARRIVED).")
 
     # (Forzar) Actualizar el estado a CANCELLED (sin validar transición, ya que se verifica que el estado actual esté en CANCELLABLE_STATES)
     client_request.status = StatusEnum.CANCELLED
