@@ -268,8 +268,6 @@ Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas po
 
 **Parámetros:**
 - `status`: Estado por el cual filtrar las solicitudes. Debe ser uno de:
-  - `CREATED`: Solicitud recién creada, esperando conductor
-  - `ACCEPTED`: Conductor asignado, esperando inicio del viaje
   - `ON_THE_WAY`: Conductor en camino al punto de recogida
   - `ARRIVED`: Conductor llegó al punto de recogida
   - `TRAVELLING`: Viaje en curso
@@ -283,20 +281,22 @@ Devuelve una lista de solicitudes de viaje asociadas al conductor con el estado 
 def get_driver_requests_by_status(
     request: Request,
     session: SessionDep,
-    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Estados válidos: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID, CANCELLED")
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Estados válidos: ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID, CANCELLED")
 ):
     """
     Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
+    Los estados CREATED y ACCEPTED no están disponibles ya que no son relevantes para los conductores.
     """
-
     # Obtener el user_id del token
     user_id = request.state.user_id
 
     # Validar que el status sea uno de los permitidos
-    if status not in StatusEnum.__members__:
+    valid_states = {"ON_THE_WAY", "ARRIVED",
+                    "TRAVELLING", "FINISHED", "PAID", "CANCELLED"}
+    if status not in valid_states:
         raise HTTPException(
             status_code=400,
-            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
+            detail=f"Status inválido. Debe ser uno de: {', '.join(valid_states)}"
         )
 
     # Obtener las solicitudes filtradas por id_driver_assigned y status
