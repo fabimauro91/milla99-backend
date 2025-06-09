@@ -659,7 +659,6 @@ def create_client_requests(session: Session, users, drivers):
     return requests
 
 
-
 def create_driver_offers(session: Session, drivers, requests):
     """4. Crear ofertas específicas según el tipo de servicio y cliente"""
     
@@ -709,8 +708,7 @@ def create_driver_offers(session: Session, drivers, requests):
                 offers_created += 1
 
     session.commit()
-    print(f"✅ Creadas {offers_created} ofertas específicas para pruebas")
-
+    print(f"✅ Creadas {offers_created} ofertas de conductores")
 
 
 def complete_some_requests(session: Session, drivers, requests):
@@ -730,6 +728,8 @@ def complete_some_requests(session: Session, drivers, requests):
         {"client_phone": "3004444459", "service_type": "Motorcycle", "driver_phone": "3008888888"},
     ]
 
+    # Seleccionar 5 requests para completar
+    requests_to_complete = requests[:5]
     completed_count = 0
 
     for assignment in assignments:
@@ -797,12 +797,9 @@ def complete_some_requests(session: Session, drivers, requests):
 
             session.add(request)
             completed_count += 1
-            
-            print(f"✅ Request completado: Cliente {assignment['client_phone']} -> Conductor {assignment['driver_phone']} ({assignment['service_type']})")
 
     session.commit()
-    print(f"✅ Completadas {completed_count} solicitudes con asignaciones específicas")
-
+    print(f"✅ Completadas {completed_count} solicitudes con estado PAID")
 
 
 def init_referral_data(session: Session, users):
@@ -848,7 +845,6 @@ def init_referral_data(session: Session, users):
 
     session.commit()
     print("✅ Datos de referidos inicializados")
-
 
 
 def create_driver_positions(session: Session, drivers):
@@ -941,6 +937,7 @@ def init_data():
         # 8. Inicializar bancos
         init_banks(session)
             
+
         # 9. Crear admin
         create_admin(session)
 
