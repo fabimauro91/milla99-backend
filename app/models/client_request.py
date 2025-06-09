@@ -64,6 +64,7 @@ class ClientRequest(SQLModel, table=True):
     review: Optional[str] = Field(default=None, max_length=255)  # Nuevo campo
     client_rating: Optional[float] = Field(default=None)
     driver_rating: Optional[float] = Field(default=None)
+    penality: float = Field(default=0)
     status: StatusEnum = Field(
         default=StatusEnum.CREATED,
         sa_column=Column(Enum(StatusEnum))
