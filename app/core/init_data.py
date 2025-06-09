@@ -495,7 +495,7 @@ def create_all_drivers(session: Session, users):
 
 
 def create_client_requests(session: Session, users, drivers):
-    """3. Crear 12 client_request (6 moto, 6 carro)"""
+    """3. Crear 12 client_request específicos para pruebas controladas"""
     
     # Coordenadas de prueba en Bogotá
     TEST_COORDINATES = {
@@ -544,16 +544,49 @@ def create_client_requests(session: Session, users, drivers):
     if not car_service or not moto_service:
         raise Exception("No se encontraron los tipos de servicio")
 
-    clients = users['clients'][:12]  # Primeros 12 clientes
+    # Obtener clientes específicos por teléfono
+    target_clients = {}
+    target_phones = ["3004444456", "3004444457", "3004444458", "3004444459"]
+    
+    for phone in target_phones:
+        client = session.exec(select(User).where(User.phone_number == phone)).first()
+        if client:
+            target_clients[phone] = client
+
+    # Configuración específica de requests por cliente
+    request_configs = [
+        # Cliente 3004444456: 2 carro + 1 moto
+        {"client_phone": "3004444456", "service_type": "Car", "coord_idx": 0},
+        {"client_phone": "3004444456", "service_type": "Car", "coord_idx": 1},
+        {"client_phone": "3004444456", "service_type": "Motorcycle", "coord_idx": 2},
+        
+        # Cliente 3004444457: 2 moto + 1 carro
+        {"client_phone": "3004444457", "service_type": "Motorcycle", "coord_idx": 3},
+        {"client_phone": "3004444457", "service_type": "Motorcycle", "coord_idx": 4},
+        {"client_phone": "3004444457", "service_type": "Car", "coord_idx": 5},
+        
+        # Cliente 3004444458: 2 carro + 1 moto
+        {"client_phone": "3004444458", "service_type": "Car", "coord_idx": 6},
+        {"client_phone": "3004444458", "service_type": "Car", "coord_idx": 7},
+        {"client_phone": "3004444458", "service_type": "Motorcycle", "coord_idx": 8},
+        
+        # Cliente 3004444459: 2 moto + 1 carro
+        {"client_phone": "3004444459", "service_type": "Motorcycle", "coord_idx": 9},
+        {"client_phone": "3004444459", "service_type": "Motorcycle", "coord_idx": 10},
+        {"client_phone": "3004444459", "service_type": "Car", "coord_idx": 11},
+    ]
+
     requests = []
 
-    for i in range(12):
-        client = clients[i]
-        pickup = TEST_COORDINATES["pickup_points"][i]
-        destination = TEST_COORDINATES["destinations"][i]
+    for config in request_configs:
+        client = target_clients.get(config["client_phone"])
+        if not client:
+            continue
+
+        pickup = TEST_COORDINATES["pickup_points"][config["coord_idx"]]
+        destination = TEST_COORDINATES["destinations"][config["coord_idx"]]
         
-        # 6 de moto (índices pares) y 6 de carro (índices impares)
-        type_service_id = moto_service.id if i % 2 == 0 else car_service.id
+        type_service_id = car_service.id if config["service_type"] == "Car" else moto_service.id
         
         request = ClientRequest(
             id_client=client.id,
@@ -574,86 +607,134 @@ def create_client_requests(session: Session, users, drivers):
     for req in requests:
         session.refresh(req)
     
-    print(f"✅ Creadas {len(requests)} solicitudes (6 moto, 6 carro)")
+    print(f"✅ Creadas {len(requests)} solicitudes específicas para pruebas")
     return requests
 
 
+
 def create_driver_offers(session: Session, drivers, requests):
-    """4. Drivers realizan ofertas sobre los requests"""
+    """4. Crear ofertas específicas según el tipo de servicio y cliente"""
     
-    # Obtener información de vehículos de los conductores
-    driver_vehicle_types = {}
+    # Mapear conductores por teléfono
+    drivers_by_phone = {}
     for driver in drivers:
-        driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == driver.id)).first()
-        if driver_info:
-            vehicle_info = session.exec(select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)).first()
-            if vehicle_info:
-                vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == vehicle_info.vehicle_type_id)).first()
-                driver_vehicle_types[driver.id] = vehicle_type.name
+        drivers_by_phone[driver.phone_number] = driver
+
+    # Conductores de carro y moto
+    car_drivers = ["3005555555", "3006666666"]  # Roberto y Laura
+    moto_drivers = ["3007777777", "3008888888"]  # Pedro y Sofía
 
     offers_created = 0
-    
+
     for request in requests:
-        # Obtener el tipo de servicio del request
+        # Obtener el cliente del request
+        client = session.exec(select(User).where(User.id == request.id_client)).first()
+        if not client:
+            continue
+
+        # Obtener el tipo de servicio
         type_service = session.exec(select(TypeService).where(TypeService.id == request.type_service_id)).first()
         vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == type_service.vehicle_type_id)).first()
+
+        # Determinar qué conductores deben hacer ofertas
+        target_driver_phones = []
         
-        # Filtrar conductores que pueden atender este tipo de servicio
-        eligible_drivers = [
-            driver for driver in drivers 
-            if driver.id in driver_vehicle_types and driver_vehicle_types[driver.id] == vehicle_type.name
-        ]
-        
-        # Cada request recibe ofertas de 1-3 conductores elegibles
-        num_offers = random.randint(1, min(3, len(eligible_drivers)))
-        selected_drivers = random.sample(eligible_drivers, num_offers)
-        
-        for driver in selected_drivers:
-            fare_offer = request.fare_offered + random.randint(1000, 5000)
-            trip_offer = DriverTripOffer(
-                id_driver=driver.id,
-                id_client_request=request.id,
-                fare_offer=fare_offer,
-                time=random.randint(10, 30),
-                distance=random.randint(3, 15)
-            )
-            session.add(trip_offer)
-            offers_created += 1
+        if client.phone_number in ["3004444456", "3004444457", "3004444458", "3004444459"]:
+            if vehicle_type.name == "Car":
+                target_driver_phones = car_drivers
+            elif vehicle_type.name == "Motorcycle":
+                target_driver_phones = moto_drivers
+
+        # Crear ofertas de los conductores específicos
+        for driver_phone in target_driver_phones:
+            driver = drivers_by_phone.get(driver_phone)
+            if driver:
+                fare_offer = request.fare_offered + random.randint(1000, 5000)
+                trip_offer = DriverTripOffer(
+                    id_driver=driver.id,
+                    id_client_request=request.id,
+                    fare_offer=fare_offer,
+                    time=random.randint(10, 30),
+                    distance=random.randint(3, 15)
+                )
+                session.add(trip_offer)
+                offers_created += 1
 
     session.commit()
-    print(f"✅ Creadas {offers_created} ofertas de conductores")
+    print(f"✅ Creadas {offers_created} ofertas específicas para pruebas")
+
 
 
 def complete_some_requests(session: Session, drivers, requests):
-    """5. Completar 5 client_request (asignar driver, marcar como PAID, etc)"""
+    """5. Completar requests específicos con asignaciones controladas"""
     
-    # Obtener información de vehículos de los conductores
-    driver_vehicle_types = {}
+    # Mapear conductores por teléfono
+    drivers_by_phone = {}
     for driver in drivers:
-        driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == driver.id)).first()
-        if driver_info:
-            vehicle_info = session.exec(select(VehicleInfo).where(VehicleInfo.driver_info_id == driver_info.id)).first()
-            if vehicle_info:
-                vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == vehicle_info.vehicle_type_id)).first()
-                driver_vehicle_types[driver.id] = vehicle_type.name
+        drivers_by_phone[driver.phone_number] = driver
 
-    # Seleccionar 5 requests para completar
-    requests_to_complete = requests[:5]
+    # Configuración específica de asignaciones
+    assignments = [
+        {"client_phone": "3004444456", "service_type": "Car", "driver_phone": "3005555555"},
+        {"client_phone": "3004444457", "service_type": "Car", "driver_phone": "3006666666"},
+        {"client_phone": "3004444458", "service_type": "Car", "driver_phone": "3005555555"},
+        {"client_phone": "3004444457", "service_type": "Motorcycle", "driver_phone": "3007777777"},
+        {"client_phone": "3004444459", "service_type": "Motorcycle", "driver_phone": "3008888888"},
+    ]
+
     completed_count = 0
 
-    for request in requests_to_complete:
-        # Obtener ofertas para este request
-        offers = session.exec(
-            select(DriverTripOffer).where(DriverTripOffer.id_client_request == request.id)
-        ).all()
-        
-        if offers:
-            # Seleccionar una oferta aleatoria
-            selected_offer = random.choice(offers)
-            
-            # Completar la solicitud
-            request.id_driver_assigned = selected_offer.id_driver
-            request.fare_assigned = selected_offer.fare_offer
+    for assignment in assignments:
+        # Buscar el request específico
+        client = session.exec(select(User).where(User.phone_number == assignment["client_phone"])).first()
+        if not client:
+            continue
+
+        # Obtener el tipo de servicio
+        if assignment["service_type"] == "Car":
+            car_service = session.exec(
+                select(TypeService)
+                .join(VehicleType)
+                .where(VehicleType.name == "Car")
+            ).first()
+            target_service_id = car_service.id
+        else:
+            moto_service = session.exec(
+                select(TypeService)
+                .join(VehicleType)
+                .where(VehicleType.name == "Motorcycle")
+            ).first()
+            target_service_id = moto_service.id
+
+        # Buscar el request específico del cliente y tipo de servicio
+        request = session.exec(
+            select(ClientRequest).where(
+                ClientRequest.id_client == client.id,
+                ClientRequest.type_service_id == target_service_id,
+                ClientRequest.status == StatusEnum.CREATED
+            )
+        ).first()
+
+        if not request:
+            continue
+
+        # Obtener el conductor asignado
+        assigned_driver = drivers_by_phone.get(assignment["driver_phone"])
+        if not assigned_driver:
+            continue
+
+        # Buscar la oferta específica de este conductor para este request
+        offer = session.exec(
+            select(DriverTripOffer).where(
+                DriverTripOffer.id_client_request == request.id,
+                DriverTripOffer.id_driver == assigned_driver.id
+            )
+        ).first()
+
+        if offer:
+            # Completar la solicitud con la asignación específica
+            request.id_driver_assigned = assigned_driver.id
+            request.fare_assigned = offer.fare_offer
             request.client_rating = round(random.uniform(4.0, 5.0), 1)
             request.driver_rating = round(random.uniform(4.0, 5.0), 1)
             request.review = random.choice([
@@ -668,9 +749,12 @@ def complete_some_requests(session: Session, drivers, requests):
             
             session.add(request)
             completed_count += 1
+            
+            print(f"✅ Request completado: Cliente {assignment['client_phone']} -> Conductor {assignment['driver_phone']} ({assignment['service_type']})")
 
     session.commit()
-    print(f"✅ Completadas {completed_count} solicitudes con estado PAID")
+    print(f"✅ Completadas {completed_count} solicitudes con asignaciones específicas")
+
 
 
 def init_referral_data(session: Session, users):
@@ -714,6 +798,7 @@ def init_referral_data(session: Session, users):
 
     session.commit()
     print("✅ Datos de referidos inicializados")
+
 
 
 def create_driver_positions(session: Session, drivers):
@@ -769,6 +854,10 @@ def init_data():
         # 2. Crear y definir todos los drivers con documentos, transacciones y monto
         drivers = create_all_drivers(session, users)
 
+        # Datos adicionales
+        init_referral_data(session, users)
+        create_driver_positions(session, drivers)
+        
         # 3. Crear 12 client_request (6 moto, 6 carro)
         requests = create_client_requests(session, users, drivers)
 
@@ -778,9 +867,7 @@ def init_data():
         # 5. Completar 5 client_request (asignar driver, marcar como PAID, etc)
         complete_some_requests(session, drivers, requests)
 
-        # Datos adicionales
-        init_referral_data(session, users)
-        create_driver_positions(session, drivers)
+    
         create_admin(session)
 
         session.commit()
