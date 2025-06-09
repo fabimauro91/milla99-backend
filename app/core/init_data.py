@@ -32,6 +32,7 @@ from passlib.hash import bcrypt
 from app.models.payment_method import PaymentMethod
 import random
 from app.models.bank import Bank
+import traceback
 
 
 def uuid_prueba(num: int) -> UUID:
@@ -99,10 +100,28 @@ def init_vehicle_types(engine):
 
 
 def init_time_distance_values(engine):
+    """Inicializa los valores de tiempo y distancia para cada tipo de servicio"""
     with Session(engine) as session:
+        # Verificar si ya existen valores
         existing_values = session.exec(select(ConfigServiceValue)).all()
         if existing_values:
             return
+
+        # Obtener los tipos de servicio existentes
+        car_service = session.exec(
+            select(TypeService)
+            .join(VehicleType)
+            .where(VehicleType.name == "Car")
+        ).first()
+
+        moto_service = session.exec(
+            select(TypeService)
+            .join(VehicleType)
+            .where(VehicleType.name == "Motorcycle")
+        ).first()
+
+        if not car_service or not moto_service:
+            raise Exception("No se encontraron los tipos de servicio")
 
         time_distance_values = [
             ConfigServiceValue(
@@ -110,14 +129,14 @@ def init_time_distance_values(engine):
                 min_value=150.0,
                 tarifa_value=6000.0,
                 weight_value=350.5,
-                service_type_id=1,
+                service_type_id=car_service.id,  # Usar el ID real del servicio de carro
             ),
             ConfigServiceValue(
                 km_value=800.0,
                 min_value=100.0,
                 tarifa_value=3000.0,
                 weight_value=350.0,
-                service_type_id=2,
+                service_type_id=moto_service.id,  # Usar el ID real del servicio de moto
             )
         ]
 
@@ -188,7 +207,7 @@ def create_admin(session: Session):
 
 def create_all_users(session: Session):
     """1. Crear todos los usuarios (clientes y conductores)"""
-    
+
     # Datos de clientes
     clients_data = [
         {"full_name": "María García", "phone_number": "3001111111"},
@@ -265,7 +284,8 @@ def create_all_users(session: Session):
                 session.add(user_has_role)
 
             # Crear selfie
-            selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+            selfie_dir = os.path.join(
+                "static", "uploads", "users", str(user.id))
             os.makedirs(selfie_dir, exist_ok=True)
             selfie_path = os.path.join(selfie_dir, "selfie.jpg")
             shutil.copyfile("img/demo/front foto.jpg", selfie_path)
@@ -304,7 +324,8 @@ def create_all_users(session: Session):
                 session.add(user_has_role)
 
             # Crear selfie
-            selfie_dir = os.path.join("static", "uploads", "users", str(user.id))
+            selfie_dir = os.path.join(
+                "static", "uploads", "users", str(user.id))
             os.makedirs(selfie_dir, exist_ok=True)
             selfie_path = os.path.join(selfie_dir, "selfie.jpg")
             shutil.copyfile("img/demo/front foto.jpg", selfie_path)
@@ -315,14 +336,16 @@ def create_all_users(session: Session):
 
     session.commit()
     print(f"✅ Creados {len(clients)} clientes y {len(drivers)} conductores")
+    print(
+        f"DEBUG: Lista de clientes creados: {[c.phone_number for c in clients]}")
     return {'clients': clients, 'drivers': drivers}
 
 
 def create_all_drivers(session: Session, users):
     """2. Crear y definir todos los drivers con documentos, transacciones y monto"""
-    
+
     drivers = users['drivers']
-    
+
     # Configuración de vehículos por conductor
     driver_configs = [
         # demo_driver - Carro
@@ -364,24 +387,32 @@ def create_all_drivers(session: Session, users):
     ]
 
     # Obtener tipos de vehículo y documentos
-    car_type = session.exec(select(VehicleType).where(VehicleType.name == "Car")).first()
-    moto_type = session.exec(select(VehicleType).where(VehicleType.name == "Motorcycle")).first()
-    
-    license_type = session.exec(select(DocumentType).where(DocumentType.name == "license")).first()
-    soat_type = session.exec(select(DocumentType).where(DocumentType.name == "soat")).first()
-    tech_type = session.exec(select(DocumentType).where(DocumentType.name == "technical_inspections")).first()
-    card_type = session.exec(select(DocumentType).where(DocumentType.name == "property_card")).first()
+    car_type = session.exec(select(VehicleType).where(
+        VehicleType.name == "Car")).first()
+    moto_type = session.exec(select(VehicleType).where(
+        VehicleType.name == "Motorcycle")).first()
+
+    license_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "license")).first()
+    soat_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "soat")).first()
+    tech_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "technical_inspections")).first()
+    card_type = session.exec(select(DocumentType).where(
+        DocumentType.name == "property_card")).first()
 
     completed_drivers = []
 
     for config in driver_configs:
         # Buscar el usuario por teléfono
-        user = session.exec(select(User).where(User.phone_number == config["phone"])).first()
+        user = session.exec(select(User).where(
+            User.phone_number == config["phone"])).first()
         if not user:
             continue
 
         # Verificar si ya tiene DriverInfo
-        existing_driver_info = session.exec(select(DriverInfo).where(DriverInfo.user_id == user.id)).first()
+        existing_driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.user_id == user.id)).first()
         if existing_driver_info:
             continue
 
@@ -490,7 +521,8 @@ def create_all_drivers(session: Session, users):
         completed_drivers.append(user)
 
     session.commit()
-    print(f"✅ Configurados {len(completed_drivers)} conductores con documentos, transacciones y montos")
+    print(
+        f"✅ Configurados {len(completed_drivers)} conductores con documentos, transacciones y montos")
     return completed_drivers
 
 
@@ -501,30 +533,44 @@ def create_client_requests(session: Session, users, drivers):
     TEST_COORDINATES = {
         "pickup_points": [
             {"lat": 4.718136, "lng": -74.073170, "description": "Suba Bogotá"},
-            {"lat": 4.702468, "lng": -74.109776, "description": "Santa Rosita Engativa"},
-            {"lat": 4.648270, "lng": -74.061890, "description": "Chapinero Centro"},
+            {"lat": 4.702468, "lng": -74.109776,
+                "description": "Santa Rosita Engativa"},
+            {"lat": 4.648270, "lng": -74.061890,
+                "description": "Chapinero Centro"},
             {"lat": 4.609710, "lng": -74.151750, "description": "Kennedy Central"},
             {"lat": 4.760032, "lng": -74.037677, "description": "Zona Rosa"},
-            {"lat": 4.628594, "lng": -74.064865, "description": "Universidad Nacional"},
+            {"lat": 4.628594, "lng": -74.064865,
+                "description": "Universidad Nacional"},
             {"lat": 4.686419, "lng": -74.055969, "description": "Zona T"},
             {"lat": 4.570868, "lng": -74.297333, "description": "Fontibón"},
             {"lat": 4.638618, "lng": -74.082618, "description": "La Candelaria"},
             {"lat": 4.595447, "lng": -74.166527, "description": "Corabastos"},
-            {"lat": 4.711486, "lng": -74.072502, "description": "Plaza de las Américas"},
+            {"lat": 4.711486, "lng": -74.072502,
+                "description": "Plaza de las Américas"},
             {"lat": 4.624335, "lng": -74.063611, "description": "Museo del Oro"}
         ],
         "destinations": [
-            {"lat": 4.598100, "lng": -74.076100, "description": "Centro Internacional"},
-            {"lat": 4.798100, "lng": -74.046100, "description": "Centro Comercial Andino"},
-            {"lat": 4.698100, "lng": -74.126100, "description": "Centro Comercial Metrópolis"},
+            {"lat": 4.598100, "lng": -74.076100,
+                "description": "Centro Internacional"},
+            {"lat": 4.798100, "lng": -74.046100,
+                "description": "Centro Comercial Andino"},
+            {"lat": 4.698100, "lng": -74.126100,
+                "description": "Centro Comercial Metrópolis"},
             {"lat": 4.558100, "lng": -74.146100, "description": "Portal Sur"},
-            {"lat": 4.676220, "lng": -74.048066, "description": "Aeropuerto El Dorado"},
-            {"lat": 4.601009, "lng": -74.065863, "description": "Terminal de Transporte"},
-            {"lat": 4.711111, "lng": -74.072222, "description": "Centro Comercial Titán Plaza"},
-            {"lat": 4.590278, "lng": -74.132500, "description": "Hospital Kennedy"},
-            {"lat": 4.657889, "lng": -74.054167, "description": "Universidad Javeriana"},
-            {"lat": 4.628056, "lng": -74.064722, "description": "Palacio de Justicia"},
-            {"lat": 4.715278, "lng": -74.036111, "description": "Centro Comercial Santafé"},
+            {"lat": 4.676220, "lng": -74.048066,
+                "description": "Aeropuerto El Dorado"},
+            {"lat": 4.601009, "lng": -74.065863,
+                "description": "Terminal de Transporte"},
+            {"lat": 4.711111, "lng": -74.072222,
+                "description": "Centro Comercial Titán Plaza"},
+            {"lat": 4.590278, "lng": -74.132500,
+                "description": "Hospital Kennedy"},
+            {"lat": 4.657889, "lng": -74.054167,
+                "description": "Universidad Javeriana"},
+            {"lat": 4.628056, "lng": -74.064722,
+                "description": "Palacio de Justicia"},
+            {"lat": 4.715278, "lng": -74.036111,
+                "description": "Centro Comercial Santafé"},
             {"lat": 4.624722, "lng": -74.063889, "description": "Plaza Bolívar"}
         ]
     }
@@ -594,12 +640,14 @@ def create_client_requests(session: Session, users, drivers):
             fare_offered=random.randint(15000, 25000),
             pickup_description=pickup["description"],
             destination_description=destination["description"],
-            pickup_position=from_shape(Point(pickup["lng"], pickup["lat"]), srid=4326),
-            destination_position=from_shape(Point(destination["lng"], destination["lat"]), srid=4326),
+            pickup_position=from_shape(
+                Point(pickup["lng"], pickup["lat"]), srid=4326),
+            destination_position=from_shape(
+                Point(destination["lng"], destination["lat"]), srid=4326),
             payment_method_id=random.randint(1, 3),
             status=StatusEnum.CREATED
         )
-        
+
         session.add(request)
         requests.append(request)
 
@@ -746,7 +794,7 @@ def complete_some_requests(session: Session, drivers, requests):
                 "Muy profesional"
             ])
             request.status = StatusEnum.PAID
-            
+
             session.add(request)
             completed_count += 1
             
@@ -786,8 +834,10 @@ def init_referral_data(session: Session, users):
         return
 
     for data in referral_data:
-        user = session.exec(select(User).where(User.phone_number == data["user_phone"])).first()
-        referrer = session.exec(select(User).where(User.phone_number == data["referrer_phone"])).first()
+        user = session.exec(select(User).where(
+            User.phone_number == data["user_phone"])).first()
+        referrer = session.exec(select(User).where(
+            User.phone_number == data["referrer_phone"])).first()
 
         if user and referrer:
             referral = Referral(
@@ -817,7 +867,8 @@ def create_driver_positions(session: Session, drivers):
             coords = driver_positions[driver.phone_number]
             position = DriverPosition(
                 id_driver=driver.id,
-                position=from_shape(Point(coords["lng"], coords["lat"]), srid=4326)
+                position=from_shape(
+                    Point(coords["lng"], coords["lat"]), srid=4326)
             )
             session.merge(position)
 
@@ -825,57 +876,100 @@ def create_driver_positions(session: Session, drivers):
     print("✅ Posiciones de conductores creadas")
 
 
+def init_banks(session: Session):
+    """Inicializa los bancos del sistema"""
+    banks_data = [
+        {"bank_code": "001", "bank_name": "Banco de Bogotá"},
+        {"bank_code": "002", "bank_name": "Banco Popular"},
+        {"bank_code": "006", "bank_name": "Banco Itau"},
+        {"bank_code": "007", "bank_name": "Bancolombia"},
+        {"bank_code": "009", "bank_name": "Citibank"},
+        {"bank_code": "012", "bank_name": "Banco GNB Sudameris"},
+        {"bank_code": "013", "bank_name": "BBVA Colombia"},
+        {"bank_code": "019", "bank_name": "Scotiabank Colpatria"},
+        {"bank_code": "023", "bank_name": "Banco de Occidente"},
+        {"bank_code": "031", "bank_name": "Bancoldex"},
+        {"bank_code": "032", "bank_name": "Banco Caja Social BCSC"},
+        {"bank_code": "040", "bank_name": "Banco Agrario"},
+        {"bank_code": "041", "bank_name": "JP Morgan corporación Financión"},
+        {"bank_code": "042", "bank_name": "Banco Falabella"}
+    ]
+
+    for bank_data in banks_data:
+        # Verificar si el banco ya existe
+        existing_bank = session.exec(
+            select(Bank).where(Bank.bank_code == bank_data["bank_code"])).first()
+        if not existing_bank:
+            bank = Bank(**bank_data)
+            session.add(bank)
+
+    session.commit()
+    print("✅ Bancos inicializados")
+
+
 # ============================================================================
 # FUNCIÓN PRINCIPAL
 # ============================================================================
 
 def init_data():
-    """Inicializa los datos básicos de la aplicación."""
+    """Función principal de inicialización de datos"""
     session = Session(engine)
 
     try:
-        print("🚀 Iniciando configuración de datos...")
-        
-        # Configuración básica
+        # 1. Inicializar roles
         init_roles()
+
+        # 2. Inicializar tipos de documentos
         init_document_types()
+
+        # 3. Inicializar tipos de vehículos
         init_vehicle_types(engine)
-        
-        # Inicializar tipos de servicio
+
+        # 4. Inicializar tipos de servicio
         type_service_service = TypeServiceService(session)
         type_service_service.init_default_types()
 
+        # 5. Inicializar valores de tiempo y distancia
         init_time_distance_values(engine)
+
+        # 6. Inicializar configuración del proyecto
         init_project_settings()
+
+        # 7. Inicializar métodos de pago
         init_payment_methods(session)
-        # 1. Crear todos los usuarios (clientes y conductores)
-        users = create_all_users(session)
 
-        # 2. Crear y definir todos los drivers con documentos, transacciones y monto
-        drivers = create_all_drivers(session, users)
-
-        # Datos adicionales
-        init_referral_data(session, users)
-        create_driver_positions(session, drivers)
-        
-        # 3. Crear 12 client_request (6 moto, 6 carro)
-        requests = create_client_requests(session, users, drivers)
-
-        # 4. Drivers realizan ofertas sobre los requests
-        create_driver_offers(session, drivers, requests)
-
-        # 5. Completar 5 client_request (asignar driver, marcar como PAID, etc)
-        complete_some_requests(session, drivers, requests)
-
-    
+        # 8. Inicializar bancos
+        init_banks(session)
+            
+        # 9. Crear admin
         create_admin(session)
 
-        session.commit()
-        print("✅ Inicialización completada correctamente.")
+        # 10. Crear usuarios
+        users = create_all_users(session)
+
+        # 11. Crear conductores
+        create_all_drivers(session, users)
+
+        # 12. Crear solicitudes de clientes
+        requests = create_client_requests(session, users, users['drivers'])
+
+        # 13. Crear ofertas de conductores
+        create_driver_offers(session, users['drivers'], requests)
+
+        # 14. Completar algunas solicitudes
+        complete_some_requests(session, users['drivers'], requests)
+
+        # 15. Inicializar datos de referidos
+        init_referral_data(session, users)
+
+        # 16. Crear posiciones de conductores
+        create_driver_positions(session, users['drivers'])
+
+        print("✅ Inicialización de datos completada exitosamente")
 
     except Exception as e:
-        session.rollback()
-        print(f"❌ Error en la inicialización: {e}")
+        print("❌ Error en la inicialización:", str(e))
+        print(traceback.format_exc())
         raise
     finally:
         session.close()

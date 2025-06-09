@@ -3,7 +3,6 @@ from app.models.transaction import Transaction, TransactionType
 from app.models.verify_mount import VerifyMount
 from sqlalchemy import func
 from fastapi import HTTPException
-import traceback
 from uuid import UUID
 from app.models.user import User
 from app.utils.balance_notifications import check_and_notify_low_balance
@@ -14,9 +13,6 @@ class TransactionService:
         self.session = session
 
     def create_transaction(self, user_id: UUID, income=0, expense=0, type=None, client_request_id=None, description=None):
-        print("TRACEBACK INICIO:\n", "".join(traceback.format_stack()))
-        print(f"DEBUG income: {income}, expense: {expense}, type: {type}")
-
         verify_mount = self.session.query(VerifyMount).filter(
             VerifyMount.user_id == user_id).first()
 

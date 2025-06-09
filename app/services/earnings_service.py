@@ -65,20 +65,15 @@ def _get_referral_chain(session: SQLAlchemySession, user_id: UUID, levels: int) 
 
 
 def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> None:
-    print("[DEBUG] Entrando a distribute_earnings para request:", request.id)
     try:
         if request.status != StatusEnum.PAID:
-            print("[DEBUG] Estado no es PAID, saliendo de distribute_earnings")
             return
 
         fare = Decimal(str(request.fare_assigned or 0))
-        print(f"[DEBUG] fare_assigned: {fare}")
         if fare <= 0:
-            print("[DEBUG] fare <= 0, saliendo de distribute_earnings")
             return
 
         config = get_config_percentages(session)
-        print(f"[DEBUG] Config porcentajes: {config}")
         driver_saving_pct = config["driver_saving"]
         company_pct = config["company"]
         referral_pcts = [
@@ -94,7 +89,6 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
         driver_expense_pct = Decimal("0.10")  # 10%
         driver_expense = (
             fare * driver_expense_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        print(f"[DEBUG] driver_expense: {driver_expense}")
 
         print(
             f"[DEBUG] Creando transacción SERVICE_FEE egreso para conductor: user_id={request.id_driver_assigned}, expense={int(driver_expense)}")
@@ -109,7 +103,6 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
         # Calcular el ahorro (1% del valor del viaje)
         driver_saving = (
             fare * driver_saving_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        print(f"[DEBUG] driver_saving: {driver_saving}")
 
         # Buscar el registro de ahorro existente
         driver_savings = session.query(DriverSavings).filter(
@@ -117,11 +110,8 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
         ).first()
 
         if driver_savings:
-            print(
-                f"[DEBUG] Suma ahorro existente: {driver_savings.mount} + {driver_saving}")
             driver_savings.mount += driver_saving
         else:
-            print(f"[DEBUG] Crea nuevo ahorro con mount: {driver_saving}")
             driver_savings = DriverSavings(
                 user_id=request.id_driver_assigned,
                 mount=driver_saving,
@@ -131,14 +121,11 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
             session.add(driver_savings)
 
         earnings = []
-        
 
         chain_ids = _get_referral_chain(session, request.id_client, levels=5)
-        print(f"[DEBUG] chain_ids: {chain_ids}")
 
         company_share = (
             fare * company_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        print(f"[DEBUG] company_share inicial: {company_share}")
         earnings.append(CompanyAccount(
             client_request_id=request.id,
             income=company_share,
@@ -150,8 +137,6 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
             if idx < len(chain_ids):
                 ref_amount = (fare * pct).quantize(Decimal("0.01"),
                                                    rounding=ROUND_HALF_UP)
-                print(
-                    f"[DEBUG] Creando transacción REFERRAL_{idx+1}: user_id={chain_ids[idx]}, income={int(ref_amount)}")
                 transaction_service.create_transaction(
                     user_id=chain_ids[idx],
                     income=int(ref_amount),
@@ -161,24 +146,17 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
             else:
                 company_share += (fare * pct).quantize(Decimal("0.01"),
                                                        rounding=ROUND_HALF_UP)
-                print(
-                    f"[DEBUG] Suma a company_share por falta de referido: {company_share}")
 
         if company_share > 0:
-            print(f"[DEBUG] company_share adicional: {company_share}")
             earnings.append(CompanyAccount(
                 client_request_id=request.id,
                 income=company_share,
                 type="ADDITIONAL"
             ))
 
-        print(f"[DEBUG] earnings a agregar: {earnings}")
         session.add_all(earnings)
         session.commit()
-        print("[DEBUG] Fin de distribute_earnings")
     except Exception as e:
-        print("[ERROR] Exception en distribute_earnings:", e)
-        print(traceback.format_exc())
         raise
 
 
