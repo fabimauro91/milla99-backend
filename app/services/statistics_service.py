@@ -18,6 +18,7 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.driver_savings import DriverSavings
 from app.models.project_settings import ProjectSettings
 from app.models.company_account import CompanyAccount, cashflow
+from app.models.type_service import TypeService
 
 from sqlalchemy import func, and_, or_
 
@@ -194,6 +195,34 @@ class StatisticsService:
                 cancelled_services_query).first() or 0
             print(f"Servicios cancelados encontrados: {cancelled_services}")
 
+            # Servicios completados por tipo de servicio
+            print("\nConsultando servicios completados por tipo de servicio...")
+            completed_services_by_type_query = select(
+                TypeService.name, func.count(ClientRequest.id))
+            completed_services_by_type_query = completed_services_by_type_query.join(
+                TypeService, ClientRequest.type_service_id == TypeService.id
+            ).where(
+                ClientRequest.status == StatusEnum.PAID
+            )
+            if service_type_id:
+                completed_services_by_type_query = completed_services_by_type_query.where(
+                    ClientRequest.type_service_id == service_type_id
+                )
+            if driver_uuid:
+                completed_services_by_type_query = completed_services_by_type_query.where(
+                    ClientRequest.id_driver_assigned == driver_uuid
+                )
+            completed_services_by_type_query = self._build_date_filter(
+                completed_services_by_type_query, start_date, end_date, ClientRequest.created_at)
+            completed_services_by_type_query = completed_services_by_type_query.group_by(
+                TypeService.name)
+            print(
+                f"Query servicios completados por tipo: {completed_services_by_type_query}")
+            completed_services_by_type = self.session.exec(
+                completed_services_by_type_query).all()
+            print(
+                f"Servicios completados por tipo encontrados: {completed_services_by_type}")
+
             # Tasa de cancelación
             total_services = completed_services + cancelled_services
             cancellation_rate = (
@@ -203,7 +232,11 @@ class StatisticsService:
             response_data["service_stats"] = {
                 "completed_services": completed_services,
                 "cancelled_services": cancelled_services,
-                "cancellation_rate": round(cancellation_rate, 2)
+                "cancellation_rate": round(cancellation_rate, 2),
+                "completed_by_type": [
+                    {"type_name": name, "count": count}
+                    for name, count in completed_services_by_type
+                ]
             }
             print(
                 f"\nEstadísticas de servicios calculadas: {response_data['service_stats']}")
