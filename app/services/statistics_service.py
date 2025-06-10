@@ -291,11 +291,63 @@ class StatisticsService:
             net_income = total_income - total_withdrawals
             print(f"Ingresos netos calculados: {net_income}")
 
+            # Ingresos promedio por conductor
+            print("\nCalculando ingresos promedio por conductor...")
+            total_driver_gross_income_query = select(func.sum(ClientRequest.fare_assigned)).where(
+                ClientRequest.status == StatusEnum.PAID
+            )
+            if service_type_id:
+                total_driver_gross_income_query = total_driver_gross_income_query.where(
+                    ClientRequest.type_service_id == service_type_id
+                )
+            if driver_uuid:
+                total_driver_gross_income_query = total_driver_gross_income_query.where(
+                    ClientRequest.id_driver_assigned == driver_uuid
+                )
+            total_driver_gross_income_query = self._build_date_filter(
+                total_driver_gross_income_query, start_date, end_date, ClientRequest.updated_at)
+            print(
+                f"Query ingresos brutos de conductor: {total_driver_gross_income_query}")
+            total_driver_gross_income = self.session.exec(
+                total_driver_gross_income_query).first() or 0
+            print(
+                f"Ingresos brutos de conductor encontrados: {total_driver_gross_income}")
+
+            # Contar conductores únicos que completaron viajes
+            unique_completed_drivers_query = select(func.count(func.distinct(ClientRequest.id_driver_assigned))).where(
+                ClientRequest.status == StatusEnum.PAID,
+                # Asegurar que hay un conductor asignado
+                ClientRequest.id_driver_assigned != None
+            )
+            if service_type_id:
+                unique_completed_drivers_query = unique_completed_drivers_query.where(
+                    ClientRequest.type_service_id == service_type_id
+                )
+            if driver_uuid:
+                unique_completed_drivers_query = unique_completed_drivers_query.where(
+                    ClientRequest.id_driver_assigned == driver_uuid
+                )
+            unique_completed_drivers_query = self._build_date_filter(
+                unique_completed_drivers_query, start_date, end_date, ClientRequest.updated_at)
+            print(
+                f"Query conductores únicos con viajes completados: {unique_completed_drivers_query}")
+            unique_completed_drivers = self.session.exec(
+                unique_completed_drivers_query).first() or 0
+            print(
+                f"Conductores únicos con viajes completados encontrados: {unique_completed_drivers}")
+
+            average_driver_income = (
+                total_driver_gross_income / unique_completed_drivers
+            ) if unique_completed_drivers > 0 else 0
+            print(
+                f"Ingresos promedio por conductor calculados: {average_driver_income}")
+
             response_data["financial_stats"] = {
                 "total_income": total_income,
                 "total_commission": total_commission,
                 "total_withdrawals": total_withdrawals,
-                "net_income": net_income
+                "net_income": net_income,
+                "average_driver_income": round(average_driver_income, 2)
             }
             print(
                 f"\nEstadísticas financieras calculadas: {response_data['financial_stats']}")
