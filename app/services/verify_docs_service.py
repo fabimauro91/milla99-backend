@@ -53,34 +53,44 @@ class VerifyDocsService:
         self.db = db
 
     def get_users_with_pending_docs(self) -> List[UserWithDocs]:
-        """Lista usuarios con documentos pendientes y sus documentos"""
+        """Lista usuarios cuyo rol de conductor está PENDIENTE de aprobación, junto con todos sus documentos."""
+        # Consulta para obtener usuarios cuyo rol de conductor está en estado PENDING
         users_query = (
             select(User)
-            .join(DriverInfo, DriverInfo.user_id == User.id)
-            .join(DriverDocuments, DriverDocuments.driver_info_id == DriverInfo.id)
-            .where(DriverDocuments.status == DriverStatus.PENDING)
+            .join(UserHasRole, User.id == UserHasRole.id_user)
+            .where(
+                UserHasRole.id_rol == "DRIVER",
+                UserHasRole.status == RoleStatus.PENDING
+            )
             .distinct()
         )
         users = self.db.exec(users_query).all()
 
         result = []
         for user in users:
-            # Para cada usuario, obtenemos sus documentos pendientes
-            docs_query = (
-                select(DriverDocuments)
-                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
-                .where(
-                    DriverInfo.user_id == user.id,
-                    DriverDocuments.status == DriverStatus.PENDING
+            # Para cada usuario, obtenemos su información de driver
+            driver_info = self.db.exec(
+                select(DriverInfo).where(DriverInfo.user_id == user.id)
+            ).first()
+
+            if driver_info:
+                # Obtenemos TODOS los documentos del driver, independientemente de su estado
+                docs_query = (
+                    select(DriverDocuments)
+                    .where(DriverDocuments.driver_info_id == driver_info.id)
                 )
-            )
-            pending_docs = self.db.exec(docs_query).all()
+                all_docs = self.db.exec(docs_query).all()
 
-            result.append(UserWithDocs(
-                user=user,
-                documents=pending_docs
-            ))
-
+                result.append(UserWithDocs(
+                    user=user,
+                    documents=all_docs
+                ))
+            else:
+                # Si no hay driver_info (caso excepcional), se añade el usuario sin documentos
+                result.append(UserWithDocs(
+                    user=user,
+                    documents=[]
+                ))
         return result
 
     def get_users_with_all_approved_docs(self) -> List[User]:
