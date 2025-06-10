@@ -2,6 +2,8 @@ from sqlmodel import Session, select
 from datetime import date, datetime, timedelta
 from typing import List, Dict, Any, Optional
 from uuid import UUID
+import traceback
+import inspect
 
 # Importar modelos necesarios
 from app.models.user import User
@@ -15,296 +17,260 @@ from app.models.vehicle_type import VehicleType
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.driver_savings import DriverSavings
 from app.models.project_settings import ProjectSettings
+from app.models.company_account import CompanyAccount, cashflow
 
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
+
+print(f"\nDEBUG: Archivo statistics_service.py cargado desde: {__file__}\n")
 
 
 class StatisticsService:
     def __init__(self, session: Session):
         self.session = session
 
+    def _print_model_fields(self, model_class):
+        """Imprime los campos de un modelo para depuración"""
+        print(f"\nCampos de {model_class.__name__}:")
+        for field_name, field in model_class.model_fields.items():
+            print(f"  {field_name}: {field.annotation}")
+
+    def _build_date_filter(self, query, start_date: Optional[date], end_date: Optional[date], date_field):
+        """Construye el filtro de fechas para una consulta"""
+        if start_date:
+            query = query.where(date_field >= start_date)
+        if end_date:
+            end_of_day = datetime(
+                end_date.year, end_date.month, end_date.day, 23, 59, 59)
+            query = query.where(date_field <= end_of_day)
+        return query
+
+    def _get_base_query(self, model, start_date: Optional[date], end_date: Optional[date], date_field):
+        """Construye una consulta base con filtros de fecha"""
+        query = select(model)
+        return self._build_date_filter(query, start_date, end_date, date_field)
+
     def get_summary_statistics(
         self,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         service_type_id: Optional[int] = None,
-        driver_id: Optional[str] = None  # Cambiado a str para UUIDs
+        driver_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Obtiene un resumen de estadísticas administrativas.
+        Obtiene estadísticas resumidas del sistema.
+
+        Args:
+            start_date: Fecha de inicio para filtrar estadísticas
+            end_date: Fecha de fin para filtrar estadísticas
+            service_type_id: ID del tipo de servicio para filtrar
+            driver_id: ID del conductor para filtrar
+
+        Returns:
+            Dict con estadísticas de usuarios, servicios y finanzas
         """
-        response_data = {
-            "period_summary": {},
-            "service_stats": {},
-            "financial_stats": {},
-            "effectiveness_stats": {},
-            "driver_specific_stats": []
-        }
+        try:
+            print("\n=== Iniciando get_summary_statistics ===")
+            print(
+                f"Parámetros recibidos: start_date={start_date}, end_date={end_date}, service_type_id={service_type_id}, driver_id={driver_id}")
 
-        # --- 1. Resumen del Período ---
-        if start_date:
-            response_data["period_summary"]["start_date"] = start_date.isoformat()
-        if end_date:
-            response_data["period_summary"]["end_date"] = end_date.isoformat()
+            # Imprimir estructura de modelos relevantes
+            print("\n=== Estructura de Modelos ===")
+            try:
+                self._print_model_fields(User)
+                self._print_model_fields(DriverDocuments)
+                self._print_model_fields(UserHasRole)
+            except Exception as e:
+                print(f"Error al imprimir campos del modelo: {str(e)}")
+                print("Continuando con la ejecución...")
 
-        # Calcular total_days si ambas fechas están presentes
-        if start_date and end_date:
-            response_data["period_summary"]["total_days"] = (
-                end_date - start_date).days + 1
-        elif start_date or end_date:
-            # Si solo una fecha es provista, no se puede calcular un rango de días coherente
-            response_data["period_summary"]["total_days"] = None
+            response_data = {}
 
-        # --- 2. Estadísticas de Servicios ---
-        base_query_services = select(ClientRequest)
+            # --- 1. Estadísticas de Usuarios ---
+            print("\n=== Calculando estadísticas de usuarios ===")
 
-        # Aplicar filtros de fecha a servicios
-        if start_date:
-            base_query_services = base_query_services.where(
-                ClientRequest.created_at >= start_date)
-        if end_date:
-            # end_date se considera hasta el final del día
-            end_of_day = datetime(
-                end_date.year, end_date.month, end_date.day, 23, 59, 59)
-            base_query_services = base_query_services.where(
-                ClientRequest.created_at <= end_of_day)
-
-        # Aplicar filtro por tipo de servicio a servicios
-        if service_type_id:
-            base_query_services = base_query_services.where(
-                ClientRequest.type_service_id == service_type_id)
-
-        # Aplicar filtro por conductor a servicios
-        if driver_id:
-            base_query_services = base_query_services.where(
-                ClientRequest.id_driver_assigned == UUID(driver_id))
-
-        # Contar total de solicitudes
-        total_requests = self.session.exec(base_query_services.select(
-            func.count(ClientRequest.id))).first() or 0
-
-        # Contar servicios por estado
-        completed_services = self.session.exec(base_query_services.where(
-            ClientRequest.status == StatusEnum.COMPLETED).select(func.count(ClientRequest.id))).first() or 0
-        cancelled_services = self.session.exec(base_query_services.where(
-            ClientRequest.status == StatusEnum.CANCELLED).select(func.count(ClientRequest.id))).first() or 0
-        in_progress_services = self.session.exec(base_query_services.where(
-            and_(
-                ClientRequest.status != StatusEnum.COMPLETED,
-                ClientRequest.status != StatusEnum.CANCELLED,
-                ClientRequest.status != StatusEnum.REJECTED
-            )).select(func.count(ClientRequest.id))).first() or 0
-
-        # Calcular porcentajes
-        completed_percentage = (
-            completed_services / total_requests * 100) if total_requests > 0 else 0.0
-        cancellation_rate = (
-            cancelled_services / total_requests * 100) if total_requests > 0 else 0.0
-
-        response_data["service_stats"] = {
-            "total_requests": total_requests,
-            "completed_services": completed_services,
-            "cancelled_services": cancelled_services,
-            "in_progress_services": in_progress_services,
-            "completed_percentage": round(completed_percentage, 2),
-            "cancellation_rate": round(cancellation_rate, 2)
-        }
-
-        # --- 3. Estadísticas Financieras ---
-        # Obtener configuración del proyecto para porcentajes de comisión
-        project_settings = self.session.exec(select(ProjectSettings)).first()
-        company_commission_rate = float(
-            project_settings.company) if project_settings and project_settings.company else 0.0
-
-        base_query_transactions = select(Transaction)
-        base_query_withdrawals = select(Withdrawal)
-
-        # Aplicar filtros de fecha a transacciones y retiros
-        if start_date:
-            base_query_transactions = base_query_transactions.where(
-                Transaction.date >= start_date)
-            base_query_withdrawals = base_query_withdrawals.where(
-                Withdrawal.created_at >= start_date)
-        if end_date:
-            end_of_day_trans = datetime(
-                end_date.year, end_date.month, end_date.day, 23, 59, 59) if end_date else None
-            if end_of_day_trans:
-                base_query_transactions = base_query_transactions.where(
-                    Transaction.date <= end_of_day_trans)
-                base_query_withdrawals = base_query_withdrawals.where(
-                    Withdrawal.created_at <= end_of_day_trans)
-
-        # Aplicar filtro por conductor a transacciones y retiros
-        if driver_id:
-            # Para transacciones relacionadas con el conductor (ej. bonos, retiros, comisiones)
-            base_query_transactions = base_query_transactions.where(
-                Transaction.user_id == UUID(driver_id))
-            # Para retiros realizados por el conductor
-            base_query_withdrawals = base_query_withdrawals.where(
-                Withdrawal.user_id == UUID(driver_id))
-
-        # Total de ingresos de servicios (monto final pagado por el cliente)
-        total_income_from_services = self.session.exec(
-            base_query_services.where(
-                ClientRequest.status == StatusEnum.COMPLETED)
-            .select(func.sum(ClientRequest.final_amount))
-        ).first() or 0.0
-
-        # Total de gastos (egresos) y bonificaciones
-        total_expenses = self.session.exec(
-            base_query_transactions.where(Transaction.expense > 0)
-            .select(func.sum(Transaction.expense))
-        ).first() or 0.0
-
-        # Total de retiros procesados (aprobados)
-        total_withdrawals_processed = self.session.exec(
-            base_query_withdrawals.where(
-                Withdrawal.status == WithdrawalStatus.APPROVED)
-            .select(func.sum(Withdrawal.amount))
-        ).first() or 0.0
-
-        # Ganancias netas de la empresa (ingresos por comisión - gastos de la empresa)
-        company_gross_commission = total_income_from_services * company_commission_rate
-        # Asumiendo que los gastos registrados en Transaction son relevantes para la empresa
-        # Podríamos necesitar más granularidad si hay gastos de conductor vs. empresa
-        company_net_earnings = company_gross_commission - total_expenses
-
-        # Ahorros acumulados de los conductores
-        # Este no se filtra por fecha porque los ahorros son acumulativos
-        total_driver_savings_query = select(func.sum(DriverSavings.amount))
-        if driver_id:  # Si se filtra por conductor, solo sus ahorros
-            total_driver_savings_query = total_driver_savings_query.where(
-                DriverSavings.user_id == UUID(driver_id))
-        total_driver_savings = self.session.exec(
-            total_driver_savings_query).first() or 0.0
-
-        response_data["financial_stats"] = {
-            "total_income_from_services": round(total_income_from_services, 2),
-            "total_expenses_bonuses": round(total_expenses, 2),
-            "total_withdrawals_processed": round(total_withdrawals_processed, 2),
-            "company_net_earnings": round(company_net_earnings, 2),
-            "driver_savings_accumulated": round(total_driver_savings, 2)
-        }
-
-        # --- 4. Estadísticas de Efectividad ---
-        # Tiempo promedio de aceptación de solicitudes (desde created_at hasta accepted_at)
-        # Solo para solicitudes que fueron aceptadas
-        accepted_requests_query = base_query_services.where(
-            ClientRequest.status == StatusEnum.ACCEPTED_BY_DRIVER
-        )
-
-        # Calcular la diferencia en segundos y luego en minutos
-        avg_time_to_accept_sec = self.session.exec(
-            accepted_requests_query.select(
-                func.avg(func.timestampdiff(
-                    func.second, ClientRequest.created_at, ClientRequest.accepted_at))
+            # Total de conductores activos
+            print("\nConsultando conductores activos...")
+            active_drivers_query = select(func.count(User.id)).select_from(User).join(
+                UserHasRole, and_(
+                    User.id == UserHasRole.id_user,
+                    UserHasRole.id_rol == "DRIVER",
+                    UserHasRole.status == RoleStatus.APPROVED
+                )
             )
-        ).first() or 0.0
-        avg_time_to_accept_minutes = avg_time_to_accept_sec / 60.0
+            print(f"Query conductores activos: {active_drivers_query}")
+            active_drivers = self.session.exec(
+                active_drivers_query).first() or 0
+            print(f"Conductores activos encontrados: {active_drivers}")
 
-        # Tiempo promedio de finalización de servicios (desde accepted_at hasta completed_at)
-        # Solo para solicitudes completadas
-        completed_requests_query = base_query_services.where(
-            ClientRequest.status == StatusEnum.COMPLETED
-        )
+            # Conductores con documentos aprobados
+            print("\nConsultando documentos aprobados...")
+            try:
+                # Primero intentamos obtener un documento para ver su estructura
+                sample_doc = self.session.exec(
+                    select(DriverDocuments).limit(1)).first()
+                if sample_doc:
+                    print(
+                        f"Estructura de documento de muestra: {sample_doc.__dict__}")
 
-        avg_completion_time_sec = self.session.exec(
-            completed_requests_query.select(
-                func.avg(func.timestampdiff(
-                    func.second, ClientRequest.accepted_at, ClientRequest.completed_at))
+                approved_docs_query = select(func.count(User.id)).select_from(User).join(
+                    DriverInfo, User.id == DriverInfo.user_id
+                ).join(
+                    DriverDocuments, and_(
+                        DriverInfo.id == DriverDocuments.driver_info_id,
+                        DriverDocuments.status == DriverStatus.APPROVED
+                    )
+                )
+                print(f"Query documentos aprobados: {approved_docs_query}")
+                approved_docs = self.session.exec(
+                    approved_docs_query).first() or 0
+                print(f"Documentos aprobados encontrados: {approved_docs}")
+            except Exception as e:
+                print(f"Error en consulta de documentos: {str(e)}")
+                print("Traceback completo:")
+                print(traceback.format_exc())
+                raise
+
+            # Conductores con vehículos registrados
+            print("\nConsultando vehículos registrados...")
+            registered_vehicles_query = select(func.count(User.id)).select_from(User).join(
+                DriverInfo, User.id == DriverInfo.user_id
+            ).join(
+                VehicleInfo, DriverInfo.id == VehicleInfo.driver_info_id
             )
-        ).first() or 0.0
-        avg_completion_time_minutes = avg_completion_time_sec / 60.0
+            print(f"Query vehículos registrados: {registered_vehicles_query}")
+            registered_vehicles = self.session.exec(
+                registered_vehicles_query).first() or 0
+            print(f"Vehículos registrados encontrados: {registered_vehicles}")
 
-        # Tasa de actividad de conductores (conductores que han completado al menos 1 viaje en el período)
-        active_drivers_in_period = self.session.exec(
-            base_query_services.where(
-                ClientRequest.status == StatusEnum.COMPLETED)
-            .select(func.count(ClientRequest.id_driver_assigned.distinct()))
-        ).first() or 0
-
-        total_drivers = self.session.exec(
-            select(func.count(UserHasRole.id_user.distinct()))
-            .where(UserHasRole.id_rol == "DRIVER")
-        ).first() or 0
-
-        driver_activity_rate_percentage = (
-            active_drivers_in_period / total_drivers * 100) if total_drivers > 0 else 0.0
-
-        response_data["effectiveness_stats"] = {
-            "avg_time_to_accept_request_minutes": round(avg_time_to_accept_minutes, 2),
-            "avg_completion_time_minutes": round(avg_completion_time_minutes, 2),
-            "driver_activity_rate": {
-                "active_drivers_in_period": active_drivers_in_period,
-                "total_drivers": total_drivers,
-                "activity_percentage": round(driver_activity_rate_percentage, 2)
+            response_data["user_stats"] = {
+                "active_drivers": active_drivers,
+                "approved_docs": approved_docs,
+                "registered_vehicles": registered_vehicles
             }
-        }
+            print(
+                f"\nEstadísticas de usuarios calculadas: {response_data['user_stats']}")
 
-        # --- 5. Estadísticas Específicas del Conductor (si se proporciona driver_id) ---
-        if driver_id:
-            driver_uuid = UUID(driver_id)
+            # --- 2. Estadísticas de Servicios ---
+            print("\n=== Calculando estadísticas de servicios ===")
 
-            # Viajes completados por este conductor
-            driver_completed_trips = self.session.exec(
-                base_query_services.where(
-                    and_(
-                        ClientRequest.id_driver_assigned == driver_uuid,
-                        ClientRequest.status == StatusEnum.COMPLETED
-                    )
-                ).select(func.count(ClientRequest.id))
-            ).first() or 0
+            # Convertir driver_id a UUID si existe
+            driver_uuid = UUID(driver_id) if driver_id else None
 
-            # Viajes cancelados por este conductor (asumimos que el driver_id también está en cancelados)
-            driver_cancelled_trips = self.session.exec(
-                base_query_services.where(
-                    and_(
-                        ClientRequest.id_driver_assigned == driver_uuid,
-                        ClientRequest.status == StatusEnum.CANCELLED
-                    )
-                ).select(func.count(ClientRequest.id))
-            ).first() or 0
-
-            # Ganancias totales del conductor (ingresos por servicios + bonos - gastos/retiros)
-            # Incluimos solo transacciones asociadas a servicios completados o bonificaciones directamente
-            driver_total_income_from_services = self.session.exec(
-                select(func.sum(Transaction.income))
-                .where(
-                    and_(
-                        Transaction.user_id == driver_uuid,
-                        # O cualquier otro tipo que represente ganancia para el conductor
-                        Transaction.type.in_(
-                            [TransactionType.SERVICE, TransactionType.BONUS])
-                    )
+            # Total de servicios completados
+            completed_services_query = select(func.count(ClientRequest.id)).select_from(ClientRequest).where(
+                ClientRequest.status == StatusEnum.PAID
+            )
+            if service_type_id:
+                completed_services_query = completed_services_query.where(
+                    ClientRequest.type_service_id == service_type_id
                 )
-            ).first() or 0.0
-
-            driver_total_expense_from_services = self.session.exec(
-                select(func.sum(Transaction.expense))
-                .where(
-                    and_(
-                        Transaction.user_id == driver_uuid,
-                        # O cualquier otro tipo que represente gasto para el conductor
-                        Transaction.type.in_(
-                            [TransactionType.WITHDRAWAL, TransactionType.SERVICE_FEE])
-                    )
+            if driver_uuid:
+                completed_services_query = completed_services_query.where(
+                    ClientRequest.id_driver_assigned == driver_uuid
                 )
-            ).first() or 0.0
+            completed_services_query = self._build_date_filter(
+                completed_services_query, start_date, end_date, ClientRequest.created_at)
+            print(f"Query servicios completados: {completed_services_query}")
+            completed_services = self.session.exec(
+                completed_services_query).first() or 0
+            print(f"Servicios completados encontrados: {completed_services}")
 
-            driver_total_earnings = driver_total_income_from_services - \
-                driver_total_expense_from_services
+            # Servicios cancelados
+            cancelled_services_query = select(func.count(ClientRequest.id)).select_from(ClientRequest).where(
+                ClientRequest.status == StatusEnum.CANCELLED
+            )
+            if service_type_id:
+                cancelled_services_query = cancelled_services_query.where(
+                    ClientRequest.type_service_id == service_type_id
+                )
+            if driver_uuid:
+                cancelled_services_query = cancelled_services_query.where(
+                    ClientRequest.id_driver_assigned == driver_uuid
+                )
+            cancelled_services_query = self._build_date_filter(
+                cancelled_services_query, start_date, end_date, ClientRequest.created_at)
+            print(f"Query servicios cancelados: {cancelled_services_query}")
+            cancelled_services = self.session.exec(
+                cancelled_services_query).first() or 0
+            print(f"Servicios cancelados encontrados: {cancelled_services}")
 
-            # Obtener nombre del conductor
-            driver_user_info = self.session.exec(
-                select(User).where(User.id == driver_uuid)).first()
-            driver_name = driver_user_info.full_name if driver_user_info else "Desconocido"
+            # Tasa de cancelación
+            total_services = completed_services + cancelled_services
+            cancellation_rate = (
+                cancelled_services / total_services * 100) if total_services > 0 else 0
+            print(f"Tasa de cancelación calculada: {cancellation_rate}%")
 
-            response_data["driver_specific_stats"].append({
-                "driver_id": driver_id,
-                "driver_name": driver_name,
-                "completed_trips": driver_completed_trips,
-                "cancelled_trips_by_driver": driver_cancelled_trips,
-                "total_earnings": round(driver_total_earnings, 2)
-            })
+            response_data["service_stats"] = {
+                "completed_services": completed_services,
+                "cancelled_services": cancelled_services,
+                "cancellation_rate": round(cancellation_rate, 2)
+            }
+            print(
+                f"\nEstadísticas de servicios calculadas: {response_data['service_stats']}")
 
-        return response_data
+            # --- 3. Estadísticas Financieras ---
+            print("\n=== Calculando estadísticas financieras ===")
+
+            # Obtener configuración del proyecto para porcentajes de comisión
+            project_settings = self.session.exec(
+                select(ProjectSettings)).first()
+            company_commission_rate = float(
+                project_settings.company) if project_settings and project_settings.company else 0.0
+
+            # Ingresos totales (de la empresa, incluye servicios y adicionales)
+            total_income_query = select(func.sum(CompanyAccount.income)).select_from(CompanyAccount).where(
+                or_(
+                    CompanyAccount.type == cashflow.SERVICE,
+                    CompanyAccount.type == cashflow.ADDITIONAL
+                )
+            )
+            total_income_query = self._build_date_filter(
+                total_income_query, start_date, end_date, CompanyAccount.date)
+            print(f"Query ingresos totales: {total_income_query}")
+            total_income = self.session.exec(total_income_query).first() or 0
+            print(f"Ingresos totales encontrados: {total_income}")
+
+            # Comisiones totales (de la empresa, específicamente por servicios)
+            total_commission_query = select(func.sum(CompanyAccount.income)).select_from(CompanyAccount).where(
+                CompanyAccount.type == cashflow.SERVICE
+            )
+            total_commission_query = self._build_date_filter(
+                total_commission_query, start_date, end_date, CompanyAccount.date)
+            print(f"Query comisiones totales: {total_commission_query}")
+            total_commission = self.session.exec(
+                total_commission_query).first() or 0
+            print(f"Comisiones totales encontradas: {total_commission}")
+
+            # Retiros totales (gastos de la empresa por retiros de usuarios)
+            total_withdrawals_query = select(func.sum(Transaction.expense)).select_from(Transaction).where(
+                Transaction.type == TransactionType.WITHDRAWAL
+            )
+            if driver_uuid:
+                total_withdrawals_query = total_withdrawals_query.where(
+                    Transaction.user_id == driver_uuid)
+            total_withdrawals_query = self._build_date_filter(
+                total_withdrawals_query, start_date, end_date, Transaction.date)
+            print(f"Query retiros totales: {total_withdrawals_query}")
+            total_withdrawals = self.session.exec(
+                total_withdrawals_query).first() or 0
+            print(f"Retiros totales encontrados: {total_withdrawals}")
+
+            net_income = total_income - total_withdrawals
+            print(f"Ingresos netos calculados: {net_income}")
+
+            response_data["financial_stats"] = {
+                "total_income": total_income,
+                "total_commission": total_commission,
+                "total_withdrawals": total_withdrawals,
+                "net_income": net_income
+            }
+            print(
+                f"\nEstadísticas financieras calculadas: {response_data['financial_stats']}")
+
+            return response_data
+
+        except Exception as e:
+            print(f"\nError en get_summary_statistics: {str(e)}")
+            print("Traceback completo:")
+            print(traceback.format_exc())
+            raise
