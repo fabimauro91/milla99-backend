@@ -151,6 +151,28 @@ class StatisticsService:
             print(
                 f"\nEstadísticas de usuarios calculadas: {response_data['user_stats']}")
 
+            # Clientes activos únicos
+            print("\nConsultando clientes activos únicos...")
+            active_clients_query = select(func.count(func.distinct(
+                ClientRequest.id_client))).select_from(ClientRequest)
+            active_clients_query = self._build_date_filter(
+                active_clients_query, start_date, end_date, ClientRequest.created_at
+            )
+            if service_type_id:
+                active_clients_query = active_clients_query.where(
+                    ClientRequest.type_service_id == service_type_id)
+            if driver_id:
+                active_clients_query = active_clients_query.where(
+                    ClientRequest.id_driver_assigned == driver_id)
+            print(f"Query clientes activos únicos: {active_clients_query}")
+            active_clients = self.session.exec(
+                active_clients_query).first() or 0
+            print(f"Clientes activos únicos encontrados: {active_clients}")
+
+            response_data["user_stats"]["active_clients"] = active_clients
+            print(
+                f"\nEstadísticas de usuarios calculadas (con clientes activos): {response_data['user_stats']}")
+
             # --- 2. Estadísticas de Servicios ---
             print("\n=== Calculando estadísticas de servicios ===")
 
