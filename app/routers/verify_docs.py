@@ -1,20 +1,31 @@
 from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from typing import List
+from typing import List, Dict, Any
 
 from app.core.dependencies.admin_auth import get_current_admin
 from app.models.user import UserRead
 from app.models.driver_documents import DocumentsUpdate, DriverDocuments
 from app.core.db import SessionDep
-from app.services.verify_docs_service import VerifyDocsService, UserWithDocs, UserWithExpiringDocsResponse
-from app.core.dependencies.admin_auth import get_current_admin
+from app.services.verify_docs_service import (
+    VerifyDocsService,
+    UserWithDocs,
+    UserWithExpiringDocsResponse
+)
+from app.models.driver_documents import DocumentsUpdate, DriverDocumentsCreateRequest
+from app.models.user import User
+from app.models.user_has_roles import UserHasRole, RoleStatus
 
 
 bearer_scheme = HTTPBearer()
 
 router = APIRouter(prefix="/verify-docs",
                    tags=["ADMIN"],
-                    dependencies=[Depends(get_current_admin)])
+                   dependencies=[Depends(get_current_admin)])
+
+
+def get_verify_docs_service(session: SessionDep) -> VerifyDocsService:
+    """Dependency para obtener el servicio de verificación de documentos"""
+    return VerifyDocsService(session)
 
 
 @router.get("/pending", response_model=List[UserWithDocs])
@@ -43,20 +54,14 @@ def get_users_with_all_approved_docs(
     return service.get_users_with_all_approved_docs()
 
 
-@router.post("/update-role-status")
-def update_role_status(
-    request: Request,
-    session: SessionDep
+@router.get("/verification-status", response_model=Dict[str, Any])
+def get_verification_status(
+    service: VerifyDocsService = Depends(get_verify_docs_service)
 ):
     """
-    Actualiza el estado del rol de los usuarios basado en el estado de sus documentos.
-    Si algún documento no está aprobado, el rol del usuario queda como pendiente.
-
-    **Respuesta:**
-    Devuelve un mensaje indicando el resultado de la actualización de roles.
+    Obtiene estadísticas sobre el estado de verificación de los conductores.
     """
-    service = VerifyDocsService(session)
-    return service.update_user_role_status()
+    return service.get_verification_status()
 
 
 # @router.get("/rejected", response_model=List[UserWithDocs])
@@ -115,13 +120,13 @@ def update_documents(
     Actualiza múltiples documentos.
     Se puede enciar uno o mas de documentos, cada uno con el id del documento y los datos a actualizar.
     Se debe enviar al menos un documento y al menos un dato a modificar
-    
+
             "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "status": "pending",                                
             "expiration_date": "2025-05-30T16:53:32.029Z",      opcional
             "document_front_url": "string",                     opcional
             "document_back_url": "string"                       opcional
-      
+
     **Respuesta:**
     Devuelve un mensaje indicando cuántos documentos fueron actualizados correctamente.
     """
