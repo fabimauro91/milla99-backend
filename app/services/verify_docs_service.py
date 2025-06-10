@@ -296,29 +296,99 @@ class VerifyDocsService:
     def update_documents(self, updates: List[DocumentsUpdate]) -> List[DriverDocuments]:
         """Actualiza múltiples documentos"""
         updated_docs = []
+        driver_info_ids_affected = set()  # Usamos un set para evitar duplicados
 
-        for update in updates:
-            # Acceder al atributo id directamente
-            doc_id = update.id
-            if not doc_id:
-                continue
+        try:
+            for update in updates:
+                # Acceder al atributo id directamente
+                doc_id = update.id
+                if not doc_id:
+                    continue
 
-            doc = self.db.get(DriverDocuments, doc_id)
-            if not doc:
-                continue
+                doc = self.db.get(DriverDocuments, doc_id)
+                if not doc:
+                    continue
 
-            # Convertir el modelo a diccionario y excluir campos None y el id
-            update_data = update.model_dump(exclude_unset=True, exclude={'id'})
+                # Guardar el driver_info_id antes de actualizar
+                if doc.driver_info_id:
+                    driver_info_ids_affected.add(doc.driver_info_id)
 
-            # Actualizar solo los campos que tienen valor
-            for key, value in update_data.items():
-                if hasattr(doc, key) and value is not None:
-                    setattr(doc, key, value)
+                # Convertir el modelo a diccionario y excluir campos None y el id
+                update_data = update.model_dump(
+                    exclude_unset=True, exclude={'id'})
 
-            updated_docs.append(doc)
+                # Actualizar solo los campos que tienen valor
+                for key, value in update_data.items():
+                    if hasattr(doc, key) and value is not None:
+                        setattr(doc, key, value)
 
-        self.db.commit()
-        return updated_docs
+                updated_docs.append(doc)
+
+            if not updated_docs:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No se encontraron documentos válidos para actualizar"
+                )
+
+            self.db.commit()  # Commit all individual document updates
+
+            # Ahora, para cada driver cuyos documentos fueron actualizados, verificar si su estado is_verified necesita cambiar
+            for d_info_id in driver_info_ids_affected:
+                if d_info_id:  # Asegurar que driver_info_id no es None
+                    # Obtener el registro DriverInfo
+                    driver_info = self.db.get(DriverInfo, d_info_id)
+                    if driver_info:
+                        # Obtener el registro UserHasRole para este driver
+                        user_has_role = self.db.exec(
+                            select(UserHasRole).where(
+                                UserHasRole.id_user == driver_info.user_id,
+                                UserHasRole.id_rol == "DRIVER"  # Asumiendo 'DRIVER' es el rol para conductores
+                            )
+                        ).first()
+
+                        if user_has_role:
+                            # Definir los IDs de tipo de documento requeridos
+                            # 1=Tarjeta de Propiedad, 2=Licencia, 3=SOAT, 4=Tecnomecánica
+                            REQUIRED_DOC_TYPE_IDS = [1, 2, 3, 4]
+
+                            # Contar cuántos de los tipos de documento *requeridos* están actualmente APROBADOS para este conductor
+                            approved_required_doc_types_count = self.db.exec(
+                                select(func.count(func.distinct(
+                                    DriverDocuments.document_type_id)))
+                                .where(
+                                    DriverDocuments.driver_info_id == d_info_id,
+                                    DriverDocuments.status == DriverStatus.APPROVED,
+                                    DriverDocuments.document_type_id.in_(
+                                        REQUIRED_DOC_TYPE_IDS)
+                                )
+                            ).first() or 0
+
+                            # Verificar si los 4 tipos de documentos requeridos están aprobados
+                            if approved_required_doc_types_count == len(REQUIRED_DOC_TYPE_IDS):
+                                if not user_has_role.is_verified:  # Solo actualizar si no es ya True
+                                    user_has_role.is_verified = True
+                                    self.db.add(user_has_role)
+                                    self.db.commit()  # Commit este cambio específico para UserHasRole
+                                    self.db.refresh(user_has_role)
+                            else:
+                                # Si no todos los 4 documentos requeridos están aprobados, asegurar que is_verified sea False
+                                if user_has_role.is_verified:  # Solo actualizar si es actualmente True
+                                    user_has_role.is_verified = False
+                                    self.db.add(user_has_role)
+                                    self.db.commit()  # Commit este cambio específico para UserHasRole
+                                    self.db.refresh(user_has_role)
+
+            return updated_docs
+
+        except HTTPException as he:
+            self.db.rollback()
+            raise he
+        except Exception as e:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error al actualizar documentos: {str(e)}"
+            )
 
     def create_document(self, document_data: DriverDocumentsCreateRequest) -> DriverDocuments:
         """Crea un nuevo documento para un usuario"""
