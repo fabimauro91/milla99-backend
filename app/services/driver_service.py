@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 from fastapi import HTTPException, status, UploadFile
-from app.models.driver_documents import DriverDocuments, DriverDocumentsCreate, DriverStatus
+from app.models.driver_documents import DriverDocuments, DriverDocumentsCreate
 from app.models.project_settings import ProjectSettings
 from app.models.user import User, UserCreate, UserRead
 from app.models.role import Role
@@ -22,8 +22,6 @@ import uuid
 from app.core.config import settings
 import os
 from app.models.driver_savings import DriverSavings, SavingsType
-from app.models.user_has_roles import UserHasRole, RoleStatus
-from datetime import datetime
 
 
 class DriverService:
@@ -78,15 +76,9 @@ class DriverService:
                                     detail="Ya existe un conductor de tipo carro para este usuario.")
                         user = existing_user
                     else:
-                        # Crear la entrada UserHasRole con is_verified=True
-                        user_has_role = UserHasRole(
-                            id_user=existing_user.id,
-                            id_rol=driver_role.id,
-                            is_verified=True,
-                            status=RoleStatus.PENDING,
-                            verified_at=datetime.utcnow()
-                        )
-                        session.add(user_has_role)
+                        # Asignar el rol DRIVER
+                        existing_user.roles.append(driver_role)
+                        session.add(existing_user)
                         session.commit()
                         session.refresh(existing_user)
                         user = existing_user
@@ -102,20 +94,14 @@ class DriverService:
                     session.add(driver_savings)
                     session.commit()
                     session.refresh(driver_savings)
-                    # Asignar el rol DRIVER (explicítamente)
+                    # Asignar el rol DRIVER
                     driver_role = session.exec(
                         select(Role).where(Role.id == "DRIVER")).first()
                     if not driver_role:
                         raise HTTPException(
                             status_code=500, detail="Rol DRIVER no existe")
-                    user_has_role = UserHasRole(
-                        id_user=user.id,
-                        id_rol=driver_role.id,
-                        is_verified=True,
-                        status=RoleStatus.PENDING,
-                        verified_at=datetime.utcnow()
-                    )
-                    session.add(user_has_role)
+                    user.roles.append(driver_role)
+                    session.add(user)
                     session.commit()
                     session.refresh(user)
 
@@ -208,8 +194,7 @@ class DriverService:
                         document_type_id=1,  # 1 = Tarjeta de propiedad
                         document_front_url=property_front_url,
                         document_back_url=property_back_url,
-                        expiration_date=None,
-                        status=DriverStatus.APPROVED
+                        expiration_date=None
                     ))
 
                 # Licencia de conducir
@@ -233,8 +218,7 @@ class DriverService:
                         document_type_id=2,  # 2 = Licencia
                         document_front_url=license_front_url,
                         document_back_url=license_back_url,
-                        expiration_date=driver_documents_data.license_expiration_date,
-                        status=DriverStatus.APPROVED
+                        expiration_date=driver_documents_data.license_expiration_date
                     ))
 
                 # SOAT
@@ -250,8 +234,7 @@ class DriverService:
                         vehicle_info_id=vehicle_info.id,
                         document_type_id=3,  # 3 = SOAT
                         document_front_url=soat_url,
-                        expiration_date=driver_documents_data.soat_expiration_date,
-                        status=DriverStatus.APPROVED
+                        expiration_date=driver_documents_data.soat_expiration_date
                     ))
 
                 # Tecnomecánica
@@ -268,8 +251,7 @@ class DriverService:
                         vehicle_info_id=vehicle_info.id,
                         document_type_id=4,  # 4 = Tecnomecánica
                         document_front_url=tech_url,
-                        expiration_date=driver_documents_data.vehicle_technical_inspection_expiration_date,
-                        status=DriverStatus.APPROVED
+                        expiration_date=driver_documents_data.vehicle_technical_inspection_expiration_date
                     ))
 
                 for doc in docs:
@@ -346,9 +328,8 @@ class DriverService:
                             vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
                     )
                 )
-                existing_user = session.exec(
-                    select(ProjectSettings).where(ProjectSettings.id == 1)).first()
-                bonus = Decimal(existing_user.bonus)
+                existing_user = session.exec(select(ProjectSettings).where(ProjectSettings.id == 1)).first()
+                bonus= Decimal(existing_user.bonus)
                 # Crear transacción de bono y actualizar mount
                 bonus_transaction = Transaction(
                     user_id=user.id,
@@ -356,7 +337,7 @@ class DriverService:
                     expense=0,
                     type=TransactionType.BONUS,
                     client_request_id=None
-                )
+                ) 
                 session.add(bonus_transaction)
                 session.commit()
                 # Actualizar el mount en VerifyMount

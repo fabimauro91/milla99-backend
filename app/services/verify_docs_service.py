@@ -53,68 +53,52 @@ class VerifyDocsService:
         self.db = db
 
     def get_users_with_pending_docs(self) -> List[UserWithDocs]:
-        """Lista usuarios cuyo rol de conductor está PENDIENTE de aprobación, junto con todos sus documentos."""
-        # Consulta para obtener usuarios cuyo rol de conductor está en estado PENDING
+        """Lista usuarios con documentos pendientes y sus documentos"""
         users_query = (
             select(User)
-            .join(UserHasRole, User.id == UserHasRole.id_user)
-            .where(
-                UserHasRole.id_rol == "DRIVER",
-                UserHasRole.status == RoleStatus.PENDING
-            )
+            .join(DriverInfo, DriverInfo.user_id == User.id)
+            .join(DriverDocuments, DriverDocuments.driver_info_id == DriverInfo.id)
+            .where(DriverDocuments.status == DriverStatus.PENDING)
             .distinct()
         )
         users = self.db.exec(users_query).all()
 
         result = []
         for user in users:
-            # Para cada usuario, obtenemos su información de driver
-            driver_info = self.db.exec(
-                select(DriverInfo).where(DriverInfo.user_id == user.id)
-            ).first()
-
-            if driver_info:
-                # Obtenemos TODOS los documentos del driver, independientemente de su estado
-                docs_query = (
-                    select(DriverDocuments)
-                    .where(DriverDocuments.driver_info_id == driver_info.id)
+            # Para cada usuario, obtenemos sus documentos pendientes
+            docs_query = (
+                select(DriverDocuments)
+                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
+                .where(
+                    DriverInfo.user_id == user.id,
+                    DriverDocuments.status == DriverStatus.PENDING
                 )
-                all_docs = self.db.exec(docs_query).all()
+            )
+            pending_docs = self.db.exec(docs_query).all()
 
-                result.append(UserWithDocs(
-                    user=user,
-                    documents=all_docs
-                ))
-            else:
-                # Si no hay driver_info (caso excepcional), se añade el usuario sin documentos
-                result.append(UserWithDocs(
-                    user=user,
-                    documents=[]
-                ))
+            result.append(UserWithDocs(
+                user=user,
+                documents=pending_docs
+            ))
+
         return result
 
     def get_users_with_all_approved_docs(self) -> List[User]:
         """Lista usuarios con todos sus documentos aprobados y rol aprobado"""
-        # Subconsulta para obtener driver_info_id de documentos no aprobados
-        driver_info_with_non_approved_docs = (
-            select(DriverDocuments.driver_info_id)
+        users_with_non_approved = (
+            select(DriverDocuments.user_id)
             .where(DriverDocuments.status != DriverStatus.APPROVED)
         )
 
-        # Consulta principal para obtener usuarios con todos los documentos aprobados y rol aprobado
         query = (
             select(User)
-            # Join User con DriverInfo
-            .join(DriverInfo, User.id == DriverInfo.user_id)
-            # Join DriverInfo con DriverDocuments
-            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
+            .join(DriverDocuments)
             # Join con UserHasRole
             .join(UserHasRole, User.id == UserHasRole.id_user)
             .where(
                 and_(
                     DriverDocuments.status == DriverStatus.APPROVED,
-                    # Asegurarse que el driver_info_id del usuario no esté en la lista de documentos no aprobados
-                    DriverInfo.id.not_in(driver_info_with_non_approved_docs),
+                    User.id.not_in(users_with_non_approved),
                     UserHasRole.status == RoleStatus.APPROVED,  # Condición para UserHasRole
                     UserHasRole.id_rol == "DRIVER"  # Asegurarse que sea rol conductor
                 )
@@ -126,7 +110,6 @@ class VerifyDocsService:
     def update_user_role_status(self):
         """
         Actualiza el status en UserHasRole basado en el estado de los documentos
-        y devuelve información sobre los conductores actualizados
         """
         # Primero obtenemos todos los usuarios con rol DRIVER
         driver_users = (
@@ -140,16 +123,15 @@ class VerifyDocsService:
         )
         driver_users_result = self.db.exec(driver_users).all()
 
-        updated_drivers = []
         for user_role in driver_users_result:
             # Obtenemos el driver_info del usuario
             driver_info = self.db.exec(
                 select(DriverInfo)
-                .join(User)
                 .where(DriverInfo.user_id == user_role.id_user)
             ).first()
 
             if not driver_info:
+                # Si no hay driver_info para este user_role, continuamos con el siguiente
                 continue
 
             # Contamos los documentos aprobados del usuario
@@ -171,9 +153,6 @@ class VerifyDocsService:
             )
             total_docs = self.db.exec(total_docs_query).first()
 
-            # Guardamos el estado anterior
-            previous_status = user_role.status
-
             # Si tiene todos los documentos y todos están aprobados
             if total_docs == 4 and approved_docs_count == 4:
                 user_role.status = RoleStatus.APPROVED
@@ -182,37 +161,14 @@ class VerifyDocsService:
 
             self.db.add(user_role)
 
-            # Solo agregamos a la lista si el estado cambió
-            if previous_status != user_role.status:
-                # Obtenemos la información del usuario
-                user = self.db.exec(
-                    select(User)
-                    .where(User.id == user_role.id_user)
-                ).first()
-
-                updated_drivers.append({
-                    "user_id": str(user.id),
-                    "full_name": user.full_name,
-                    "phone_number": user.phone_number,
-                    "previous_status": previous_status,
-                    "new_status": user_role.status,
-                    "approved_docs": approved_docs_count,
-                    "total_docs": total_docs
-                })
-
         self.db.commit()
-        return {
-            "message": "Estados de roles actualizados correctamente",
-            "updated_drivers": updated_drivers,
-            "total_updated": len(updated_drivers)
-        }
+        return {"message": "Estados de roles actualizados correctamente"}
 
     def get_users_with_rejected_docs(self) -> List[UserWithDocs]:
         """Lista usuarios con documentos rechazados"""
         query = (
             select(User)
-            .join(DriverInfo, User.id == DriverInfo.user_id)
-            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
+            .join(DriverDocuments)
             .where(DriverDocuments.status == DriverStatus.REJECTED)
             .distinct()
         )
@@ -224,9 +180,8 @@ class VerifyDocsService:
             # Para cada usuario, obtenemos sus documentos revocado
             docs_query = (
                 select(DriverDocuments)
-                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
                 .where(
-                    DriverInfo.user_id == user.id,
+                    DriverDocuments.user_id == user.id,
                     DriverDocuments.status == DriverStatus.REJECTED
                 )
             )
@@ -242,8 +197,7 @@ class VerifyDocsService:
         """Lista usuarios con documentos expirados"""
         query = (
             select(User)
-            .join(DriverInfo, User.id == DriverInfo.user_id)
-            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
+            .join(DriverDocuments)
             .where(DriverDocuments.status == DriverStatus.EXPIRED)
             .distinct()
         )
@@ -254,9 +208,8 @@ class VerifyDocsService:
             # Para cada usuario, obtenemos sus documentos pendientes
             docs_query = (
                 select(DriverDocuments)
-                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
                 .where(
-                    DriverInfo.user_id == user.id,
+                    DriverDocuments.user_id == user.id,
                     DriverDocuments.status == DriverStatus.EXPIRED
                 )
             )
@@ -303,8 +256,7 @@ class VerifyDocsService:
         # Primero obtenemos los usuarios y documentos
         query = (
             select(User, DriverDocuments)
-            .join(DriverInfo, User.id == DriverInfo.user_id)
-            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
+            .join(DriverDocuments)
             .where(
                 and_(
                     DriverDocuments.status == DriverStatus.APPROVED,
