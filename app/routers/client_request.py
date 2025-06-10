@@ -6,6 +6,7 @@ from app.models.type_service import TypeService
 from app.core.db import SessionDep
 from app.services.client_requests_service import (
     create_client_request,
+    driver_canceled_service,
     get_time_and_distance_service,
     get_nearby_client_requests_service,
     assign_driver_service,
@@ -73,6 +74,13 @@ class AssignDriverRequest(BaseModel):
 
 
 class CancelClientRequestRequest(BaseModel):
+    id_client_request: UUID = Field(...,
+                                    description="ID de la solicitud de viaje a cancelar")
+    reason: str | None = Field(
+        None, description="Razón de la cancelación (opcional)")
+
+
+class DriverCancelRequest(BaseModel):
     id_client_request: UUID = Field(...,
                                     description="ID de la solicitud de viaje a cancelar")
     reason: str | None = Field(
@@ -263,14 +271,11 @@ def get_client_requests_by_status(
     return get_client_requests_by_status_service(session, status, user_id)
 
 
-
 @router.get("/by-driver-status/{status}", tags=["Drivers"], description="""
 Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
 
 **Parámetros:**
 - `status`: Estado por el cual filtrar las solicitudes. Debe ser uno de:
-  - `CREATED`: Solicitud recién creada, esperando conductor
-  - `ACCEPTED`: Conductor asignado, esperando inicio del viaje
   - `ON_THE_WAY`: Conductor en camino al punto de recogida
   - `ARRIVED`: Conductor llegó al punto de recogida
   - `TRAVELLING`: Viaje en curso
@@ -284,25 +289,26 @@ Devuelve una lista de solicitudes de viaje asociadas al conductor con el estado 
 def get_driver_requests_by_status(
     request: Request,
     session: SessionDep,
-    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Estados válidos: CREATED, ACCEPTED, ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID, CANCELLED")
+    status: str = Path(..., description="Estado por el cual filtrar las solicitudes. Estados válidos: ON_THE_WAY, ARRIVED, TRAVELLING, FINISHED, PAID, CANCELLED")
 ):
     """
     Devuelve una lista de solicitudes de viaje asociadas a un conductor filtradas por el estado enviado en el parámetro.
+    Los estados CREATED y ACCEPTED no están disponibles ya que no son relevantes para los conductores.
     """
-
     # Obtener el user_id del token
     user_id = request.state.user_id
 
     # Validar que el status sea uno de los permitidos
-    if status not in StatusEnum.__members__:
+    valid_states = {"ON_THE_WAY", "ARRIVED",
+                    "TRAVELLING", "FINISHED", "PAID", "CANCELLED"}
+    if status not in valid_states:
         raise HTTPException(
             status_code=400,
-            detail=f"Status inválido. Debe ser uno de: {', '.join(StatusEnum.__members__.keys())}"
+            detail=f"Status inválido. Debe ser uno de: {', '.join(valid_states)}"
         )
 
     # Obtener las solicitudes filtradas por id_driver_assigned y status
     return get_driver_requests_by_status_service(session, user_id, status)
-
 
 
 @router.post("/", response_model=ClientRequestResponse, status_code=status.HTTP_201_CREATED, tags=["Passengers"], description="""
@@ -712,7 +718,7 @@ def update_status_by_driver(
 
 
 @router.patch("/clientCanceled", tags=["Passengers"], description="""
-Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
+Cancela una solicitud de viaje por parte del cliente. Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED o ON_THE_WAY.
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje a cancelar.
@@ -728,7 +734,7 @@ def update_status_by_client(
 ):
     """
     Permite al cliente cancelar su solicitud de viaje.
-    Solo se permite cancelar solicitudes en estado CREATED o ACCEPTED.
+    Solo se permite cancelar solicitudes en estado CREATED, ACCEPTED o ON_THE_WAY.
     """
     user_id = getattr(request.state, 'user_id', None)
     if user_id is None:
@@ -761,3 +767,34 @@ def update_review(
     """
     user_id = request.state.user_id
     return update_review_service(session, id_client_request, review, user_id)
+
+
+@router.patch("/driver-canceled", tags=["Drivers"], description="""
+Permite al conductor cancelar una solicitud de viaje. Este endpoint debe usarse cuando el conductor ha llegado al punto de recogida (estado ARRIVED) 
+y el cliente no aparece. El conductor solo puede cancelar solicitudes que estén en estado ARRIVED.
+
+**Parámetros:**
+- `id_client_request`: ID de la solicitud de viaje a cancelar
+- `reason`: Razón opcional de la cancelación
+
+**Respuesta:**
+Devuelve un mensaje de éxito o error.
+""")
+def driver_cancel_request(
+    request: Request,
+    cancel_data: DriverCancelRequest = Body(...,
+                                            example={
+                                                "id_client_request": "00000000-0000-0000-0000-000000000000",
+                                                "reason": "Cliente no apareció en el punto de recogida"
+                                            }
+                                            ),
+    session: Session = Depends(get_session)
+):
+    """
+    Permite al conductor cancelar una solicitud de viaje.
+    Solo se pueden cancelar solicitudes en estado ARRIVED (cuando el conductor ha llegado al punto de recogida).
+    """
+    user_id = getattr(request.state, 'user_id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    return driver_canceled_service(session, cancel_data.id_client_request, user_id, cancel_data.reason)

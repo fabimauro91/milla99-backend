@@ -328,6 +328,7 @@ def get_client_requests_by_status_service(session: Session, status: str, user_id
         for cr in results
     ]
 
+
 def get_driver_requests_by_status_service(session: Session, id_driver_assigned: str, status: str):
     from app.models.client_request import ClientRequest
 
@@ -698,7 +699,8 @@ class ClientRequestStateMachine:
     Máquina de estados para controlar las transiciones válidas en una solicitud de viaje.
     """
     # Estados que permiten cancelación
-    CANCELLABLE_STATES = {StatusEnum.CREATED, StatusEnum.ACCEPTED}
+    CANCELLABLE_STATES = {StatusEnum.CREATED,
+                          StatusEnum.ACCEPTED, StatusEnum.ON_THE_WAY}
 
     # Transiciones permitidas por rol
     DRIVER_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
@@ -712,6 +714,7 @@ class ClientRequestStateMachine:
     CLIENT_TRANSITIONS: Dict[StatusEnum, Set[StatusEnum]] = {
         StatusEnum.CREATED: {StatusEnum.CANCELLED},
         StatusEnum.ACCEPTED: {StatusEnum.CANCELLED},
+        StatusEnum.ON_THE_WAY: {StatusEnum.CANCELLED},
         # PAID solo se puede establecer después de un pago exitoso, no por cambio directo de estado
     }
 
@@ -807,7 +810,8 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
 
 def client_canceled_service(session: Session, id_client_request: int, user_id: int):
     """
-    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) únicamente si la solicitud está en CREATED o ACCEPTED.
+    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) 
+    únicamente si la solicitud está en CREATED, ACCEPTED o ON_THE_WAY.
     """
     # Validar rol del cliente (que sea CLIENT y esté aprobado)
     user_role = session.query(UserHasRole).filter(
@@ -830,10 +834,10 @@ def client_canceled_service(session: Session, id_client_request: int, user_id: i
         raise HTTPException(
             status_code=403, detail="Solo el cliente dueño de la solicitud puede cancelarla.")
 
-    # Validar que la solicitud esté en CREATED o ACCEPTED (es decir, que su estado actual esté en CANCELLABLE_STATES)
+    # Validar que la solicitud esté en CREATED, ACCEPTED o ON_THE_WAY (es decir, que su estado actual esté en CANCELLABLE_STATES)
     if (client_request.status not in ClientRequestStateMachine.CANCELLABLE_STATES):
         raise HTTPException(
-            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED o ACCEPTED).")
+            status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED, ACCEPTED o ON_THE_WAY).")
 
     # (Forzar) Actualizar el estado a CANCELLED (sin validar transición, ya que se verifica que el estado actual esté en CANCELLABLE_STATES)
     client_request.status = StatusEnum.CANCELLED
@@ -934,3 +938,55 @@ def update_review_service(session: Session, id_client_request: UUID, review: str
     client_request.updated_at = datetime.utcnow()
     session.commit()
     return {"success": True, "message": "Review actualizado correctamente"}
+
+
+def driver_canceled_service(session: Session, id_client_request: UUID, user_id: UUID, reason: str | None = None):
+    """
+    Permite al conductor cancelar una solicitud de viaje. El conductor solo puede cancelar solicitudes que estén en estado ARRIVED.
+    Esto se usa típicamente cuando el cliente no aparece después de que el conductor ha llegado al punto de recogida.
+
+    Args:
+        session: Sesión de base de datos
+        id_client_request: ID de la solicitud de viaje a cancelar
+        user_id: ID del conductor que intenta cancelar (obtenido del token)
+        reason: Razón opcional de la cancelación
+
+    Returns:
+        Mensaje de éxito si la cancelación fue exitosa
+
+    Raises:
+        HTTPException(404): Si la solicitud no se encuentra
+        HTTPException(403): Si el usuario no es el conductor asignado
+        HTTPException(400): Si la solicitud no está en estado ARRIVED
+    """
+    # Obtener la solicitud y validar que existe y que el usuario es el conductor asignado
+    client_request = session.query(ClientRequest).filter(
+        ClientRequest.id == id_client_request,
+        # Validamos ambas condiciones en una sola consulta
+        ClientRequest.id_driver_assigned == user_id
+    ).first()
+
+    if not client_request:
+        # No distinguimos entre "no encontrado" y "no es el conductor asignado" por seguridad
+        raise HTTPException(
+            status_code=404,
+            detail="Solicitud de viaje no encontrada o no tienes permiso para cancelarla."
+        )
+
+    # Validar que la solicitud está en estado ARRIVED
+    if client_request.status != StatusEnum.ARRIVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta solicitud de viaje solo puede ser cancelada por el conductor cuando está en estado ARRIVED (cuando el conductor ha llegado al punto de recogida)."
+        )
+
+    # Actualizar el estado de la solicitud
+    client_request.status = StatusEnum.CANCELLED
+    client_request.updated_at = datetime.utcnow()
+    # TODO: Si se desea almacenar la razón de cancelación, se necesitará agregar un campo al modelo ClientRequest
+    session.commit()
+
+    return {
+        "success": True,
+        "message": "Solicitud de viaje cancelada exitosamente por el conductor."
+    }

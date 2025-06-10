@@ -126,7 +126,7 @@ class VerifyDocsService:
                 select(func.count(DriverDocuments.id))
                 .where(
                     and_(
-                        DriverDocuments.user_id == user_role.id_user,
+                        DriverDocuments.id_user == user_role.id_user,
                         DriverDocuments.status == DriverStatus.APPROVED
                     )
                 )
@@ -136,7 +136,7 @@ class VerifyDocsService:
             # Contamos el total de documentos del usuario
             total_docs_query = (
                 select(func.count(DriverDocuments.id))
-                .where(DriverDocuments.user_id == user_role.id_user)
+                .where(DriverDocuments.id_user == user_role.id_user)
             )
             total_docs = self.db.exec(total_docs_query).first()
 

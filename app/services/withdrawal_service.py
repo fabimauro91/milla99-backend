@@ -42,7 +42,7 @@ class WithdrawalService:
     def request_withdrawal(
         self,
         user_id: UUID,
-        amount: int,
+        amount: int,  # Monto base sin comisión
         bank_account_id: UUID,
         description: Optional[str] = None
     ) -> Withdrawal:
@@ -62,33 +62,24 @@ class WithdrawalService:
             HTTPException: Si hay algún error en el proceso
         """
         try:
-            # Verificar que la cuenta bancaria existe y pertenece al usuario
-            bank_account = self.session.query(BankAccount).filter(
-                BankAccount.id == bank_account_id,
-                BankAccount.user_id == user_id
-            ).first()
+            # Verificar cuenta bancaria
+            bank_account = self.validate_bank_account(user_id, bank_account_id)
 
-            if not bank_account:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Bank account not found or does not belong to user"
-                )
-
-            # Obtener el número de retiros confirmados del mes
+            # Obtener retiros confirmados del mes
             confirmed_withdrawals = get_monthly_confirmed_withdrawals(
                 self.session, user_id)
 
-            # Calcular el monto total incluyendo comisión si aplica
+            # Calcular comisión y monto total
             total_amount, commission = calculate_withdrawal_amount(
                 amount, confirmed_withdrawals)
 
             # Verificar saldo suficiente para el monto total
             assert_can_withdraw(self.session, user_id, total_amount)
 
-            # Crear el registro de retiro con el monto total
+            # Crear el registro de retiro con el monto base
             withdrawal = Withdrawal(
                 user_id=user_id,
-                amount=total_amount,  # Monto total (base + comisión)
+                amount=amount,  # Monto base sin comisión
                 status=WithdrawalStatus.PENDING,
                 bank_account_id=bank_account_id,
                 withdrawal_date=datetime.utcnow()
@@ -100,26 +91,25 @@ class WithdrawalService:
             transaction = Transaction(
                 user_id=user_id,
                 type=TransactionType.WITHDRAWAL,
-                expense=total_amount,
+                expense=total_amount,  # Monto total (base + comisión)
+                commission=commission,  # Comisión separada
                 description=(
                     f"Retiro a cuenta bancaria {bank_account.account_number}" +
-                    (f" (incluye comisión de {commission})" if commission > 0 else "")
+                    (f" (comisión: {commission})" if commission > 0 else "")
                 ),
                 bank_account_id=bank_account_id,
                 id_withdrawal=withdrawal.id,
-                is_confirmed=True,
-                commission=commission
+                is_confirmed=True
             )
 
             # Actualizar el saldo del usuario
             verify_mount = self.session.query(VerifyMount).filter(
                 VerifyMount.user_id == user_id
             ).first()
-
             verify_mount.mount -= total_amount
             verify_mount.updated_at = datetime.utcnow()
 
-            # Guardar los cambios
+            # Guardar cambios
             self.session.add(transaction)
             self.session.commit()
             self.session.refresh(withdrawal)
@@ -161,6 +151,7 @@ class WithdrawalService:
     def reject_withdrawal(self, withdrawal_id: UUID) -> dict:
         """
         Rechaza un retiro y devuelve el monto total al usuario.
+        Solo marca la transacción como no confirmada y devuelve el monto.
         """
         withdrawal = self.session.query(Withdrawal).filter(
             Withdrawal.id == withdrawal_id,
@@ -174,7 +165,7 @@ class WithdrawalService:
             )
 
         try:
-            # Buscar la transacción original asociada al retiro
+            # Buscar la transacción original
             original_transaction = self.session.query(Transaction).filter(
                 Transaction.id_withdrawal == withdrawal.id,
                 Transaction.type == TransactionType.WITHDRAWAL
@@ -188,22 +179,28 @@ class WithdrawalService:
 
             # Marcar la transacción como no confirmada
             original_transaction.is_confirmed = False
+            self.session.add(original_transaction)  # Asegura el update
 
-            # Actualizar el estado del retiro
+            # Actualizar estado del retiro
             withdrawal.status = WithdrawalStatus.REJECTED
+            self.session.add(withdrawal)
 
-            # Devolver el monto al usuario
+            # Devolver el monto total (expense contiene el monto total incluyendo comisión)
             verify_mount = self.session.query(VerifyMount).filter(
                 VerifyMount.user_id == withdrawal.user_id
             ).first()
 
-            verify_mount.mount += withdrawal.amount
+            verify_mount.mount += original_transaction.expense  # Devolvemos el monto total
             verify_mount.updated_at = datetime.utcnow()
+            self.session.add(verify_mount)
 
             self.session.commit()
 
             return {
                 "message": "Withdrawal rejected and funds returned.",
+                "amount_returned": original_transaction.expense,
+                "base_amount": withdrawal.amount,
+                "commission": original_transaction.commission
             }
 
         except Exception as e:

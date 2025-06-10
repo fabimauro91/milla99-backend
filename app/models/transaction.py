@@ -37,6 +37,7 @@ class Transaction(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="user.id")
     income: Optional[int] = Field(default=0)
     expense: Optional[int] = Field(default=0)
+    commission: Optional[int] = Field(default=0)  # Nuevo campo para comisiones
     type: TransactionType
     client_request_id: Optional[UUID] = Field(
         default=None, foreign_key="client_request.id")
