@@ -85,20 +85,26 @@ class VerifyDocsService:
 
     def get_users_with_all_approved_docs(self) -> List[User]:
         """Lista usuarios con todos sus documentos aprobados y rol aprobado"""
-        users_with_non_approved = (
-            select(DriverDocuments.user_id)
+        # Subconsulta para obtener driver_info_id de documentos no aprobados
+        driver_info_with_non_approved_docs = (
+            select(DriverDocuments.driver_info_id)
             .where(DriverDocuments.status != DriverStatus.APPROVED)
         )
 
+        # Consulta principal para obtener usuarios con todos los documentos aprobados y rol aprobado
         query = (
             select(User)
-            .join(DriverDocuments)
+            # Join User con DriverInfo
+            .join(DriverInfo, User.id == DriverInfo.user_id)
+            # Join DriverInfo con DriverDocuments
+            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
             # Join con UserHasRole
             .join(UserHasRole, User.id == UserHasRole.id_user)
             .where(
                 and_(
                     DriverDocuments.status == DriverStatus.APPROVED,
-                    User.id.not_in(users_with_non_approved),
+                    # Asegurarse que el driver_info_id del usuario no esté en la lista de documentos no aprobados
+                    DriverInfo.id.not_in(driver_info_with_non_approved_docs),
                     UserHasRole.status == RoleStatus.APPROVED,  # Condición para UserHasRole
                     UserHasRole.id_rol == "DRIVER"  # Asegurarse que sea rol conductor
                 )
@@ -195,7 +201,8 @@ class VerifyDocsService:
         """Lista usuarios con documentos rechazados"""
         query = (
             select(User)
-            .join(DriverDocuments)
+            .join(DriverInfo, User.id == DriverInfo.user_id)
+            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
             .where(DriverDocuments.status == DriverStatus.REJECTED)
             .distinct()
         )
@@ -207,8 +214,9 @@ class VerifyDocsService:
             # Para cada usuario, obtenemos sus documentos revocado
             docs_query = (
                 select(DriverDocuments)
+                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
                 .where(
-                    DriverDocuments.user_id == user.id,
+                    DriverInfo.user_id == user.id,
                     DriverDocuments.status == DriverStatus.REJECTED
                 )
             )
@@ -224,7 +232,8 @@ class VerifyDocsService:
         """Lista usuarios con documentos expirados"""
         query = (
             select(User)
-            .join(DriverDocuments)
+            .join(DriverInfo, User.id == DriverInfo.user_id)
+            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
             .where(DriverDocuments.status == DriverStatus.EXPIRED)
             .distinct()
         )
@@ -235,8 +244,9 @@ class VerifyDocsService:
             # Para cada usuario, obtenemos sus documentos pendientes
             docs_query = (
                 select(DriverDocuments)
+                .join(DriverInfo, DriverDocuments.driver_info_id == DriverInfo.id)
                 .where(
-                    DriverDocuments.user_id == user.id,
+                    DriverInfo.user_id == user.id,
                     DriverDocuments.status == DriverStatus.EXPIRED
                 )
             )
@@ -283,7 +293,8 @@ class VerifyDocsService:
         # Primero obtenemos los usuarios y documentos
         query = (
             select(User, DriverDocuments)
-            .join(DriverDocuments)
+            .join(DriverInfo, User.id == DriverInfo.user_id)
+            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
             .where(
                 and_(
                     DriverDocuments.status == DriverStatus.APPROVED,
