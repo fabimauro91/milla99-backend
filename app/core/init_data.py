@@ -244,7 +244,8 @@ def create_all_users(session: Session):
         {"full_name": "Roberto Sánchez", "phone_number": "3005555555"},
         {"full_name": "Laura Torres", "phone_number": "3006666666"},
         {"full_name": "Pedro Gómez", "phone_number": "3007777777"},
-        {"full_name": "Sofía Ramírez", "phone_number": "3008888888"}
+        {"full_name": "Sofía Ramírez", "phone_number": "3008888888"},
+        {"full_name": "Driver Docs Complete", "phone_number": "3001234567"}
     ]
 
     # Obtener roles
@@ -314,11 +315,16 @@ def create_all_users(session: Session):
 
             # Asignar rol DRIVER
             if driver_role:
+                status_for_driver = RoleStatus.APPROVED
+                # Establecer el rol PENDING para 'Driver Docs Complete'
+                if driver_data["phone_number"] == "3001234567":
+                    status_for_driver = RoleStatus.PENDING
+
                 user_has_role = UserHasRole(
                     id_user=user.id,
                     id_rol=driver_role.id,
                     is_verified=True,
-                    status=RoleStatus.APPROVED,
+                    status=status_for_driver,
                     verified_at=datetime.utcnow()
                 )
                 session.add(user_has_role)
@@ -383,6 +389,12 @@ def create_all_drivers(session: Session, users):
             "phone": "3008888888",
             "driver_info": {"first_name": "Sofía", "last_name": "Ramírez", "birth_date": date(1992, 11, 25), "email": "sofia.ramirez@example.com"},
             "vehicle_info": {"brand": "Honda", "model": "CB 190R", "model_year": 2022, "color": "Azul", "plate": "SOF012", "vehicle_type": "Motorcycle"}
+        },
+        # Driver Docs Complete - Carro
+        {
+            "phone": "3001234567",
+            "driver_info": {"first_name": "Driver", "last_name": "Docs Complete", "birth_date": date(1980, 1, 1), "email": "driver.complete@example.com"},
+            "vehicle_info": {"brand": "Nissan", "model": "Versa", "model_year": 2021, "color": "Gris", "plate": "DOC123", "vehicle_type": "Car"}
         }
     ]
 
@@ -528,7 +540,7 @@ def create_all_drivers(session: Session, users):
 
 def create_client_requests(session: Session, users, drivers):
     """3. Crear 12 client_request específicos para pruebas controladas"""
-    
+
     # Coordenadas de prueba en Bogotá
     TEST_COORDINATES = {
         "pickup_points": [
@@ -593,9 +605,10 @@ def create_client_requests(session: Session, users, drivers):
     # Obtener clientes específicos por teléfono
     target_clients = {}
     target_phones = ["3004444456", "3004444457", "3004444458", "3004444459"]
-    
+
     for phone in target_phones:
-        client = session.exec(select(User).where(User.phone_number == phone)).first()
+        client = session.exec(select(User).where(
+            User.phone_number == phone)).first()
         if client:
             target_clients[phone] = client
 
@@ -605,17 +618,17 @@ def create_client_requests(session: Session, users, drivers):
         {"client_phone": "3004444456", "service_type": "Car", "coord_idx": 0},
         {"client_phone": "3004444456", "service_type": "Car", "coord_idx": 1},
         {"client_phone": "3004444456", "service_type": "Motorcycle", "coord_idx": 2},
-        
+
         # Cliente 3004444457: 2 moto + 1 carro
         {"client_phone": "3004444457", "service_type": "Motorcycle", "coord_idx": 3},
         {"client_phone": "3004444457", "service_type": "Motorcycle", "coord_idx": 4},
         {"client_phone": "3004444457", "service_type": "Car", "coord_idx": 5},
-        
+
         # Cliente 3004444458: 2 carro + 1 moto
         {"client_phone": "3004444458", "service_type": "Car", "coord_idx": 6},
         {"client_phone": "3004444458", "service_type": "Car", "coord_idx": 7},
         {"client_phone": "3004444458", "service_type": "Motorcycle", "coord_idx": 8},
-        
+
         # Cliente 3004444459: 2 moto + 1 carro
         {"client_phone": "3004444459", "service_type": "Motorcycle", "coord_idx": 9},
         {"client_phone": "3004444459", "service_type": "Motorcycle", "coord_idx": 10},
@@ -631,9 +644,9 @@ def create_client_requests(session: Session, users, drivers):
 
         pickup = TEST_COORDINATES["pickup_points"][config["coord_idx"]]
         destination = TEST_COORDINATES["destinations"][config["coord_idx"]]
-        
+
         type_service_id = car_service.id if config["service_type"] == "Car" else moto_service.id
-        
+
         request = ClientRequest(
             id_client=client.id,
             type_service_id=type_service_id,
@@ -654,14 +667,14 @@ def create_client_requests(session: Session, users, drivers):
     session.commit()
     for req in requests:
         session.refresh(req)
-    
+
     print(f"✅ Creadas {len(requests)} solicitudes específicas para pruebas")
     return requests
 
 
 def create_driver_offers(session: Session, drivers, requests):
     """4. Crear ofertas específicas según el tipo de servicio y cliente"""
-    
+
     # Mapear conductores por teléfono
     drivers_by_phone = {}
     for driver in drivers:
@@ -675,17 +688,20 @@ def create_driver_offers(session: Session, drivers, requests):
 
     for request in requests:
         # Obtener el cliente del request
-        client = session.exec(select(User).where(User.id == request.id_client)).first()
+        client = session.exec(select(User).where(
+            User.id == request.id_client)).first()
         if not client:
             continue
 
         # Obtener el tipo de servicio
-        type_service = session.exec(select(TypeService).where(TypeService.id == request.type_service_id)).first()
-        vehicle_type = session.exec(select(VehicleType).where(VehicleType.id == type_service.vehicle_type_id)).first()
+        type_service = session.exec(select(TypeService).where(
+            TypeService.id == request.type_service_id)).first()
+        vehicle_type = session.exec(select(VehicleType).where(
+            VehicleType.id == type_service.vehicle_type_id)).first()
 
         # Determinar qué conductores deben hacer ofertas
         target_driver_phones = []
-        
+
         if client.phone_number in ["3004444456", "3004444457", "3004444458", "3004444459"]:
             if vehicle_type.name == "Car":
                 target_driver_phones = car_drivers
@@ -713,7 +729,7 @@ def create_driver_offers(session: Session, drivers, requests):
 
 def complete_some_requests(session: Session, drivers, requests):
     """5. Completar requests específicos con asignaciones controladas"""
-    
+
     # Mapear conductores por teléfono
     drivers_by_phone = {}
     for driver in drivers:
@@ -721,11 +737,16 @@ def complete_some_requests(session: Session, drivers, requests):
 
     # Configuración específica de asignaciones
     assignments = [
-        {"client_phone": "3004444456", "service_type": "Car", "driver_phone": "3005555555"},
-        {"client_phone": "3004444457", "service_type": "Car", "driver_phone": "3006666666"},
-        {"client_phone": "3004444458", "service_type": "Car", "driver_phone": "3005555555"},
-        {"client_phone": "3004444457", "service_type": "Motorcycle", "driver_phone": "3007777777"},
-        {"client_phone": "3004444459", "service_type": "Motorcycle", "driver_phone": "3008888888"},
+        {"client_phone": "3004444456", "service_type": "Car",
+            "driver_phone": "3005555555"},
+        {"client_phone": "3004444457", "service_type": "Car",
+            "driver_phone": "3006666666"},
+        {"client_phone": "3004444458", "service_type": "Car",
+            "driver_phone": "3005555555"},
+        {"client_phone": "3004444457", "service_type": "Motorcycle",
+            "driver_phone": "3007777777"},
+        {"client_phone": "3004444459", "service_type": "Motorcycle",
+            "driver_phone": "3008888888"},
     ]
 
     # Seleccionar 5 requests para completar
@@ -734,7 +755,8 @@ def complete_some_requests(session: Session, drivers, requests):
 
     for assignment in assignments:
         # Buscar el request específico
-        client = session.exec(select(User).where(User.phone_number == assignment["client_phone"])).first()
+        client = session.exec(select(User).where(
+            User.phone_number == assignment["client_phone"])).first()
         if not client:
             continue
 
@@ -936,7 +958,6 @@ def init_data():
 
         # 8. Inicializar bancos
         init_banks(session)
-            
 
         # 9. Crear admin
         create_admin(session)
@@ -953,13 +974,11 @@ def init_data():
         # 13. Crear ofertas de conductores
         create_driver_offers(session, users['drivers'], requests)
 
-        
         # 15. Inicializar datos de referidos
         init_referral_data(session, users)
 
         # 14. Completar algunas solicitudes
         complete_some_requests(session, users['drivers'], requests)
-
 
         # 16. Crear posiciones de conductores
         create_driver_positions(session, users['drivers'])

@@ -1,7 +1,7 @@
 from sqlmodel import select, and_, or_, SQLModel
 from datetime import datetime, timedelta
 from typing import List, Optional
-from app.models.driver_documents import DocumentsUpdate, DriverDocuments, DriverStatus,DriverDocumentsCreateRequest
+from app.models.driver_documents import DocumentsUpdate, DriverDocuments, DriverStatus, DriverDocumentsCreateRequest
 from app.models.user import User
 from app.models.document_type import DocumentType
 from app.models.user_has_roles import UserHasRole, RoleStatus
@@ -12,6 +12,8 @@ from uuid import UUID
 from app.models.driver_info import DriverInfo
 
 # modelo  para la respuesta de listas en ususario
+
+
 class UserWithDocs(BaseModel):
     user: User
     documents: List[DriverDocuments]
@@ -20,6 +22,8 @@ class UserWithDocs(BaseModel):
         from_attributes = True
 
 # Primero, creamos un modelo para la respuesta del documento
+
+
 class DocumentExpirationInfo(SQLModel):
     document_id: UUID
     expiration_date: datetime
@@ -29,6 +33,8 @@ class DocumentExpirationInfo(SQLModel):
         from_attributes = True
 
 # Modelo para la respuesta completa
+
+
 class UserWithExpiringDocsResponse(SQLModel):
     # Datos del usuario
     user_id: UUID
@@ -41,11 +47,10 @@ class UserWithExpiringDocsResponse(SQLModel):
     class Config:
         from_attributes = True
 
+
 class VerifyDocsService:
     def __init__(self, db):
         self.db = db
-
-    
 
     def get_users_with_pending_docs(self) -> List[UserWithDocs]:
         """Lista usuarios con documentos pendientes y sus documentos"""
@@ -77,8 +82,6 @@ class VerifyDocsService:
             ))
 
         return result
-        
-
 
     def get_users_with_all_approved_docs(self) -> List[User]:
         """Lista usuarios con todos sus documentos aprobados y rol aprobado"""
@@ -90,7 +93,8 @@ class VerifyDocsService:
         query = (
             select(User)
             .join(DriverDocuments)
-            .join(UserHasRole, User.id == UserHasRole.id_user)  # Join con UserHasRole
+            # Join con UserHasRole
+            .join(UserHasRole, User.id == UserHasRole.id_user)
             .where(
                 and_(
                     DriverDocuments.status == DriverStatus.APPROVED,
@@ -102,11 +106,11 @@ class VerifyDocsService:
             .distinct()
         )
         return self.db.exec(query).all()
-    
 
     def update_user_role_status(self):
         """
         Actualiza el status en UserHasRole basado en el estado de los documentos
+        y devuelve información sobre los conductores actualizados
         """
         # Primero obtenemos todos los usuarios con rol DRIVER
         driver_users = (
@@ -120,13 +124,24 @@ class VerifyDocsService:
         )
         driver_users_result = self.db.exec(driver_users).all()
 
+        updated_drivers = []
         for user_role in driver_users_result:
+            # Obtenemos el driver_info del usuario
+            driver_info = self.db.exec(
+                select(DriverInfo)
+                .join(User)
+                .where(DriverInfo.user_id == user_role.id_user)
+            ).first()
+
+            if not driver_info:
+                continue
+
             # Contamos los documentos aprobados del usuario
             docs_query = (
                 select(func.count(DriverDocuments.id))
                 .where(
                     and_(
-                        DriverDocuments.user_id == user_role.id_user,
+                        DriverDocuments.driver_info_id == driver_info.id,
                         DriverDocuments.status == DriverStatus.APPROVED
                     )
                 )
@@ -136,9 +151,12 @@ class VerifyDocsService:
             # Contamos el total de documentos del usuario
             total_docs_query = (
                 select(func.count(DriverDocuments.id))
-                .where(DriverDocuments.user_id == user_role.id_user)
+                .where(DriverDocuments.driver_info_id == driver_info.id)
             )
             total_docs = self.db.exec(total_docs_query).first()
+
+            # Guardamos el estado anterior
+            previous_status = user_role.status
 
             # Si tiene todos los documentos y todos están aprobados
             if total_docs == 4 and approved_docs_count == 4:
@@ -148,10 +166,30 @@ class VerifyDocsService:
 
             self.db.add(user_role)
 
-        self.db.commit()
-        return {"message": "Estados de roles actualizados correctamente"}
-    
+            # Solo agregamos a la lista si el estado cambió
+            if previous_status != user_role.status:
+                # Obtenemos la información del usuario
+                user = self.db.exec(
+                    select(User)
+                    .where(User.id == user_role.id_user)
+                ).first()
 
+                updated_drivers.append({
+                    "user_id": str(user.id),
+                    "full_name": user.full_name,
+                    "phone_number": user.phone_number,
+                    "previous_status": previous_status,
+                    "new_status": user_role.status,
+                    "approved_docs": approved_docs_count,
+                    "total_docs": total_docs
+                })
+
+        self.db.commit()
+        return {
+            "message": "Estados de roles actualizados correctamente",
+            "updated_drivers": updated_drivers,
+            "total_updated": len(updated_drivers)
+        }
 
     def get_users_with_rejected_docs(self) -> List[UserWithDocs]:
         """Lista usuarios con documentos rechazados"""
@@ -181,8 +219,6 @@ class VerifyDocsService:
                 documents=rejected_docs
             ))
         return result
-    
-
 
     def get_users_with_expired_docs(self) -> List[UserWithDocs]:
         """Lista usuarios con documentos expirados"""
@@ -212,9 +248,9 @@ class VerifyDocsService:
             ))
 
         return result
-    
 
-    #actualiza los documentos que se venciron en fecha a expirado
+    # actualiza los documentos que se venciron en fecha a expirado
+
     def update_expired_documents(self) -> int:
         """Actualiza documentos expirados"""
         current_date = datetime.utcnow()
@@ -237,8 +273,8 @@ class VerifyDocsService:
         self.db.commit()
         return count
 
+    # muestra los usuarios que tienen documentos proximos a vencersen en fecha
 
-    #muestra los usuarios que tienen documentos proximos a vencersen en fecha
     def check_soon_to_expire_documents(self) -> List[UserWithExpiringDocsResponse]:
         """Verifica documentos próximos a expirar"""
         current_date = datetime.utcnow()
@@ -283,8 +319,6 @@ class VerifyDocsService:
 
         # Convertimos el diccionario en una lista de respuestas
         return [UserWithExpiringDocsResponse(**user_data) for user_data in users_dict.values()]
-    
-
 
     def update_documents(self, updates: List[DocumentsUpdate]) -> List[DriverDocuments]:
         """Actualiza múltiples documentos"""
@@ -312,7 +346,7 @@ class VerifyDocsService:
 
         self.db.commit()
         return updated_docs
-    
+
     def create_document(self, document_data: DriverDocumentsCreateRequest) -> DriverDocuments:
         """Crea un nuevo documento para un usuario"""
         try:
@@ -325,7 +359,8 @@ class VerifyDocsService:
                 )
 
             # Verificar si el tipo de documento existe
-            document_type = self.db.get(DocumentType, document_data.document_type_id)
+            document_type = self.db.get(
+                DocumentType, document_data.document_type_id)
             if not document_type:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
