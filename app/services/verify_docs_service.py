@@ -1,6 +1,6 @@
 from sqlmodel import select, and_, or_, SQLModel
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from app.models.driver_documents import DocumentsUpdate, DriverDocuments, DriverStatus, DriverDocumentsCreateRequest
 from app.models.user import User
 from app.models.document_type import DocumentType
@@ -115,62 +115,53 @@ class VerifyDocsService:
         )
         return self.db.exec(query).all()
 
-    def update_user_role_status(self):
+    def get_verification_status(self) -> Dict[str, Any]:
         """
-        Actualiza el status en UserHasRole basado en el estado de los documentos
+        Obtiene estadísticas sobre el estado de verificación de los conductores.
         """
-        # Primero obtenemos todos los usuarios con rol DRIVER
-        driver_users = (
-            select(UserHasRole)
+        # Total de conductores
+        total_drivers = self.db.exec(
+            select(func.count(UserHasRole.id))
+            .where(UserHasRole.id_rol == "DRIVER")
+        ).first() or 0
+
+        # Conductores verificados (is_verified = True)
+        verified_drivers = self.db.exec(
+            select(func.count(UserHasRole.id))
             .where(
                 and_(
                     UserHasRole.id_rol == "DRIVER",
                     UserHasRole.is_verified == True
                 )
             )
-        )
-        driver_users_result = self.db.exec(driver_users).all()
+        ).first() or 0
 
-        for user_role in driver_users_result:
-            # Obtenemos el driver_info del usuario
-            driver_info = self.db.exec(
-                select(DriverInfo)
-                .where(DriverInfo.user_id == user_role.id_user)
-            ).first()
-
-            if not driver_info:
-                # Si no hay driver_info para este user_role, continuamos con el siguiente
-                continue
-
-            # Contamos los documentos aprobados del usuario
-            docs_query = (
-                select(func.count(DriverDocuments.id))
-                .where(
-                    and_(
-                        DriverDocuments.driver_info_id == driver_info.id,
-                        DriverDocuments.status == DriverStatus.APPROVED
-                    )
+        # Conductores con status APPROVED
+        approved_drivers = self.db.exec(
+            select(func.count(UserHasRole.id))
+            .where(
+                and_(
+                    UserHasRole.id_rol == "DRIVER",
+                    UserHasRole.status == RoleStatus.APPROVED
                 )
             )
-            approved_docs_count = self.db.exec(docs_query).first()
+        ).first() or 0
 
-            # Contamos el total de documentos del usuario
-            total_docs_query = (
-                select(func.count(DriverDocuments.id))
-                .where(DriverDocuments.driver_info_id == driver_info.id)
-            )
-            total_docs = self.db.exec(total_docs_query).first()
+        # Conductores con documentos pendientes
+        drivers_with_pending_docs = self.db.exec(
+            select(func.count(func.distinct(DriverInfo.user_id)))
+            .join(DriverDocuments, DriverInfo.id == DriverDocuments.driver_info_id)
+            .where(DriverDocuments.status == DriverStatus.PENDING)
+        ).first() or 0
 
-            # Si tiene todos los documentos y todos están aprobados
-            if total_docs == 4 and approved_docs_count == 4:
-                user_role.status = RoleStatus.APPROVED
-            else:
-                user_role.status = RoleStatus.PENDING
-
-            self.db.add(user_role)
-
-        self.db.commit()
-        return {"message": "Estados de roles actualizados correctamente"}
+        return {
+            "total_drivers": total_drivers,
+            "verified_drivers": verified_drivers,
+            "approved_drivers": approved_drivers,
+            "drivers_with_pending_docs": drivers_with_pending_docs,
+            "verification_rate": (verified_drivers / total_drivers * 100) if total_drivers > 0 else 0,
+            "approval_rate": (approved_drivers / total_drivers * 100) if total_drivers > 0 else 0
+        }
 
     def get_users_with_rejected_docs(self) -> List[UserWithDocs]:
         """Lista usuarios con documentos rechazados"""
