@@ -374,6 +374,13 @@ class StatisticsService:
             print(
                 f"\nEstadísticas financieras calculadas: {response_data['financial_stats']}")
 
+            # --- 4. Estadísticas de Suspensiones ---
+            print("\n=== Calculando estadísticas de suspensiones ===")
+            suspended_drivers_stats = self.batch_check_all_suspended_drivers()
+            response_data["suspended_drivers_stats"] = suspended_drivers_stats
+            print(
+                f"\nEstadísticas de suspensiones calculadas: {suspended_drivers_stats}")
+
             return response_data
 
         except Exception as e:
@@ -381,3 +388,15 @@ class StatisticsService:
             print("Traceback completo:")
             print(traceback.format_exc())
             raise
+
+    def batch_check_all_suspended_drivers(self):
+        """
+        Método para verificar y levantar suspensiones de todos los conductores suspendidos.
+        Útil para ejecutar como tarea programada (cron job).
+
+        Returns:
+            dict: Resumen de las suspensiones levantadas
+        """
+        # Importar la función desde client_requests_service
+        from app.services.client_requests_service import batch_check_all_suspended_drivers
+        return batch_check_all_suspended_drivers(self.session)
