@@ -803,7 +803,6 @@ def driver_cancel_request(
     return driver_canceled_service(session, cancel_data.id_client_request, user_id, cancel_data.reason)
 
 
-
 @router.get("/drivers-check-suspension", tags=["Drivers"], description="""
             Permite verificar y levantar la suspensión de un conductor específico.""")
 def check_driver_suspension_api(
@@ -813,22 +812,6 @@ def check_driver_suspension_api(
     driver_id = request.state.user_id
     try:
         result = check_and_lift_driver_suspension(session, driver_id)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    
-
-@router.post("/drivers/batch-check-suspensions", tags=["ADMIN"], description="""
-            API endpoint para verificar y levantar la suspensión de todos los conductores suspendidos.""")
-def batch_check_suspensions_api(
-    session: Session = Depends(get_session),
-    current_admin=Depends(get_current_admin)
-):
-    try:
-        result = batch_check_all_suspended_drivers(session)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
