@@ -1,91 +1,155 @@
+import io
 from fastapi import status
+from datetime import date
+import json
 
 
-def test_create_driver(client):
-    response = client.post(
-        "/drivers/",
-        json={
-            "user_id": 1,
-            "first_name": "Carlos",
-            "last_name": "Gómez",
-            "birth_date": "1990-01-01",
-            "email": "carlos@example.com",
-            "vehicle_type": "motorcycle",
-            "brand": "Yamaha",
-            "model": "YZF-R3",
-            "color": "Blue",
-            "license_plate": "XYZ123"
-        }
+def test_create_driver_full(client):
+    # Datos de usuario
+    user_data = {
+        "full_name": "Carlos Prueba",
+        "country_code": "+57",
+        "phone_number": "3010000000"
+    }
+    driver_info_data = {
+        "first_name": "Carlos",
+        "last_name": "Gómez",
+        "birth_date": str(date(1990, 1, 1)),
+        "email": "carlos.prueba@example.com"
+    }
+    vehicle_info_data = {
+        "brand": "Toyota",
+        "model": "Corolla",
+        "model_year": 2020,
+        "color": "Blanco",
+        "plate": "ABC123",
+        "vehicle_type_id": 1
+    }
+    driver_documents_data = {
+        "license_expiration_date": str(date(2026, 1, 1)),
+        "soat_expiration_date": str(date(2025, 12, 31)),
+        "vehicle_technical_inspection_expiration_date": str(date(2025, 12, 31)),
+        # URLs opcionales (simuladas)
+        "property_card_front_url": None,
+        "property_card_back_url": None,
+        "license_front_url": None,
+        "license_back_url": None,
+        "soat_url": None,
+        "vehicle_technical_inspection_url": None
+    }
+
+    # Archivos simulados en memoria (filename, fileobj, content_type)
+    selfie = ("selfie.jpg", io.BytesIO(b"fake-selfie-data"), "image/jpeg")
+    property_card_front = ("property_front.jpg", io.BytesIO(
+        b"fake-property-front"), "image/jpeg")
+    property_card_back = ("property_back.jpg", io.BytesIO(
+        b"fake-property-back"), "image/jpeg")
+    license_front = ("license_front.jpg", io.BytesIO(
+        b"fake-license-front"), "image/jpeg")
+    license_back = ("license_back.jpg", io.BytesIO(
+        b"fake-license-back"), "image/jpeg")
+    soat = ("soat.jpg", io.BytesIO(b"fake-soat"), "image/jpeg")
+    vehicle_technical_inspection = (
+        "tech.jpg", io.BytesIO(b"fake-tech"), "image/jpeg")
+
+    # Construir el payload multipart/form-data
+    data = {
+        "user": (None, json.dumps(user_data), "application/json"),
+        "driver_info": (None, json.dumps(driver_info_data), "application/json"),
+        "vehicle_info": (None, json.dumps(vehicle_info_data), "application/json"),
+        "driver_documents": (None, json.dumps(driver_documents_data), "application/json"),
+        "selfie": selfie,
+        "property_card_front": property_card_front,
+        "property_card_back": property_card_back,
+        "license_front": license_front,
+        "license_back": license_back,
+        "soat": soat,
+        "vehicle_technical_inspection": vehicle_technical_inspection,
+    }
+
+    response = client.post("/drivers/", files=data)
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    resp_json = response.json()
+    assert resp_json["user"]["full_name"] == user_data["full_name"]
+    assert resp_json["driver_info"]["first_name"] == driver_info_data["first_name"]
+    assert resp_json["vehicle_info"]["brand"] == vehicle_info_data["brand"]
+    # Verifica que las URLs de los documentos y selfie estén presentes
+    assert resp_json["user"]["selfie_url"]
+
+
+def test_get_driver_me(client):
+    # 1. Crear un driver nuevo
+    phone_number = "3010000002"
+    country_code = "+57"
+    user_data = {
+        "full_name": "Driver Me Test",
+        "country_code": country_code,
+        "phone_number": phone_number
+    }
+    driver_info_data = {
+        "first_name": "DriverMe",
+        "last_name": "Test",
+        "birth_date": str(date(1992, 2, 2)),
+        "email": "driver.me@example.com"
+    }
+    vehicle_info_data = {
+        "brand": "Mazda",
+        "model": "3",
+        "model_year": 2021,
+        "color": "Rojo",
+        "plate": "XYZ987",
+        "vehicle_type_id": 1
+    }
+    driver_documents_data = {
+        "license_expiration_date": str(date(2027, 2, 2)),
+        "soat_expiration_date": str(date(2025, 2, 2)),
+        "property_card_expiration_date": str(date(2028, 2, 2)),
+        "technical_inspection_expiration_date": str(date(2026, 2, 2))
+    }
+    files = {
+        "selfie": ("selfie.jpg", io.BytesIO(b"fake-selfie-data"), "image/jpeg"),
+        "property_card_front": ("property_front.jpg", io.BytesIO(b"fake-property-front"), "image/jpeg"),
+        "property_card_back": ("property_back.jpg", io.BytesIO(b"fake-property-back"), "image/jpeg"),
+        "license_front": ("license_front.jpg", io.BytesIO(b"fake-license-front"), "image/jpeg"),
+        "license_back": ("license_back.jpg", io.BytesIO(b"fake-license-back"), "image/jpeg"),
+        "soat": ("soat.jpg", io.BytesIO(b"fake-soat"), "image/jpeg"),
+        "technical_inspection": ("tech.jpg", io.BytesIO(b"fake-tech"), "image/jpeg"),
+    }
+    data = {
+        "user": json.dumps(user_data),
+        "driver_info": json.dumps(driver_info_data),
+        "vehicle_info": json.dumps(vehicle_info_data),
+        "driver_documents": json.dumps(driver_documents_data),
+    }
+    resp = client.post("/drivers/", data=data, files=files)
+    print("CREAR DRIVER:", resp.status_code, resp.text)
+    assert resp.status_code == status.HTTP_201_CREATED
+
+    # 2. Enviar código de verificación (simula WhatsApp)
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    print("ENVIAR CODIGO:", send_resp.status_code, send_resp.text)
+    assert send_resp.status_code == 201
+    msg = send_resp.json()["message"]
+    code = msg.split()[-1]  # Toma el último fragmento, que es el código real
+    print("CODIGO EXTRAIDO:", code)
+
+    # 3. Verificar el código y obtener el token
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
     )
-    print("[CREATE] Response:", response.json())
-    assert response.status_code == status.HTTP_201_CREATED
-    assert response.json()["first_name"] == "Carlos"
+    print("VERIFICAR CODIGO:", verify_resp.status_code, verify_resp.text)
+    print("VERIFICAR CODIGO JSON:", verify_resp.json())
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
-
-def test_get_all_drivers(client):
-    response = client.get("/drivers/")
-    assert response.status_code == status.HTTP_200_OK
-    assert isinstance(response.json(), list)
-
-
-def test_get_driver_by_id(client):
-    # Create a driver first
-    response = client.post(
-        "/drivers/",
-        json={
-            "user_id": 2,
-            "first_name": "Ana",
-            "last_name": "Martínez",
-            "birth_date": "1988-05-12"
-        }
-    )
-    driver_id = response.json()["id"]
-
-    # get driver by id
-    get_response = client.get(f"/drivers/{driver_id}")
-    assert get_response.status_code == status.HTTP_200_OK
-    assert get_response.json()["first_name"] == "Ana"
-
-
-def test_update_driver(client):
-    response = client.post(
-        "/drivers/",
-        json={
-            "user_id": 3,
-            "first_name": "Luis",
-            "last_name": "Ramírez"
-        }
-    )
-    driver_id = response.json()["id"]
-
-    patch_response = client.patch(
-        f"/drivers/{driver_id}", json={"last_name": "Rodríguez"})
-    assert patch_response.status_code == status.HTTP_200_OK
-    assert patch_response.json()["last_name"] == "Rodríguez"
-
-
-def test_soft_delete_driver(client):
-    response = client.post(
-        "/drivers/",
-        json={
-            "user_id": 4,
-            "first_name": "Mario",
-            "last_name": "López"
-        }
-    )
-    driver_id = response.json()["id"]
-
-    # active driver
-    patch_response = client.patch(
-        f"/drivers/{driver_id}", json={"is_active": True})
-    assert patch_response.status_code == 200
-
-    delete_response = client.delete(f"/drivers/{driver_id}")
-    assert delete_response.status_code == status.HTTP_200_OK
-    assert delete_response.json() == {
-        "message": "Driver deactivated (soft delete) successfully"}
-
-    # verify that the driver is inactive
-    get_response = client.get(f"/drivers/{driver_id}")
-    assert get_response.status_code == status.HTTP_200_OK
-    assert get_response.json()["is_active"] is False
+    # 4. Consultar /drivers/me con el token
+    me_resp = client.get("/drivers/me", headers=headers)
+    print("DRIVERS/ME:", me_resp.status_code, me_resp.text)
+    assert me_resp.status_code == 200
+    me_json = me_resp.json()
+    print("RESPUESTA DRIVERS/ME:", me_json)
+    assert me_json["user"]["phone_number"] == phone_number
+    assert me_json["driver_info"]["first_name"] == "DriverMe"
+    assert me_json["vehicle_info"]["plate"] == "XYZ987"
