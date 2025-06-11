@@ -67,7 +67,7 @@ class User(UserBase, table=True):
     withdrawals: List["Withdrawal"] = Relationship(back_populates="user")
     penalities: List["PenalityUser"] = Relationship(
         back_populates="user",
-        sa_relationship_kwargs={"foreign_keys": "PenalityUser.user_id"}
+        sa_relationship_kwargs={"foreign_keys": "PenalityUser.id_user"}  
     )
 
 class UserCreate(SQLModel):

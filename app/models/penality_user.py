@@ -13,9 +13,9 @@ class PenalityUser(SQLModel, table=True):
 
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True, unique=True)
     id_client_request: UUID = Field(foreign_key="client_request.id", nullable=False)
-    user_id: UUID = Field(foreign_key="user.id", nullable=False)
+    id_user: UUID = Field(foreign_key="user.id", nullable=False)
     id_driver_assigned: UUID = Field(foreign_key="user.id", nullable=False)
-    id_driver_get_money: UUID = Field(foreign_key="user.id", nullable=False)
+    id_driver_get_money: UUID = Field(foreign_key="user.id", nullable=True)
     amount: float = Field(nullable=False)
     status: statusEnum = Field(default=statusEnum.PENDING, nullable=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
@@ -25,10 +25,10 @@ class PenalityUser(SQLModel, table=True):
         sa_column_kwargs={"onupdate": datetime.utcnow}
     )
 
-     # Relaciones
+    # Relaciones
     user: "User" = Relationship(
         back_populates="penalities",
-        sa_relationship_kwargs={"foreign_keys": "PenalityUser.user_id"}
+        sa_relationship_kwargs={"foreign_keys": "PenalityUser.id_user"}
     )
     client_request: "ClientRequest" = Relationship(
         back_populates="penalities",
