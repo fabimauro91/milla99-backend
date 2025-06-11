@@ -365,18 +365,28 @@ class VerifyDocsService:
                             # Verificar si los 4 tipos de documentos requeridos están aprobados
                             if approved_required_doc_types_count == len(REQUIRED_DOC_TYPE_IDS):
                                 if not user_has_role.is_verified:  # Solo actualizar si no es ya True
-                                    user_has_role.is_verified = True
-                                    user_has_role.status = RoleStatus.APPROVED  # Actualizar status a APPROVED
-                                    self.db.add(user_has_role)
-                                    self.db.commit()  # Commit este cambio específico para UserHasRole
-                                    self.db.refresh(user_has_role)
+                                    # Verificar si el conductor está suspendido
+                                    if user_has_role.suspension:
+                                        # Si está suspendido, solo actualizamos is_verified pero mantenemos status como PENDING
+                                        user_has_role.is_verified = True
+                                        user_has_role.status = RoleStatus.PENDING
+                                        self.db.add(user_has_role)
+                                        self.db.commit()
+                                        self.db.refresh(user_has_role)
+                                    else:
+                                        # Si no está suspendido, actualizamos ambos campos
+                                        user_has_role.is_verified = True
+                                        user_has_role.status = RoleStatus.APPROVED
+                                        self.db.add(user_has_role)
+                                        self.db.commit()
+                                        self.db.refresh(user_has_role)
                             else:
                                 # Si no todos los 4 documentos requeridos están aprobados, asegurar que is_verified sea False
                                 if user_has_role.is_verified:  # Solo actualizar si es actualmente True
                                     user_has_role.is_verified = False
                                     user_has_role.status = RoleStatus.PENDING  # Mantener status como PENDING
                                     self.db.add(user_has_role)
-                                    self.db.commit()  # Commit este cambio específico para UserHasRole
+                                    self.db.commit()
                                     self.db.refresh(user_has_role)
 
             return updated_docs
