@@ -1031,6 +1031,7 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
             driver= session.query(UserHasRole).filter(
             UserHasRole.id_user == user_id).first()
             driver.suspension = True
+            driver.status= RoleStatus.PENDING
             session.commit()    
         
 
@@ -1165,6 +1166,7 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
     if not last_cancellation:
         # Si no hay cancelaciones pero está suspendido, levantar la suspensión
         driver_role.suspension = False
+        driver_role.status= RoleStatus.APPROVED
         session.commit()
         return {
             "success": True,
@@ -1179,7 +1181,7 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
     if current_time >= suspension_end_date:
         # Ha transcurrido el tiempo de suspensión, levantar la suspensión
         driver_role.suspension = False
-        
+        driver_role.status= RoleStatus.APPROVED
         # Eliminar todos los registros de cancelación del conductor
         delete_all_cancellations(session, driver_id)
         
