@@ -153,3 +153,99 @@ def test_get_driver_me(client):
     assert me_json["user"]["phone_number"] == phone_number
     assert me_json["driver_info"]["first_name"] == "DriverMe"
     assert me_json["vehicle_info"]["plate"] == "XYZ987"
+
+
+def test_patch_driver_me(client):
+    # 1. Crear un driver nuevo
+    phone_number = "3010000003"
+    country_code = "+57"
+    user_data = {
+        "full_name": "Driver Patch Test",
+        "country_code": country_code,
+        "phone_number": phone_number
+    }
+    driver_info_data = {
+        "first_name": "Patch",
+        "last_name": "Original",
+        "birth_date": str(date(1993, 3, 3)),
+        "email": "patch.original@example.com"
+    }
+    vehicle_info_data = {
+        "brand": "Kia",
+        "model": "Rio",
+        "model_year": 2019,
+        "color": "Negro",
+        "plate": "PATCH01",
+        "vehicle_type_id": 1
+    }
+    driver_documents_data = {
+        "license_expiration_date": str(date(2028, 3, 3)),
+        "soat_expiration_date": str(date(2026, 3, 3)),
+        "property_card_expiration_date": str(date(2029, 3, 3)),
+        "technical_inspection_expiration_date": str(date(2027, 3, 3))
+    }
+    files = {
+        "selfie": ("selfie.jpg", io.BytesIO(b"original-selfie"), "image/jpeg"),
+        "property_card_front": ("property_front.jpg", io.BytesIO(b"original-property-front"), "image/jpeg"),
+        "property_card_back": ("property_back.jpg", io.BytesIO(b"original-property-back"), "image/jpeg"),
+        "license_front": ("license_front.jpg", io.BytesIO(b"original-license-front"), "image/jpeg"),
+        "license_back": ("license_back.jpg", io.BytesIO(b"original-license-back"), "image/jpeg"),
+        "soat": ("soat.jpg", io.BytesIO(b"original-soat"), "image/jpeg"),
+        "technical_inspection": ("tech.jpg", io.BytesIO(b"original-tech"), "image/jpeg"),
+    }
+    data = {
+        "user": json.dumps(user_data),
+        "driver_info": json.dumps(driver_info_data),
+        "vehicle_info": json.dumps(vehicle_info_data),
+        "driver_documents": json.dumps(driver_documents_data),
+    }
+    resp = client.post("/drivers/", data=data, files=files)
+    print("CREAR DRIVER:", resp.status_code, resp.text)
+    assert resp.status_code == status.HTTP_201_CREATED
+
+    # 2. Enviar código de verificación (simula WhatsApp)
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    print("ENVIAR CODIGO:", send_resp.status_code, send_resp.text)
+    assert send_resp.status_code == 201
+    msg = send_resp.json()["message"]
+    code = msg.split()[-1]
+    print("CODIGO EXTRAIDO:", code)
+
+    # 3. Verificar el código y obtener el token
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    print("VERIFICAR CODIGO:", verify_resp.status_code, verify_resp.text)
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 4. Obtener el estado actual antes del PATCH
+    me_resp_before = client.get("/drivers/me", headers=headers)
+    print("\n=== ESTADO ANTES DEL PATCH ===")
+    print("GET /drivers/me antes del PATCH:", me_resp_before.status_code)
+    print("Datos antes del PATCH:", json.dumps(
+        me_resp_before.json(), indent=2, ensure_ascii=False))
+
+    # 5. PATCH /drivers/me con nuevos datos y archivos
+    patch_data = {
+        "first_name": (None, "Patched"),
+        "last_name": (None, "Updated"),
+        "color": (None, "Azul"),
+        "selfie": ("new_selfie.jpg", io.BytesIO(b"new-selfie-data"), "image/jpeg"),
+    }
+    patch_resp = client.patch("/drivers/me", files=patch_data, headers=headers)
+    print("\n=== RESPUESTA DEL PATCH ===")
+    print("PATCH /drivers/me status:", patch_resp.status_code)
+    print("Datos después del PATCH:", json.dumps(
+        patch_resp.json(), indent=2, ensure_ascii=False))
+
+    # 6. Verificar el estado final
+    me_resp_after = client.get("/drivers/me", headers=headers)
+    print("\n=== ESTADO FINAL DESPUÉS DEL PATCH ===")
+    print("GET /drivers/me después del PATCH:", me_resp_after.status_code)
+    print("Datos finales:", json.dumps(
+        me_resp_after.json(), indent=2, ensure_ascii=False))
+
+    assert patch_resp.status_code == 200
