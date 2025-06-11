@@ -843,24 +843,25 @@ def client_canceled_service(session: Session, id_client_request: int, user_id: i
     if (client_request.status not in ClientRequestStateMachine.CANCELLABLE_STATES):
         raise HTTPException(
             status_code=400, detail="La solicitud no se puede cancelar (solo se permite cancelar si está en CREATED, ACCEPTED o ON_THE_WAY).")
-    
-    #valida si el estado del client_request esta en on the way
+
+    # valida si el estado del client_request esta en on the way
     if (client_request.status == StatusEnum.ON_THE_WAY):
-        config = session.query(ProjectSettings).get(1)  # Asume que la configuración está en la fila con ID 1
+        # Asume que la configuración está en la fila con ID 1
+        config = session.query(ProjectSettings).get(1)
         if not config:
             raise ValueError(
                 "No se encontró la configuración del proyecto con ID 1")
-        multa= Decimal(config.fine_one)
-        penality= PenalityUser(
+        multa = Decimal(config.fine_one)
+        penality = PenalityUser(
             id_user=client_request.id_client,
             id_client_request=client_request.id,
-            id_driver_assigned= client_request.id_driver_assigned,
+            id_driver_assigned=client_request.id_driver_assigned,
             amount=multa,
-            status= statusEnum.PENDING,
+            status=statusEnum.PENDING,
         )
         session.add(penality)
 
-    #valida si el estado del client_request esta en arrived
+    # valida si el estado del client_request esta en arrived
     if (client_request.status == StatusEnum.ARRIVED):
         config = session.query(ProjectSettings).get(1)
         if not config:
@@ -872,7 +873,7 @@ def client_canceled_service(session: Session, id_client_request: int, user_id: i
             id_client_request=client_request.id,
             id_driver_assigned=client_request.id_driver_assigned,
             amount=multa,
-            status=StatusEnum.PENDING,
+            status=statusEnum.PENDING,
         )
         session.add(penality)
 
@@ -1016,24 +1017,27 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
     validator = 0
     # Validar que la solicitud está en estado ARRIVED
     if client_request.status == StatusEnum.ACCEPTED or client_request.status == StatusEnum.ON_THE_WAY:
-        config = session.query(ProjectSettings).get(1)  # Asume que la configuración está en la fila con ID 1
-        day= Decimal(config.cancel_max_days)
-        week= Decimal(config.cancel_max_weeks)
-        suspension= Decimal(config.day_suspension)
-        delete_old_cancellations(session, user_id)  # Eliminar cancelaciones antiguas del conductor
-        validator= 1
+        # Asume que la configuración está en la fila con ID 1
+        config = session.query(ProjectSettings).get(1)
+        day = Decimal(config.cancel_max_days)
+        week = Decimal(config.cancel_max_weeks)
+        suspension = Decimal(config.day_suspension)
+        # Eliminar cancelaciones antiguas del conductor
+        delete_old_cancellations(session, user_id)
+        validator = 1
         record_driver_cancellation(session, user_id, id_client_request)
-        cancel_day_count = get_daily_cancellation_count(session, user_id)   # Obtener el conteo de cancelaciones del día
-        cancel_week_count = get_weekly_cancellation_count(session, user_id) # Obtener el conteo de cancelaciones de la semana
+        cancel_day_count = get_daily_cancellation_count(
+            session, user_id)   # Obtener el conteo de cancelaciones del día
+        # Obtener el conteo de cancelaciones de la semana
+        cancel_week_count = get_weekly_cancellation_count(session, user_id)
 
         if cancel_day_count > day or cancel_week_count > week:
-            validator= 2
-            driver= session.query(UserHasRole).filter(
-            UserHasRole.id_user == user_id).first()
+            validator = 2
+            driver = session.query(UserHasRole).filter(
+                UserHasRole.id_user == user_id).first()
             driver.suspension = True
-            driver.status= RoleStatus.PENDING
-            session.commit()    
-        
+            driver.status = RoleStatus.PENDING
+            session.commit()
 
     # Validar que la solicitud está en estado ARRIVED
     if client_request.status != StatusEnum.ARRIVED and client_request.status != StatusEnum.ACCEPTED and client_request.status != StatusEnum.ON_THE_WAY:
@@ -1068,6 +1072,7 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
             "weekly_cancellation_count": cancel_week_count
         }
 
+
 def record_driver_cancellation(session: Session, driver_id: UUID, client_request_id: UUID):
     """
     Registra la cancelación del conductor en la tabla de registros.
@@ -1079,15 +1084,18 @@ def record_driver_cancellation(session: Session, driver_id: UUID, client_request
     session.add(cancellation_record)
     session.flush()  # Para obtener el ID sin hacer commit
 
+
 def get_daily_cancellation_count(session: Session, driver_id: UUID) -> int:
     """
     Obtiene el número de cancelaciones hechas por un conductor en el día actual.
     """
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.utcnow().replace(
+        hour=0, minute=0, second=0, microsecond=0)
     return session.query(DriverCancellation).filter(
-            DriverCancellation.id_driver == driver_id,
-            DriverCancellation.cancelled_at >= today_start
+        DriverCancellation.id_driver == driver_id,
+        DriverCancellation.cancelled_at >= today_start
     ).count()
+
 
 def get_weekly_cancellation_count(session: Session, driver_id: UUID) -> int:
     """
@@ -1095,9 +1103,10 @@ def get_weekly_cancellation_count(session: Session, driver_id: UUID) -> int:
     """
     seven_days_ago = datetime.utcnow() - timedelta(days=7)
     return session.query(DriverCancellation).filter(
-            DriverCancellation.id_driver == driver_id,
-            DriverCancellation.cancelled_at >= seven_days_ago
+        DriverCancellation.id_driver == driver_id,
+        DriverCancellation.cancelled_at >= seven_days_ago
     ).count()
+
 
 def delete_old_cancellations(session: Session, driver_id: UUID):
     """
@@ -1105,10 +1114,11 @@ def delete_old_cancellations(session: Session, driver_id: UUID):
     """
     seven_days_ago = datetime.utcnow() - timedelta(days=7)
     session.query(DriverCancellation).filter(
-            DriverCancellation.id_driver == driver_id,
-            DriverCancellation.cancelled_at < seven_days_ago
+        DriverCancellation.id_driver == driver_id,
+        DriverCancellation.cancelled_at < seven_days_ago
     ).delete(synchronize_session=False)
     session.commit()
+
 
 def delete_all_cancellations(session: Session, driver_id: UUID):
     """
@@ -1119,37 +1129,39 @@ def delete_all_cancellations(session: Session, driver_id: UUID):
     ).delete(synchronize_session=False)
     session.commit()
 
+
 def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
     """
     Verifica si ha transcurrido el tiempo de suspensión de un conductor y levanta la suspensión automáticamente.
     También elimina todos los registros de cancelación del conductor si se levanta la suspensión.
-    
+
     Args:
         session: Sesión de base de datos
         driver_id: ID del conductor a verificar
-        
+
     Returns:
         dict: Información sobre el estado de la suspensión
     """
     # Obtener la configuración del proyecto para los días de suspensión
     config = session.query(ProjectSettings).get(1)
     if not config:
-        raise ValueError("No se encontró la configuración del proyecto con ID 1")
-    
+        raise ValueError(
+            "No se encontró la configuración del proyecto con ID 1")
+
     suspension_days = int(config.day_suspension)
-    
+
     # Obtener el registro del conductor en user_has_role
     driver_role = session.query(UserHasRole).filter(
         UserHasRole.id_user == driver_id,
         UserHasRole.id_rol == "DRIVER"
     ).first()
-    
+
     if not driver_role:
         return {
             "success": False,
             "message": "Conductor no encontrado"
         }
-    
+
     # Si el conductor no está suspendido, no hay nada que hacer
     if not driver_role.suspension:
         return {
@@ -1157,36 +1169,37 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
             "message": "El conductor no está suspendido",
             "is_suspended": False
         }
-    
+
     # Obtener la última cancelación del conductor (la más reciente)
     last_cancellation = session.query(DriverCancellation).filter(
         DriverCancellation.id_driver == driver_id
     ).order_by(DriverCancellation.cancelled_at.desc()).first()
-    
+
     if not last_cancellation:
         # Si no hay cancelaciones pero está suspendido, levantar la suspensión
         driver_role.suspension = False
-        driver_role.status= RoleStatus.APPROVED
+        driver_role.status = RoleStatus.APPROVED
         session.commit()
         return {
             "success": True,
             "message": "Suspensión levantada - no se encontraron cancelaciones",
             "is_suspended": False
         }
-    
+
     # Calcular si han pasado los días de suspensión desde la última cancelación
-    suspension_end_date = last_cancellation.cancelled_at + timedelta(days=suspension_days)
+    suspension_end_date = last_cancellation.cancelled_at + \
+        timedelta(days=suspension_days)
     current_time = datetime.now(timezone.utc)
-    
+
     if current_time >= suspension_end_date:
         # Ha transcurrido el tiempo de suspensión, levantar la suspensión
         driver_role.suspension = False
-        driver_role.status= RoleStatus.APPROVED
+        driver_role.status = RoleStatus.APPROVED
         # Eliminar todos los registros de cancelación del conductor
         delete_all_cancellations(session, driver_id)
-        
+
         session.commit()
-        
+
         return {
             "success": True,
             "message": f"Suspensión levantada automáticamente. Han transcurrido {suspension_days} días desde la última cancelación",
@@ -1199,7 +1212,7 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
         remaining_time = suspension_end_date - current_time
         remaining_days = remaining_time.days
         remaining_hours = remaining_time.seconds // 3600
-        
+
         return {
             "success": True,
             "message": f"El conductor aún está suspendido. Tiempo restante: {remaining_days} días y {remaining_hours} horas",
@@ -1208,4 +1221,3 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
             "remaining_days": remaining_days,
             "remaining_hours": remaining_hours
         }
-    

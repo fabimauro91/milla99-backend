@@ -398,5 +398,39 @@ class StatisticsService:
             dict: Resumen de las suspensiones levantadas
         """
         # Importar la función desde client_requests_service
-        from app.services.client_requests_service import batch_check_all_suspended_drivers
-        return batch_check_all_suspended_drivers(self.session)
+        from app.services.client_requests_service import check_and_lift_driver_suspension
+
+        # Obtener todos los conductores suspendidos
+        suspended_drivers = self.session.exec(
+            select(UserHasRole).where(
+                UserHasRole.id_rol == "DRIVER",
+                UserHasRole.suspension == True
+            )
+        ).all()
+
+        lifted_suspensions = []
+        still_suspended = []
+
+        for driver in suspended_drivers:
+            result = check_and_lift_driver_suspension(
+                self.session, driver.id_user)
+
+            if result["success"] and not result.get("is_suspended", True):
+                lifted_suspensions.append({
+                    "driver_id": str(driver.id_user),
+                    "message": result["message"]
+                })
+            else:
+                still_suspended.append({
+                    "driver_id": str(driver.id_user),
+                    "message": result["message"]
+                })
+
+        return {
+            "success": True,
+            "total_suspended_drivers": len(suspended_drivers),
+            "suspensions_lifted": len(lifted_suspensions),
+            "still_suspended": len(still_suspended),
+            "lifted_details": lifted_suspensions,
+            "still_suspended_details": still_suspended
+        }

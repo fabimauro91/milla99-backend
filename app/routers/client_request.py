@@ -6,7 +6,6 @@ from app.models.client_request import ClientRequest, ClientRequestCreate, Status
 from app.models.type_service import TypeService
 from app.core.db import SessionDep
 from app.services.client_requests_service import (
-    batch_check_all_suspended_drivers,
     check_and_lift_driver_suspension,
     create_client_request,
     driver_canceled_service,
@@ -731,7 +730,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_status_by_client(
     request: Request,
-    id_client_request: UUID = Body(...,
+    id_client_request: UUID = Body(..., embed=True,
                                    description="ID de la solicitud de viaje a cancelar"),
     session: Session = Depends(get_session)
 ):
