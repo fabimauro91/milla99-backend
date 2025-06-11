@@ -16,7 +16,8 @@ class UserHasRole(SQLModel, table=True):
     id_rol: Optional[str] = Field(foreign_key="role.id", primary_key=True, ondelete="RESTRICT")
     is_verified: bool = Field(default=False)
     status: RoleStatus = Field(default=RoleStatus.PENDING)
-    verified_at: Optional[datetime] = Field(default=None) 
+    verified_at: Optional[datetime] = Field(default=None)
+    suspension:bool = Field(default=False) 
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,

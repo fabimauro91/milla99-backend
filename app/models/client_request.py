@@ -58,6 +58,7 @@ class ClientRequest(SQLModel, table=True):
         default=None, foreign_key="payment_method.id")  # Nuevo campo
     fare_offered: Optional[float] = Field(default=None)
     fare_assigned: Optional[float] = Field(default=None)
+    penality: Optional[float] = Field(default=0, nullable=True)  # Nuevo campo
     pickup_description: Optional[str] = Field(default=None, max_length=255)
     destination_description: Optional[str] = Field(
         default=None, max_length=255)
@@ -101,7 +102,11 @@ class ClientRequest(SQLModel, table=True):
         back_populates="client_requests")  # Nueva relación
     payment_method: Optional["PaymentMethod"] = Relationship(
         back_populates="client_requests")  # Nueva relación
-
+    # Nueva relación con PenalityUser
+    penalities: List["PenalityUser"] = Relationship(
+        back_populates="client_request",
+        sa_relationship_kwargs={"foreign_keys": "PenalityUser.id_client_request"}
+    )
 
 # Definir el listener para el evento after_update
 def after_update_listener(mapper, connection, target):
