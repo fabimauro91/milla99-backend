@@ -1031,7 +1031,7 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
         # Obtener el conteo de cancelaciones de la semana
         cancel_week_count = get_weekly_cancellation_count(session, user_id)
 
-        if cancel_day_count > day or cancel_week_count > week:
+        if cancel_day_count >= day or cancel_week_count >= week:
             validator = 2
             driver = session.query(UserHasRole).filter(
                 UserHasRole.id_user == user_id).first()

@@ -164,7 +164,7 @@ def init_project_settings():
             amount="50000",
             fine_one="1000",
             fine_two="2000",
-            cancel_max_days=7,
+            cancel_max_days=3,
             cancel_max_weeks=10,
             day_suspension=7,
             created_at=datetime(2025, 5, 20, 15, 35, 26),

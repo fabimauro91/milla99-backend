@@ -772,15 +772,24 @@ def update_review(
 
 
 @router.patch("/driver-canceled", tags=["Drivers"], description="""
-Permite al conductor cancelar una solicitud de viaje. Este endpoint debe usarse cuando el conductor ha llegado al punto de recogida (estado ARRIVED) 
-y el cliente no aparece. El conductor solo puede cancelar solicitudes que estén en estado ARRIVED.
+Permite al conductor cancelar una solicitud de viaje con diferentes reglas según el estado:
+
+**Estados permitidos y consecuencias:**
+- `ARRIVED`: Cancelación justificada (cliente no apareció) - Sin penalización
+- `ACCEPTED`: Cancelación injustificada - Cuenta para suspensión 
+- `ON_THE_WAY`: Cancelación injustificada - Cuenta para suspensión
+
+**Límites de cancelación:**
+- Máximo 3 cancelaciones por día
+- Máximo 10 cancelaciones por semana
+- Suspensión automática de 7 días al exceder límites
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje a cancelar
 - `reason`: Razón opcional de la cancelación
 
 **Respuesta:**
-Devuelve un mensaje de éxito o error.
+Devuelve un mensaje de éxito con información sobre el impacto de la cancelación.
 """)
 def driver_cancel_request(
     request: Request,
