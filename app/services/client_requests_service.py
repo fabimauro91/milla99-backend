@@ -1048,7 +1048,7 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
 
     # Actualizar el estado de la solicitud
     client_request.status = StatusEnum.CANCELLED
-    client_request.updated_at = datetime.utcnow()
+    client_request.updated_at = datetime.now(timezone.utc)
     # TODO: Si se desea almacenar la razón de cancelación, se necesitará agregar un campo al modelo ClientRequest
     session.commit()
 
@@ -1089,7 +1089,7 @@ def get_daily_cancellation_count(session: Session, driver_id: UUID) -> int:
     """
     Obtiene el número de cancelaciones hechas por un conductor en el día actual.
     """
-    today_start = datetime.utcnow().replace(
+    today_start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0)
     return session.query(DriverCancellation).filter(
         DriverCancellation.id_driver == driver_id,
@@ -1101,7 +1101,7 @@ def get_weekly_cancellation_count(session: Session, driver_id: UUID) -> int:
     """
     Obtiene el número de cancelaciones hechas por un conductor en los últimos 7 días.
     """
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
     return session.query(DriverCancellation).filter(
         DriverCancellation.id_driver == driver_id,
         DriverCancellation.cancelled_at >= seven_days_ago
@@ -1112,7 +1112,7 @@ def delete_old_cancellations(session: Session, driver_id: UUID):
     """
     Elimina los registros de cancelación de un conductor que tienen más de 7 días.
     """
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
     session.query(DriverCancellation).filter(
         DriverCancellation.id_driver == driver_id,
         DriverCancellation.cancelled_at < seven_days_ago
@@ -1187,8 +1187,12 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
         }
 
     # Calcular si han pasado los días de suspensión desde la última cancelación
-    suspension_end_date = last_cancellation.cancelled_at + \
-        timedelta(days=suspension_days)
+    # Asegurar que cancelled_at tenga zona horaria UTC si no la tiene
+    cancelled_at = last_cancellation.cancelled_at
+    if cancelled_at.tzinfo is None:
+        cancelled_at = cancelled_at.replace(tzinfo=timezone.utc)
+
+    suspension_end_date = cancelled_at + timedelta(days=suspension_days)
     current_time = datetime.now(timezone.utc)
 
     if current_time >= suspension_end_date:
@@ -1205,7 +1209,7 @@ def check_and_lift_driver_suspension(session: Session, driver_id: UUID):
             "message": f"Suspensión levantada automáticamente. Han transcurrido {suspension_days} días desde la última cancelación",
             "is_suspended": False,
             "suspension_lifted_at": current_time.isoformat(),
-            "last_cancellation_date": last_cancellation.cancelled_at.isoformat()
+            "last_cancellation_date": cancelled_at.isoformat()
         }
     else:
         # Aún no ha transcurrido el tiempo de suspensión

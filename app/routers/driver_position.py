@@ -81,7 +81,7 @@ def get_driver_position(
     if not driver_info:
         raise HTTPException(
             status_code=404, detail="No se encontró información de conductor para este usuario.")
-    id_driver = driver_info.id
+    id_driver = driver_info.user_id
     # Usar el servicio existente para obtener la posición
     service = DriverPositionService(session)
     obj = service.get_driver_position(id_driver)
