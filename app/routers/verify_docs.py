@@ -137,3 +137,140 @@ def update_documents(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/debug-driver-status/{user_id}", response_model=Dict[str, Any])
+def debug_driver_status(
+    user_id: str,
+    session: SessionDep
+):
+    """
+    DEBUG: Verifica el estado completo de verificación de un conductor específico.
+    """
+    from uuid import UUID
+    from sqlmodel import select
+    from app.models.driver_info import DriverInfo
+    from app.models.driver_documents import DriverDocuments, DriverStatus
+    from app.models.user_has_roles import UserHasRole
+    from sqlalchemy import func
+
+    try:
+        user_uuid = UUID(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # 1. Verificar UserHasRole
+    user_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user_uuid,
+            UserHasRole.id_rol == "DRIVER"
+        )
+    ).first()
+
+    if not user_role:
+        raise HTTPException(status_code=404, detail="Driver role not found")
+
+    # 2. Obtener DriverInfo
+    driver_info = session.exec(
+        select(DriverInfo).where(DriverInfo.user_id == user_uuid)
+    ).first()
+
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
+
+    # 3. Obtener documentos y su estado
+    documents = session.exec(
+        select(DriverDocuments).where(
+            DriverDocuments.driver_info_id == driver_info.id
+        )
+    ).all()
+
+    # 4. Contar documentos aprobados por tipo
+    REQUIRED_DOC_TYPE_IDS = [1, 2, 3, 4]
+    approved_required_doc_types_count = session.exec(
+        select(func.count(func.distinct(DriverDocuments.document_type_id)))
+        .where(
+            DriverDocuments.driver_info_id == driver_info.id,
+            DriverDocuments.status == DriverStatus.APPROVED,
+            DriverDocuments.document_type_id.in_(REQUIRED_DOC_TYPE_IDS)
+        )
+    ).first() or 0
+
+    # 5. Documentos por tipo y estado
+    docs_by_type = {}
+    for doc in documents:
+        doc_type = doc.document_type_id
+        if doc_type not in docs_by_type:
+            docs_by_type[doc_type] = []
+        docs_by_type[doc_type].append({
+            "id": str(doc.id),
+            "status": doc.status,
+            "expiration_date": doc.expiration_date.isoformat() if doc.expiration_date else None
+        })
+
+    return {
+        "user_id": str(user_uuid),
+        "user_role": {
+            "is_verified": user_role.is_verified,
+            "status": user_role.status,
+            "verified_at": user_role.verified_at.isoformat() if user_role.verified_at else None
+        },
+        "driver_info_id": str(driver_info.id),
+        "documents_analysis": {
+            "total_documents": len(documents),
+            "required_doc_types_approved": approved_required_doc_types_count,
+            "should_be_approved": approved_required_doc_types_count == 4,
+            "documents_by_type": docs_by_type
+        },
+        "required_doc_types": {
+            "1": "Tarjeta de Propiedad",
+            "2": "Licencia",
+            "3": "SOAT",
+            "4": "Tecnomecánica"
+        }
+    }
+
+
+@router.post("/force-approve-driver/{user_id}")
+def force_approve_driver(
+    user_id: str,
+    session: SessionDep
+):
+    """
+    DEBUG: Fuerza la aprobación de un conductor (para testing)
+    """
+    from uuid import UUID
+    from sqlmodel import select
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+
+    try:
+        user_uuid = UUID(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Buscar el UserHasRole del conductor
+    user_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user_uuid,
+            UserHasRole.id_rol == "DRIVER"
+        )
+    ).first()
+
+    if not user_role:
+        raise HTTPException(status_code=404, detail="Driver role not found")
+
+    # Forzar aprobación
+    user_role.is_verified = True
+    user_role.status = RoleStatus.APPROVED
+    session.add(user_role)
+    session.commit()
+    session.refresh(user_role)
+
+    return {
+        "message": "Driver forcefully approved",
+        "user_id": str(user_uuid),
+        "new_status": {
+            "is_verified": user_role.is_verified,
+            "status": user_role.status
+        }
+    }

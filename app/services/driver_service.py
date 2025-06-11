@@ -328,8 +328,9 @@ class DriverService:
                             vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
                     )
                 )
-                existing_user = session.exec(select(ProjectSettings).where(ProjectSettings.id == 1)).first()
-                bonus= Decimal(existing_user.bonus)
+                existing_user = session.exec(
+                    select(ProjectSettings).where(ProjectSettings.id == 1)).first()
+                bonus = Decimal(existing_user.bonus)
                 # Crear transacción de bono y actualizar mount
                 bonus_transaction = Transaction(
                     user_id=user.id,
@@ -337,7 +338,7 @@ class DriverService:
                     expense=0,
                     type=TransactionType.BONUS,
                     client_request_id=None
-                ) 
+                )
                 session.add(bonus_transaction)
                 session.commit()
                 # Actualizar el mount en VerifyMount
