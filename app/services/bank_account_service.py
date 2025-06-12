@@ -83,7 +83,7 @@ class BankAccountService:
 
     def get_bank_accounts(self, user_id: UUID) -> List[BankAccountRead]:
         """
-        Obtiene todas las cuentas bancarias de un usuario.
+        Obtiene todas las cuentas bancarias activas de un usuario.
         Verifica que el usuario tenga el rol apropiado.
         Los datos sensibles se devuelven enmascarados.
         """
@@ -91,7 +91,8 @@ class BankAccountService:
         self.verify_user_role(user_id)
 
         accounts = self.session.query(BankAccount).filter(
-            BankAccount.user_id == user_id
+            BankAccount.user_id == user_id,
+            BankAccount.is_active == True
         ).all()
         return [BankAccountRead.from_orm(account) for account in accounts]
 
