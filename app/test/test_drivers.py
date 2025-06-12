@@ -374,24 +374,34 @@ def test_driver_creation_and_verification_flow(client):
             driver_role.status = RoleStatus.APPROVED
             session.add(driver_role)
             session.commit()
-            # Asegurarnos de que el rol se refresque
             session.refresh(driver_role)
             print("Verificación completada")
 
-            # Verificar que el rol se actualizó correctamente
-            updated_role = session.exec(
-                select(UserHasRole).where(
-                    UserHasRole.id_user == UUID(str(driver_id)),
-                    UserHasRole.id_rol == "DRIVER"
-                )
-            ).first()
-            assert updated_role is not None
-            assert updated_role.status == RoleStatus.APPROVED
-            print("Estado del rol verificado después de actualización")
+            # Cerrar la sesión para asegurar visibilidad del cambio
+            session.close()
+
+            # Volver a autenticar al conductor para obtener un nuevo token
+            print("7. Re-autenticando conductor después de aprobación...")
+            send_resp = client.post(
+                f"/auth/verify/{country_code}/{phone_number}/send")
+            print("ENVIAR CODIGO (re-auth):",
+                  send_resp.status_code, send_resp.text)
+            assert send_resp.status_code == 201
+            msg = send_resp.json()["message"]
+            code = msg.split()[-1]
+            print("CODIGO EXTRAIDO (re-auth):", code)
+            verify_resp = client.post(
+                f"/auth/verify/{country_code}/{phone_number}/code",
+                json={"code": code}
+            )
+            print("VERIFICAR CODIGO (re-auth):",
+                  verify_resp.status_code, verify_resp.text)
+            assert verify_resp.status_code == 200
+            auth_token = verify_resp.json()["access_token"]
+            headers = {"Authorization": f"Bearer {auth_token}"}
 
             # 5. Verificar que el driver puede acceder después de verificación
-            print("6. Verificando acceso después de verificación...")
-            # Intentar actualizar posición (debería funcionar)
+            print("8. Verificando acceso después de re-autenticación...")
             position_resp = client.post(
                 "/drivers-position/", json=position_data, headers=headers)
             print("RESPUESTA POSICION:",
@@ -400,7 +410,7 @@ def test_driver_creation_and_verification_flow(client):
             print("Acceso permitido correctamente después de verificación")
 
             # 6. Verificar datos del driver
-            print("7. Verificando datos del driver...")
+            print("9. Verificando datos del driver...")
             me_resp = client.get("/drivers/me", headers=headers)
             assert me_resp.status_code == status.HTTP_200_OK
             me_data = me_resp.json()
