@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Security
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Security, Body, Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session
 from app.core.db import get_session
 from app.models.bank_account import (
-    BankAccount, BankAccountCreate, BankAccountRead, AccountType
+    BankAccount, BankAccountCreate, BankAccountRead, AccountType, BankAccountUpdate
 )
 from app.services.bank_account_service import BankAccountService
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from app.core.dependencies.auth import get_current_user
 
@@ -65,38 +65,61 @@ def list_my_bank_accounts(
 #     return service.get_bank_account(user_id, account_id)
 
 
-# @router.put("/{account_id}", response_model=BankAccountRead)
-# def update_bank_account(
-#     request: Request,
-#     account_id: UUID,
-#     bank_account: BankAccountCreate,
-#     session: Session = Depends(get_session),
-#     current_user=Depends(get_current_user)
-# ):
-#     """
-#     Actualiza una cuenta bancaria existente.
-#     No permite modificar campos sensibles como user_id o is_verified.
-#     Si se modifica el número de cuenta, requiere re-verificación.
-#     """
-#     user_id = request.state.user_id
-#     service = BankAccountService(session)
-#     return service.update_bank_account(user_id, account_id, bank_account.dict())
+@router.put("/{account_id}", response_model=BankAccountRead)
+def update_bank_account(
+    request: Request,
+    account_id: UUID,
+    bank_account: BankAccountCreate,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    """
+    Actualiza una cuenta bancaria existente.
+    No permite modificar campos sensibles como user_id o is_verified.
+    Si se modifica el número de cuenta, requiere re-verificación.
+    """
+    user_id = request.state.user_id
+    service = BankAccountService(session)
+    return service.update_bank_account(user_id, account_id, bank_account.dict())
 
 
-# @router.delete("/{account_id}")
-# def delete_bank_account(
-#     request: Request,
-#     account_id: UUID,
-#     session: Session = Depends(get_session),
-#     current_user=Depends(get_current_user)
-# ):
-#     """
-#     Desactiva una cuenta bancaria.
-#     No permite eliminar si hay retiros pendientes o recientes.
-#     """
-#     user_id = request.state.user_id
-#     service = BankAccountService(session)
-#     return service.delete_bank_account(user_id, account_id)
+@router.patch("/{account_id}", response_model=BankAccountRead)
+def patch_bank_account(
+    request: Request,
+    account_id: UUID,
+    update_data: BankAccountUpdate,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    try:
+        print(f"PATCH request received for account_id: {account_id}")
+        user_id = request.state.user_id
+        print(f"User ID: {user_id}")
+
+        update_dict = update_data.dict(exclude_unset=True)
+        print(f"Filtered update data: {update_dict}")
+
+        service = BankAccountService(session)
+        return service.update_bank_account(user_id, account_id, update_dict)
+    except Exception as e:
+        print(f"Error in patch_bank_account: {str(e)}")
+        raise
+
+
+@router.delete("/{account_id}")
+def delete_bank_account(
+    request: Request,
+    account_id: UUID,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    """
+    Desactiva una cuenta bancaria.
+    No permite eliminar si hay retiros pendientes o recientes.
+    """
+    user_id = request.state.user_id
+    service = BankAccountService(session)
+    return service.delete_bank_account(user_id, account_id)
 
 
 # @router.get("/active", response_model=List[BankAccountRead])
