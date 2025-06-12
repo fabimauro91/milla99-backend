@@ -7,23 +7,24 @@ from sqlmodel import SQLModel, Session
 from app.main import fastapi_app as app
 from app.core.db import get_session
 from app.core.init_data import init_data
+from app.core.config import settings
 
 TEST_DB_NAME = "milla99_test"
-MYSQL_ROOT_URL = "mysql+mysqlconnector://root:root@localhost:3306/"
 
 
 @pytest.fixture(scope="session", autouse=True)
 def create_and_drop_test_db():
     # Crear la base de datos
-    engine = sqlalchemy.create_engine(MYSQL_ROOT_URL)
+    engine = sqlalchemy.create_engine(settings.DATABASE_URL.rsplit('/', 1)[0])
     with engine.connect() as conn:
         conn.execute(sqlalchemy.text(
             f"DROP DATABASE IF EXISTS {TEST_DB_NAME}"))
         conn.execute(sqlalchemy.text(f"CREATE DATABASE {TEST_DB_NAME}"))
+
     # Cambiar la variable de entorno para que los tests usen la nueva DB
-    os.environ[
-        "DATABASE_URL"] = f"mysql+mysqlconnector://root:root@localhost:3306/{TEST_DB_NAME}"
+    os.environ["DATABASE_URL"] = settings.TEST_DATABASE_URL
     yield
+
     # Eliminar la base de datos al finalizar los tests
     with engine.connect() as conn:
         conn.execute(sqlalchemy.text(

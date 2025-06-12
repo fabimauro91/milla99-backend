@@ -27,6 +27,7 @@ class DriverPositionService:
             select(UserHasRole).where(
                 UserHasRole.id_user == user_id,
                 UserHasRole.id_rol == "DRIVER",
+                UserHasRole.status == RoleStatus.APPROVED
             )
         ).first()
         if not driver_role:

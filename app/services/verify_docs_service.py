@@ -377,6 +377,7 @@ class VerifyDocsService:
                                         # Si no está suspendido, actualizamos ambos campos
                                         user_has_role.is_verified = True
                                         user_has_role.status = RoleStatus.APPROVED
+                                        user_has_role.verified_at = datetime.utcnow()
                                         self.db.add(user_has_role)
                                         self.db.commit()
                                         self.db.refresh(user_has_role)

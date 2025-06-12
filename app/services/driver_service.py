@@ -36,8 +36,10 @@ class DriverService:
         driver_documents_data: DriverDocumentsInput,
         selfie: UploadFile = None
     ) -> DriverFullResponse:
+        print("\n=== INICIANDO CREACIÓN DE DRIVER ===")
         with Session(engine) as session:
             try:
+                print("1. Verificando usuario existente...")
                 # Buscar usuario por teléfono y país
                 existing_user = session.exec(
                     select(User).where(
@@ -47,6 +49,7 @@ class DriverService:
                 ).first()
 
                 if existing_user:
+                    print(f"Usuario existente encontrado: {existing_user.id}")
                     # Verificar si ya tiene el rol DRIVER
                     driver_role = session.exec(
                         select(Role).where(Role.id == "DRIVER")).first()
@@ -83,17 +86,24 @@ class DriverService:
                         session.refresh(existing_user)
                         user = existing_user
                 else:
+                    print("2. Creando nuevo usuario...")
                     # Crear el Usuario
                     user = User(**user_data.dict())
                     session.add(user)
                     session.commit()
                     session.refresh(user)
+                    print(f"Usuario creado con ID: {user.id}")
+
+                    print("3. Creando DriverSavings...")
                     # Crear DriverSavings con mount=0
                     driver_savings = DriverSavings(
                         mount=0, user_id=user.id, status=SavingsType.SAVING)
                     session.add(driver_savings)
                     session.commit()
                     session.refresh(driver_savings)
+                    print("DriverSavings creado")
+
+                    print("4. Asignando rol DRIVER...")
                     # Asignar el rol DRIVER
                     driver_role = session.exec(
                         select(Role).where(Role.id == "DRIVER")).first()
@@ -104,7 +114,9 @@ class DriverService:
                     session.add(user)
                     session.commit()
                     session.refresh(user)
+                    print("Rol DRIVER asignado")
 
+                print("5. Procesando selfie...")
                 # --- SELFIE OBLIGATORIA Y GUARDADO ---
                 if not selfie:
                     raise HTTPException(
@@ -120,6 +132,7 @@ class DriverService:
                 while os.path.exists(selfie_path):
                     selfie_filename = f"selfie_{user.phone_number}_{uuid.uuid4().hex}{selfie_ext}"
                     selfie_path = os.path.join(selfie_dir, selfie_filename)
+                print(f"Guardando selfie en: {selfie_path}")
                 with open(selfie_path, "wb") as f:
                     f.write(await selfie.read())
                 selfie_url = f"{settings.STATIC_URL_PREFIX}/users/{selfie_filename}"
@@ -127,14 +140,17 @@ class DriverService:
                 session.add(user)
                 session.commit()
                 session.refresh(user)
-                # --- FIN SELFIE ---
+                print("Selfie guardada y URL actualizada")
 
+                print("6. Creando VerifyMount...")
                 # Crear VerifyMount con mount=0
                 verify_mount = VerifyMount(user_id=user.id, mount=0)
                 session.add(verify_mount)
                 session.commit()
                 session.refresh(verify_mount)
+                print("VerifyMount creado")
 
+                print("7. Creando DriverInfo...")
                 # 4. Crear el DriverInfo (ya no maneja selfie_url)
                 driver_info = DriverInfo(
                     **driver_info_data.dict(),
@@ -143,7 +159,9 @@ class DriverService:
                 session.add(driver_info)
                 session.commit()
                 session.refresh(driver_info)
+                print(f"DriverInfo creado con ID: {driver_info.id}")
 
+                print("8. Creando VehicleInfo...")
                 # 5. Crear el VehicleInfo
                 vehicle_info = VehicleInfo(
                     **vehicle_info_data.dict(),
@@ -152,7 +170,9 @@ class DriverService:
                 session.add(vehicle_info)
                 session.commit()
                 session.refresh(vehicle_info)
+                print(f"VehicleInfo creado con ID: {vehicle_info.id}")
 
+                print("9. Procesando documentos...")
                 # 6. Manejar los documentos
                 docs = []
 
@@ -328,8 +348,9 @@ class DriverService:
                             vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
                     )
                 )
-                existing_user = session.exec(select(ProjectSettings).where(ProjectSettings.id == 1)).first()
-                bonus= Decimal(existing_user.bonus)
+                existing_user = session.exec(
+                    select(ProjectSettings).where(ProjectSettings.id == 1)).first()
+                bonus = Decimal(existing_user.bonus)
                 # Crear transacción de bono y actualizar mount
                 bonus_transaction = Transaction(
                     user_id=user.id,
@@ -337,7 +358,7 @@ class DriverService:
                     expense=0,
                     type=TransactionType.BONUS,
                     client_request_id=None
-                ) 
+                )
                 session.add(bonus_transaction)
                 session.commit()
                 # Actualizar el mount en VerifyMount

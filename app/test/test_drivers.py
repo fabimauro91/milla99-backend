@@ -2,6 +2,8 @@ import io
 from fastapi import status
 from datetime import date
 import json
+from uuid import UUID
+import traceback
 
 
 def test_create_driver_full(client):
@@ -249,3 +251,166 @@ def test_patch_driver_me(client):
         me_resp_after.json(), indent=2, ensure_ascii=False))
 
     assert patch_resp.status_code == 200
+
+
+def test_driver_creation_and_verification_flow(client):
+    """
+    Test que verifica el flujo completo de:
+    1. Creación del driver (is_verified=False, status=PENDING)
+    2. Verificación de documentos por admin
+    3. Actualización de estado (is_verified=True, status=APPROVED)
+    4. Intento de usar endpoints antes y después de verificación
+    """
+    print("\n=== INICIANDO TEST DE VERIFICACIÓN ===")
+
+    # Usar una sesión explícita para el test
+    from app.core.db import engine
+    from sqlmodel import Session
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+    from sqlmodel import select
+
+    with Session(engine) as session:
+        try:
+            # 1. Crear un driver nuevo
+            print("1. Preparando datos del driver...")
+            phone_number = "3010000004"
+            country_code = "+57"
+            user_data = {
+                "full_name": "Driver Verification Test",
+                "country_code": country_code,
+                "phone_number": phone_number
+            }
+            driver_info_data = {
+                "first_name": "Verification",
+                "last_name": "Test",
+                "birth_date": "1990-01-01",
+                "email": "verification.test@example.com"
+            }
+            vehicle_info_data = {
+                "brand": "Test Brand",
+                "model": "Test Model",
+                "model_year": 2020,
+                "color": "Test Color",
+                "plate": "TEST123",
+                "vehicle_type_id": 1
+            }
+            driver_documents_data = {
+                "license_expiration_date": "2025-01-01",
+                "soat_expiration_date": "2025-01-01",
+                "vehicle_technical_inspection_expiration_date": "2025-01-01"
+            }
+
+            # Preparar los datos para la request
+            data = {
+                "user": json.dumps(user_data),
+                "driver_info": json.dumps(driver_info_data),
+                "vehicle_info": json.dumps(vehicle_info_data),
+                "driver_documents": json.dumps(driver_documents_data)
+            }
+
+            # Crear archivos simulados para la request
+            files = {
+                "selfie": ("test_selfie.jpg", b"fake image data", "image/jpeg"),
+                "license_front": ("test_license_front.jpg", b"fake image data", "image/jpeg"),
+                "license_back": ("test_license_back.jpg", b"fake image data", "image/jpeg"),
+                "soat": ("test_soat.pdf", b"fake pdf data", "application/pdf"),
+                "vehicle_technical_inspection": ("test_tech.pdf", b"fake pdf data", "application/pdf")
+            }
+
+            print("2. Enviando request para crear driver...")
+            # Crear el driver
+            create_resp = client.post("/drivers/", data=data, files=files)
+            print(f"Respuesta crear driver: {create_resp.status_code}")
+            print(f"Contenido respuesta: {create_resp.text}")
+            assert create_resp.status_code == status.HTTP_201_CREATED
+            driver_data = create_resp.json()
+            driver_id = driver_data["user"]["id"]
+            print(f"Driver creado con ID: {driver_id}")
+
+            # 2. Verificar que el driver se creó con estado inicial correcto
+            print("3. Verificando estado inicial del driver...")
+            # Obtener el rol del driver
+            driver_role = session.exec(
+                select(UserHasRole).where(
+                    UserHasRole.id_user == UUID(str(driver_id)),
+                    UserHasRole.id_rol == "DRIVER"
+                )
+            ).first()
+            assert driver_role is not None
+            assert driver_role.status == RoleStatus.PENDING
+            print("Estado inicial verificado")
+
+            # 3. Verificar que el driver no puede acceder a endpoints antes de verificación
+            print("4. Verificando acceso a endpoints antes de verificación...")
+            # Obtener código de verificación
+            send_resp = client.post(
+                f"/auth/verify/{country_code}/{phone_number}/send")
+            print("ENVIAR CODIGO:", send_resp.status_code, send_resp.text)
+            assert send_resp.status_code == 201
+            msg = send_resp.json()["message"]
+            # Toma el último fragmento, que es el código real
+            code = msg.split()[-1]
+            print("CODIGO EXTRAIDO:", code)
+
+            # Verificar el código y obtener el token
+            verify_resp = client.post(
+                f"/auth/verify/{country_code}/{phone_number}/code",
+                json={"code": code}
+            )
+            print("VERIFICAR CODIGO:", verify_resp.status_code, verify_resp.text)
+            assert verify_resp.status_code == 200
+            auth_token = verify_resp.json()["access_token"]
+            headers = {"Authorization": f"Bearer {auth_token}"}
+
+            # Intentar actualizar posición (debería fallar)
+            position_data = {"lat": 4.6097, "lng": -74.0817}
+            position_resp = client.post(
+                "/drivers-position/", json=position_data, headers=headers)
+            assert position_resp.status_code == status.HTTP_403_FORBIDDEN
+            print("Acceso denegado correctamente antes de verificación")
+
+            # 4. Simular verificación de documentos por admin
+            print("5. Simulando verificación por admin...")
+            driver_role.status = RoleStatus.APPROVED
+            session.add(driver_role)
+            session.commit()
+            # Asegurarnos de que el rol se refresque
+            session.refresh(driver_role)
+            print("Verificación completada")
+
+            # Verificar que el rol se actualizó correctamente
+            updated_role = session.exec(
+                select(UserHasRole).where(
+                    UserHasRole.id_user == UUID(str(driver_id)),
+                    UserHasRole.id_rol == "DRIVER"
+                )
+            ).first()
+            assert updated_role is not None
+            assert updated_role.status == RoleStatus.APPROVED
+            print("Estado del rol verificado después de actualización")
+
+            # 5. Verificar que el driver puede acceder después de verificación
+            print("6. Verificando acceso después de verificación...")
+            # Intentar actualizar posición (debería funcionar)
+            position_resp = client.post(
+                "/drivers-position/", json=position_data, headers=headers)
+            print("RESPUESTA POSICION:",
+                  position_resp.status_code, position_resp.text)
+            assert position_resp.status_code == status.HTTP_201_CREATED
+            print("Acceso permitido correctamente después de verificación")
+
+            # 6. Verificar datos del driver
+            print("7. Verificando datos del driver...")
+            me_resp = client.get("/drivers/me", headers=headers)
+            assert me_resp.status_code == status.HTTP_200_OK
+            me_data = me_resp.json()
+            assert me_data["driver_info"]["first_name"] == "Verification"
+            print("Datos del driver verificados correctamente")
+
+        except Exception as e:
+            print(f"Error en el test: {str(e)}")
+            print(traceback.format_exc())
+            raise
+        finally:
+            # Asegurarnos de que la sesión se cierre
+            session.close()
