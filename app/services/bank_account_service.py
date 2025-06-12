@@ -93,23 +93,16 @@ class BankAccountService:
         ).all()
         return [BankAccountRead.from_orm(account) for account in accounts]
 
-    def get_bank_account(self, user_id: UUID, account_id: UUID) -> BankAccountRead:
-        """
-        Obtiene una cuenta bancaria específica.
-        Verifica que el usuario tenga el rol apropiado y que la cuenta pertenezca al usuario.
-        Los datos sensibles se devuelven enmascarados.
-        """
-        # Verificar rol del usuario
-        self.verify_user_role(user_id)
-
-        bank_account = self.session.get(BankAccount, account_id)
+    def get_bank_account(self, user_id: UUID, account_id: UUID) -> BankAccount:
+        bank_account = (
+            self.session.query(BankAccount)
+            .filter(BankAccount.id == account_id, BankAccount.user_id == user_id)
+            .first()
+        )
         if not bank_account:
             raise HTTPException(
                 status_code=404, detail="Bank account not found")
-        if bank_account.user_id != user_id:
-            raise HTTPException(
-                status_code=403, detail="Not authorized to access this bank account")
-        return BankAccountRead.from_orm(bank_account)
+        return bank_account
 
     def update_bank_account(
         self,
