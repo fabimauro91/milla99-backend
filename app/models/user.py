@@ -65,7 +65,10 @@ class User(UserBase, table=True):
     verify_mount: Optional["VerifyMount"] = Relationship(back_populates="user")
     bank_accounts: List["BankAccount"] = Relationship(back_populates="user")
     withdrawals: List["Withdrawal"] = Relationship(back_populates="user")
-
+    penalities: List["PenalityUser"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"foreign_keys": "PenalityUser.id_user"}  
+    )
 
 class UserCreate(SQLModel):
 

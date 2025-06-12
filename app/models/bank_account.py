@@ -45,6 +45,17 @@ class BankAccountCreate(BankAccountBase):
         return self
 
 
+class BankAccountUpdate(SQLModel):
+    """Modelo para actualización parcial de cuenta bancaria"""
+    account_holder_name: Optional[str] = None
+    account_type: Optional[str] = None
+    bank_id: Optional[int] = None
+    type_identification: Optional[str] = None
+    account_number: Optional[str] = None
+    identification_number: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class BankAccountRead(BankAccountBase):
     """Modelo para leer cuenta bancaria con campos sensibles enmascarados"""
     id: UUID

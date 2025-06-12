@@ -40,12 +40,19 @@ def create_driver_position(
     # Obtener el user_id desde el token
     user_id = request.state.user_id
 
+    # Forzar refresco de datos desde la base de datos
+    session.expire_all()
     # Validar que el usuario tenga el rol DRIVER aprobado
     driver_role = session.query(UserHasRole).filter(
         UserHasRole.id_user == user_id,
         UserHasRole.id_rol == "DRIVER",
         UserHasRole.status == RoleStatus.APPROVED
     ).first()
+    print(
+        f"[DEBUG][/drivers-position/] user_id={user_id}, driver_role={driver_role}")
+    if driver_role:
+        print(
+            f"[DEBUG][/drivers-position/] status={driver_role.status}, is_verified={getattr(driver_role, 'is_verified', None)}")
 
     if not driver_role:
         raise HTTPException(
@@ -81,7 +88,7 @@ def get_driver_position(
     if not driver_info:
         raise HTTPException(
             status_code=404, detail="No se encontró información de conductor para este usuario.")
-    id_driver = driver_info.id
+    id_driver = driver_info.user_id
     # Usar el servicio existente para obtener la posición
     service = DriverPositionService(session)
     obj = service.get_driver_position(id_driver)

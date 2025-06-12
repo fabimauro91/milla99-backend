@@ -8,6 +8,8 @@ from app.models.bank_account import (
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from datetime import datetime, timedelta
+from app.utils.encryption import encryption_service
+import traceback
 
 
 class BankAccountService:
@@ -91,23 +93,16 @@ class BankAccountService:
         ).all()
         return [BankAccountRead.from_orm(account) for account in accounts]
 
-    def get_bank_account(self, user_id: UUID, account_id: UUID) -> BankAccountRead:
-        """
-        Obtiene una cuenta bancaria específica.
-        Verifica que el usuario tenga el rol apropiado y que la cuenta pertenezca al usuario.
-        Los datos sensibles se devuelven enmascarados.
-        """
-        # Verificar rol del usuario
-        self.verify_user_role(user_id)
-
-        bank_account = self.session.get(BankAccount, account_id)
+    def get_bank_account(self, user_id: UUID, account_id: UUID) -> BankAccount:
+        bank_account = (
+            self.session.query(BankAccount)
+            .filter(BankAccount.id == account_id, BankAccount.user_id == user_id)
+            .first()
+        )
         if not bank_account:
             raise HTTPException(
                 status_code=404, detail="Bank account not found")
-        if bank_account.user_id != user_id:
-            raise HTTPException(
-                status_code=403, detail="Not authorized to access this bank account")
-        return BankAccountRead.from_orm(bank_account)
+        return bank_account
 
     def update_bank_account(
         self,
@@ -120,52 +115,83 @@ class BankAccountService:
         Verifica que el usuario tenga el rol apropiado.
         No permite modificar campos sensibles como user_id o is_verified.
         """
-        # Verificar rol del usuario
-        self.verify_user_role(user_id)
+        try:
+            print(
+                f"Service: update_bank_account called with user_id={user_id}, account_id={account_id}")
+            print(f"Service: update_data={update_data}")
 
-        bank_account = self.get_bank_account(user_id, account_id)
+            # Verificar rol del usuario
+            self.verify_user_role(user_id)
 
-        # Verificar si hay retiros pendientes
-        from app.models.withdrawal import Withdrawal, WithdrawalStatus
-        pending_withdrawals = self.session.query(Withdrawal).filter(
-            Withdrawal.bank_account_id == account_id,
-            Withdrawal.status == WithdrawalStatus.PENDING
-        ).first()
-        if pending_withdrawals:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot update bank account with pending withdrawals"
-            )
+            bank_account = self.session.get(BankAccount, account_id)
+            print(f"Service: bank_account found: {bank_account is not None}")
 
-        # Campos que no se pueden modificar
-        protected_fields = {
-            "id", "user_id", "created_at", "is_verified",
-            "verification_date"
-        }
-        for field in protected_fields:
-            update_data.pop(field, None)
+            if not bank_account:
+                print(f"Service: Bank account not found with ID {account_id}")
+                raise HTTPException(
+                    status_code=404, detail="Bank account not found")
 
-        # Si se modifica el número de cuenta, requiere re-verificación y encriptación
-        if "account_number" in update_data:
-            update_data["account_number"] = encryption_service.encrypt(
-                update_data["account_number"])
-            update_data["is_verified"] = False
-            update_data["verification_date"] = None
+            if bank_account.user_id != user_id:
+                print(
+                    f"Service: Bank account belongs to {bank_account.user_id}, not {user_id}")
+                raise HTTPException(
+                    status_code=403, detail="Not authorized to access this bank account")
 
-        # Si se modifica la cédula, requiere encriptación
-        if "identification_number" in update_data:
-            update_data["identification_number"] = encryption_service.encrypt(
-                update_data["identification_number"])
+            # Verificar si hay retiros pendientes
+            from app.models.withdrawal import Withdrawal, WithdrawalStatus
+            pending_withdrawals = self.session.query(Withdrawal).filter(
+                Withdrawal.bank_account_id == account_id,
+                Withdrawal.status == WithdrawalStatus.PENDING
+            ).first()
 
-        # Actualizar campos
-        for key, value in update_data.items():
-            setattr(bank_account, key, value)
+            if pending_withdrawals:
+                print(f"Service: Bank account has pending withdrawals")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot update bank account with pending withdrawals"
+                )
 
-        bank_account.updated_at = datetime.utcnow()
-        self.session.add(bank_account)
-        self.session.commit()
-        self.session.refresh(bank_account)
-        return BankAccountRead.from_orm(bank_account)
+            # Campos que no se pueden modificar
+            protected_fields = {
+                "id", "user_id", "created_at", "is_verified",
+                "verification_date"
+            }
+            for field in protected_fields:
+                update_data.pop(field, None)
+
+            print(f"Service: After removing protected fields: {update_data}")
+
+            # Si se modifica el número de cuenta, requiere re-verificación y encriptación
+            if "account_number" in update_data:
+                print(f"Service: Encrypting account_number")
+                update_data["account_number"] = encryption_service.encrypt(
+                    update_data["account_number"])
+                update_data["is_verified"] = False
+                update_data["verification_date"] = None
+
+            # Si se modifica la cédula, requiere encriptación
+            if "identification_number" in update_data:
+                print(f"Service: Encrypting identification_number")
+                update_data["identification_number"] = encryption_service.encrypt(
+                    update_data["identification_number"])
+
+            # Actualizar campos
+            print(f"Service: Updating fields: {list(update_data.keys())}")
+            for key, value in update_data.items():
+                print(f"Service: Setting {key}={value}")
+                setattr(bank_account, key, value)
+
+            bank_account.updated_at = datetime.utcnow()
+            self.session.add(bank_account)
+            self.session.commit()
+            self.session.refresh(bank_account)
+
+            print(f"Service: Bank account updated successfully")
+            return BankAccountRead.from_orm(bank_account)
+        except Exception as e:
+            print(f"Service Error: {str(e)}")
+            print(traceback.format_exc())
+            raise
 
     def delete_bank_account(self, user_id: UUID, account_id: UUID) -> dict:
         """

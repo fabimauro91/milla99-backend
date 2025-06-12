@@ -17,7 +17,7 @@ class TransactionService:
             VerifyMount.user_id == user_id).first()
 
         # Validación para RECHARGE
-        if type == TransactionType.RECHARGE:
+        if type == TransactionType.RECHARGE or type == TransactionType.PENALITY_COMPENSATION:
             if income <= 0 or expense != 0:
                 raise HTTPException(
                     status_code=400,
@@ -50,7 +50,7 @@ class TransactionService:
                 self.session, user_id, verify_mount.mount)
 
         # Permitir egresos para SERVICE
-        elif type == TransactionType.SERVICE:
+        elif type == TransactionType.SERVICE or type == TransactionType.PENALITY_DEDUCTION:
             if not verify_mount or verify_mount.mount < expense:
                 raise HTTPException(
                     status_code=400,

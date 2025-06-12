@@ -14,7 +14,11 @@ class ProjectSettingsBase(SQLModel):
     company: str
     bonus: str
     amount: str  # Monto mínimo para retiro de ahorros
-
+    fine_one: Optional[str] = None  # Multa por cancelación en on the way 
+    fine_two: Optional[str] = None  # Multa por cancelación en arrived
+    cancel_max_days: Optional[int] = None  # maximas cancelaciones por dias
+    cancel_max_weeks: Optional[int] = None  # maximas cancelaciones por semanas
+    day_suspension: Optional[int] = None  # Dias de suspension por multa
 
 class ProjectSettings(ProjectSettingsBase, table=True):
     __tablename__ = "project_settings"

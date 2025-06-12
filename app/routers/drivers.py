@@ -22,6 +22,7 @@ from app.models.user import User
 from app.models.document_type import DocumentType
 from app.core.config import settings
 from app.core.dependencies.auth import get_current_user
+from app.services.user_service import UserService
 
 router = APIRouter(prefix="/drivers", tags=["Drivers"])
 
@@ -218,6 +219,7 @@ async def update_driver(
     license_expiration_date: Optional[str] = Form(None),
     soat_expiration_date: Optional[str] = Form(None),
     vehicle_technical_inspection_expiration_date: Optional[str] = Form(None),
+    selfie: Optional[UploadFile] = File(None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user)
 ):
@@ -225,10 +227,10 @@ async def update_driver(
     user_id = request.state.user_id
     # Buscar el driver_info correspondiente a este usuario
     driver_info = session.exec(select(DriverInfo).where(
-        DriverInfo.user_id == user_id)).first()
+        DriverInfo.user_id == user_id)).scalars().first()
     if not driver_info:
         raise HTTPException(
-            status_code=404, detail="No se encontró información de conductor para este usuario.") 
+            status_code=404, detail="No se encontró información de conductor para este usuario.")
     driver_id = driver_info.id
 
     # Buscar la información del vehículo asociada al conductor
@@ -378,48 +380,61 @@ async def update_driver(
         if doc:
             doc.expiration_date = vehicle_technical_inspection_expiration_date
 
+    # Actualizar selfie del usuario si se recibe un archivo
+    if selfie is not None:
+        try:
+            print(
+                f"[DEBUG PATCH] Actualizando selfie para user_id={user_id}, archivo={selfie.filename}")
+            UserService(session).update_selfie(user_id, selfie)
+            user = session.exec(select(User).where(
+                User.id == user_id)).scalars().first()
+            print(
+                f"[DEBUG PATCH] selfie_url actualizado: {user.selfie_url if user else 'Usuario no encontrado'}")
+        except Exception as e:
+            print(f"[ERROR PATCH] Error actualizando selfie: {e}")
+            traceback.print_exc()
+
     # Guardar todos los cambios en la base de datos
     session.commit()
 
-    # Construir y retornar la respuesta con la información actualizada
-    return DriverFullResponse(
-        user=UserResponse(
-            id=driver_info.user.id,
-            full_name=driver_info.user.full_name,
-            country_code=driver_info.user.country_code,
-            phone_number=driver_info.user.phone_number
-        ),
-        driver_info=DriverInfoResponse(
-            first_name=driver_info.first_name,
-            last_name=driver_info.last_name,
-            birth_date=str(driver_info.birth_date),
-            email=driver_info.email,
-            selfie_url=driver_info.user.selfie_url if hasattr(
-                driver_info, 'user') and hasattr(driver_info.user, 'selfie_url') else None
-        ),
-        vehicle_info=VehicleInfoResponse(
-            brand=vehicle_info.brand,
-            model=vehicle_info.model,
-            model_year=vehicle_info.model_year,
-            color=vehicle_info.color,
-            plate=vehicle_info.plate,
-            vehicle_type_id=vehicle_info.vehicle_type_id
-        ),
-        driver_documents=DriverDocumentsResponse(
-            property_card_front_url=property_card_doc.document_front_url if property_card_doc else None,
-            property_card_back_url=property_card_doc.document_back_url if property_card_doc else None,
-            license_front_url=license_doc.document_front_url if license_doc else None,
-            license_back_url=license_doc.document_back_url if license_doc else None,
-            license_expiration_date=str(
-                license_doc.expiration_date) if license_doc and license_doc.expiration_date else None,
-            soat_url=soat_doc.document_front_url if soat_doc else None,
-            soat_expiration_date=str(
-                soat_doc.expiration_date) if soat_doc and soat_doc.expiration_date else None,
-            vehicle_technical_inspection_url=vehicle_tech_doc.document_front_url if vehicle_tech_doc else None,
-            vehicle_technical_inspection_expiration_date=str(
-                vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None
-        )
-    )
+    # Consultar el usuario actualizado para la respuesta
+    user = session.exec(select(User).where(
+        User.id == user_id)).scalars().first()
+
+    return {
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "country_code": user.country_code,
+            "phone_number": user.phone_number,
+            "selfie_url": user.selfie_url,
+        },
+        "driver_info": {
+            "first_name": driver_info.first_name,
+            "last_name": driver_info.last_name,
+            "birth_date": str(driver_info.birth_date),
+            "email": driver_info.email,
+        },
+        "vehicle_info": {
+            "brand": vehicle_info.brand,
+            "model": vehicle_info.model,
+            "model_year": vehicle_info.model_year,
+            "color": vehicle_info.color,
+            "plate": vehicle_info.plate,
+            "vehicle_type_id": vehicle_info.vehicle_type_id,
+        },
+        "driver_documents": {
+            "property_card_front_url": property_card_doc.document_front_url if property_card_doc else None,
+            "property_card_back_url": property_card_doc.document_back_url if property_card_doc else None,
+            "license_front_url": license_doc.document_front_url if license_doc else None,
+            "license_back_url": license_doc.document_back_url if license_doc else None,
+            "license_expiration_date": str(license_doc.expiration_date) if license_doc and license_doc.expiration_date else None,
+            "soat_url": soat_doc.document_front_url if soat_doc else None,
+            "soat_expiration_date": str(soat_doc.expiration_date) if soat_doc and soat_doc.expiration_date else None,
+            "vehicle_technical_inspection_url": vehicle_tech_doc.document_front_url if vehicle_tech_doc else None,
+            "vehicle_technical_inspection_expiration_date": str(vehicle_tech_doc.expiration_date) if vehicle_tech_doc and vehicle_tech_doc.expiration_date else None,
+        }
+    }
 
 
 @router.get("/me", response_model=DriverFullResponse, description="""
@@ -436,7 +451,8 @@ def get_driver_me(
     # Obtener el user_id desde el token
     user_id = request.state.user_id
     # Buscar el driver_info correspondiente a este usuario
-    driver_info = session.query(DriverInfo).filter(DriverInfo.user_id == user_id).first()
+    driver_info = session.query(DriverInfo).filter(
+        DriverInfo.user_id == user_id).first()
     if not driver_info:
         raise HTTPException(
             status_code=404, detail="No se encontró información de conductor para este usuario.")

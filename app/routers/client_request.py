@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Body, Path
 from fastapi.responses import JSONResponse
 from app.core.db import get_session
+from app.core.dependencies.admin_auth import get_current_admin
 from app.models.client_request import ClientRequest, ClientRequestCreate, StatusEnum
 from app.models.type_service import TypeService
 from app.core.db import SessionDep
 from app.services.client_requests_service import (
+    check_and_lift_driver_suspension,
     create_client_request,
     driver_canceled_service,
     get_time_and_distance_service,
@@ -653,6 +655,47 @@ def get_nearby_drivers(
         )
 
 
+@router.get("/drivers-check-suspension", tags=["Drivers"], description="""
+            Permite verificar y levantar la suspensión de un conductor específico.""")
+def check_driver_suspension_api(
+    request: Request,
+    session: Session = Depends(get_session)
+):
+    print("=== INICIO DEBUG DRIVER SUSPENSION CHECK ===")
+
+    # Debug: verificar que tenemos request.state
+    print(f"request.state existe: {hasattr(request, 'state')}")
+    if hasattr(request, 'state'):
+        print(
+            f"request.state.user_id existe: {hasattr(request.state, 'user_id')}")
+        if hasattr(request.state, 'user_id'):
+            print(f"request.state.user_id valor: {request.state.user_id}")
+            print(f"request.state.user_id tipo: {type(request.state.user_id)}")
+
+    # Debug: verificar headers
+    print(
+        f"Authorization header: {request.headers.get('authorization', 'No encontrado')}")
+    print(f"Todos los headers: {dict(request.headers)}")
+
+    try:
+        driver_id = request.state.user_id
+        print(f"driver_id extraído: {driver_id}")
+        print(f"driver_id tipo: {type(driver_id)}")
+
+        result = check_and_lift_driver_suspension(session, driver_id)
+        print(f"Resultado: {result}")
+        return result
+    except ValueError as e:
+        print(f"ValueError: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Exception general: {str(e)}")
+        print(f"Exception tipo: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{client_request_id}", tags=["Passengers"], description="""
 Consulta el estado y la información detallada de una solicitud de viaje específica.
 
@@ -728,7 +771,7 @@ Devuelve un mensaje de éxito o error.
 """)
 def update_status_by_client(
     request: Request,
-    id_client_request: UUID = Body(...,
+    id_client_request: UUID = Body(..., embed=True,
                                    description="ID de la solicitud de viaje a cancelar"),
     session: Session = Depends(get_session)
 ):
@@ -770,15 +813,24 @@ def update_review(
 
 
 @router.patch("/driver-canceled", tags=["Drivers"], description="""
-Permite al conductor cancelar una solicitud de viaje. Este endpoint debe usarse cuando el conductor ha llegado al punto de recogida (estado ARRIVED) 
-y el cliente no aparece. El conductor solo puede cancelar solicitudes que estén en estado ARRIVED.
+Permite al conductor cancelar una solicitud de viaje con diferentes reglas según el estado:
+
+**Estados permitidos y consecuencias:**
+- `ARRIVED`: Cancelación justificada (cliente no apareció) - Sin penalización
+- `ACCEPTED`: Cancelación injustificada - Cuenta para suspensión 
+- `ON_THE_WAY`: Cancelación injustificada - Cuenta para suspensión
+
+**Límites de cancelación:**
+- Máximo 3 cancelaciones por día
+- Máximo 10 cancelaciones por semana
+- Suspensión automática de 7 días al exceder límites
 
 **Parámetros:**
 - `id_client_request`: ID de la solicitud de viaje a cancelar
 - `reason`: Razón opcional de la cancelación
 
 **Respuesta:**
-Devuelve un mensaje de éxito o error.
+Devuelve un mensaje de éxito con información sobre el impacto de la cancelación.
 """)
 def driver_cancel_request(
     request: Request,

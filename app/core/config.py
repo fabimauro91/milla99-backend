@@ -11,8 +11,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Configuración de la base de datos
-    # DATABASE_URL: str = "sqlite:///./milla99.db"
-    DATABASE_URL: str = "mysql+pymysql://root:juandiego@localhost:3307/milla99"
+    DATABASE_URL: str = "mysql+pymysql://root:root@localhost:3307/milla99"
+    TEST_DATABASE_URL: str = "mysql+pymysql://root:root@localhost:3307/milla99_test"
+
     # Configuración CORS
     CORS_ORIGINS: List[str] = ["*"]
     CORS_CREDENTIALS: bool = True
@@ -45,11 +46,11 @@ class Settings(BaseSettings):
 
     # Configuración de Google Maps
     GOOGLE_API_KEY: str
-    ENCRYPTION_KEY: str 
 
     model_config = ConfigDict(
         env_file=".env",
-        case_sensitive=True
+        case_sensitive=True,
+        extra="allow"  # Permitir campos extra en la configuración
     )
 
 

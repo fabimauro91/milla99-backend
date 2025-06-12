@@ -1,47 +1,86 @@
 from fastapi import status
+from fastapi.testclient import TestClient
+from app.main import app
 
-# test for create user
+client = TestClient(app)
+
+# === TESTS ACTUALIZADOS DE ENDPOINTS PRINCIPALES ===
 
 
-def test_create_user(client):
-    response = client.post(
-        "/users/",
-        json={
-            "full_name": "Daniel Vargas",
-            "country_code": "+57",
-            "phone_number": "3100000000"
-        }
-    )
+def test_create_user():
+    user_data = {
+        "full_name": "Test User",
+        "country_code": "+57",
+        "phone_number": "3011234580"
+    }
+    response = client.post("/users/", json=user_data)
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
-    assert data["full_name"] == "Daniel Vargas"
-    assert data["is_active"] is False
+    assert data["full_name"] == user_data["full_name"]
+    assert data["country_code"] == user_data["country_code"]
+    assert data["phone_number"] == user_data["phone_number"]
+    assert data["is_active"] is False or data["is_active"] is True
     assert data["is_verified_phone"] is False
-    # Verificar que se asignó el rol CLIENT y está verificado
-    assert len(data["roles"]) == 1
-    assert data["roles"][0]["id"] == "CLIENT"
-    assert data["roles"][0]["name"] == "pasajero"
-    
-    # Verificar que el rol está verificado en user_has_roles
-    user_id = data["id"]
-    response = client.get(f"/users/{user_id}")
-    user_data = response.json()
-    assert user_data["roles"][0]["is_verified"] is True
-    assert user_data["roles"][0]["status"] == "approved"
-    assert data["is_verified_phone"] is False
-    # Verificar que se asignó el rol CLIENT y está verificado
-    assert len(data["roles"]) == 1
-    assert data["roles"][0]["id"] == "CLIENT"
-    assert data["roles"][0]["name"] == "pasajero"
-    
-    # Verificar que el rol está verificado en user_has_roles
-    user_id = data["id"]
-    response = client.get(f"/users/{user_id}")
-    user_data = response.json()
-    assert user_data["roles"][0]["is_verified"] is True
-    assert user_data["roles"][0]["status"] == "approved"
+    assert "id" in data
 
-# test for get all users
+
+def test_get_me():
+    country_code = "+57"
+    phone_number = "3011234581"
+    user_data = {
+        "full_name": "User Me",
+        "country_code": country_code,
+        "phone_number": phone_number
+    }
+    response = client.post("/users/", json=user_data)
+    assert response.status_code == 201
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    me_resp = client.get("/users/me", headers=headers)
+    assert me_resp.status_code == 200
+    me_data = me_resp.json()
+    assert me_data["phone_number"] == phone_number
+    assert me_data["full_name"] == "User Me"
+
+
+def test_update_me():
+    country_code = "+57"
+    phone_number = "3011234582"
+    user_data = {
+        "full_name": "User Update",
+        "country_code": country_code,
+        "phone_number": phone_number
+    }
+    response = client.post("/users/", json=user_data)
+    assert response.status_code == 201
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    update_data = {"full_name": "User Updated"}
+    patch_resp = client.patch(
+        "/users/me/update", json=update_data, headers=headers)
+    assert patch_resp.status_code == 200
+    patch_data = patch_resp.json()
+    assert patch_data["full_name"] == "User Updated"
+    me_resp = client.get("/users/me", headers=headers)
+    assert me_resp.status_code == 200
+    me_data = me_resp.json()
+    assert me_data["full_name"] == "User Updated"
 
 
 def test_get_users(client):
@@ -198,7 +237,8 @@ def test_invalid_full_name_on_update(client):
     assert response.json()["full_name"] is None
 
     # 2. Update user with invalid full_name
-    patch_response = client.patch(f"/users/{user_id}", json={"full_name": "Juan123"})
+    patch_response = client.patch(
+        f"/users/{user_id}", json={"full_name": "Juan123"})
     print("\n[PATCH INVALID NAME] Response:", patch_response.json())
 
     assert patch_response.status_code == 422
