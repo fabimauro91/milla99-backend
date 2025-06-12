@@ -65,24 +65,6 @@ def list_my_bank_accounts(
 #     return service.get_bank_account(user_id, account_id)
 
 
-@router.put("/{account_id}", response_model=BankAccountRead)
-def update_bank_account(
-    request: Request,
-    account_id: UUID,
-    bank_account: BankAccountCreate,
-    session: Session = Depends(get_session),
-    current_user=Depends(get_current_user)
-):
-    """
-    Actualiza una cuenta bancaria existente.
-    No permite modificar campos sensibles como user_id o is_verified.
-    Si se modifica el número de cuenta, requiere re-verificación.
-    """
-    user_id = request.state.user_id
-    service = BankAccountService(session)
-    return service.update_bank_account(user_id, account_id, bank_account.dict())
-
-
 @router.patch("/{account_id}", response_model=BankAccountRead)
 def patch_bank_account(
     request: Request,

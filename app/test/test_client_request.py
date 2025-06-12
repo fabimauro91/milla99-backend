@@ -607,5 +607,5 @@ def test_driver_cannot_skip_states_to_finished():
     status_resp_finished = client.patch(
         "/client-request/updateStatusByDriver", json=status_data_finished, headers=driver_headers)
     assert status_resp_finished.status_code == 400
-    assert "Transición de estado no permitida" in status_resp_finished.json()[
+    assert "Transición de estbanado no permitida" in status_resp_finished.json()[
         "detail"]
