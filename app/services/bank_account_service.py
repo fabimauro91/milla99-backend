@@ -240,18 +240,20 @@ class BankAccountService:
         self.session.refresh(bank_account)
         return bank_account
 
-    def get_active_bank_accounts(self, user_id: UUID) -> List[BankAccount]:
+    def get_active_bank_accounts(self, user_id: UUID) -> List[BankAccountRead]:
         """
         Obtiene solo las cuentas bancarias activas de un usuario.
         Verifica que el usuario tenga el rol apropiado.
+        Los datos sensibles se devuelven enmascarados.
         """
         # Verificar rol del usuario
         self.verify_user_role(user_id)
 
-        return self.session.query(BankAccount).filter(
+        accounts = self.session.query(BankAccount).filter(
             BankAccount.user_id == user_id,
             BankAccount.is_active == True
         ).all()
+        return [BankAccountRead.from_orm(account) for account in accounts]
 
     def get_verified_bank_accounts(self, user_id: UUID) -> List[BankAccount]:
         """

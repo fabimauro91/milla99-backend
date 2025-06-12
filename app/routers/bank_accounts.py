@@ -104,19 +104,19 @@ def delete_bank_account(
     return service.delete_bank_account(user_id, account_id)
 
 
-# @router.get("/active", response_model=List[BankAccountRead])
-# def list_active_bank_accounts(
-#     request: Request,
-#     session: Session = Depends(get_session),
-#     current_user=Depends(get_current_user)
-# ):
-#     """
-#     Lista solo las cuentas bancarias activas del usuario autenticado.
-#     Los datos sensibles se devuelven enmascarados.
-#     """
-#     user_id = request.state.user_id
-#     service = BankAccountService(session)
-#     return service.get_active_bank_accounts(user_id)
+@router.get("/active", response_model=List[BankAccountRead])
+def list_active_bank_accounts(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    """
+    Lista solo las cuentas bancarias activas del usuario autenticado.
+    Los datos sensibles se devuelven enmascarados.
+    """
+    user_id = request.state.user_id
+    service = BankAccountService(session)
+    return service.get_active_bank_accounts(user_id)
 
 
 # @router.get("/verified", response_model=List[BankAccountRead])
