@@ -424,3 +424,105 @@ def test_driver_creation_and_verification_flow(client):
         finally:
             # Asegurarnos de que la sesión se cierre
             session.close()
+
+
+def test_sql_injection_on_create_driver(client):
+    malicious_data = {
+        "full_name": "Driver'; DROP TABLE users; --",
+        "country_code": "+57",
+        "phone_number": "3001234567"
+    }
+    response = client.post("/drivers/", json=malicious_data)
+    assert response.status_code == 422  # Código de error esperado
+    # Verifica que se maneje el error de validación
+    assert "detail" in response.json()
+
+
+def create_and_approve_driver(client, phone_number, country_code):
+    # Usar una sesión explícita para el test
+    from app.core.db import engine
+    from sqlmodel import Session
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+    from sqlmodel import select
+    from uuid import UUID
+
+    with Session(engine) as session:
+        try:
+            user_data = {
+                "full_name": "Driver Test",
+                "country_code": country_code,
+                "phone_number": phone_number
+            }
+            driver_info_data = {
+                "first_name": "Driver",
+                "last_name": "Test",
+                "birth_date": str(date(1990, 1, 1)),
+                "email": "driver.test@example.com"
+            }
+            vehicle_info_data = {
+                "brand": "Toyota",
+                "model": "Corolla",
+                "model_year": 2020,
+                "color": "Blanco",
+                "plate": "ABC123",
+                "vehicle_type_id": 1
+            }
+            driver_documents_data = {
+                "license_expiration_date": str(date(2026, 1, 1)),
+                "soat_expiration_date": str(date(2025, 12, 31)),
+                "vehicle_technical_inspection_expiration_date": str(date(2025, 12, 31))
+            }
+            files = {
+                "selfie": ("selfie.jpg", io.BytesIO(b"fake-selfie-data"), "image/jpeg"),
+                "property_card_front": ("property_front.jpg", io.BytesIO(b"fake-property-front"), "image/jpeg"),
+                "property_card_back": ("property_back.jpg", io.BytesIO(b"fake-property-back"), "image/jpeg"),
+                "license_front": ("license_front.jpg", io.BytesIO(b"fake-license-front"), "image/jpeg"),
+                "license_back": ("license_back.jpg", io.BytesIO(b"fake-license-back"), "image/jpeg"),
+                "soat": ("soat.jpg", io.BytesIO(b"fake-soat"), "image/jpeg"),
+                "vehicle_technical_inspection": ("tech.jpg", io.BytesIO(b"fake-tech"), "image/jpeg")
+            }
+            data = {
+                "user": json.dumps(user_data),
+                "driver_info": json.dumps(driver_info_data),
+                "vehicle_info": json.dumps(vehicle_info_data),
+                "driver_documents": json.dumps(driver_documents_data)
+            }
+            response = client.post("/drivers/", data=data, files=files)
+            assert response.status_code == status.HTTP_201_CREATED
+            driver_data = response.json()
+            driver_id = driver_data["user"]["id"]
+
+            # Enviar código de verificación
+            send_resp = client.post(
+                f"/auth/verify/{country_code}/{phone_number}/send")
+            assert send_resp.status_code == 201
+            code = send_resp.json()["message"].split()[-1]
+
+            # Verificar el código y obtener el token
+            verify_resp = client.post(
+                f"/auth/verify/{country_code}/{phone_number}/code",
+                json={"code": code}
+            )
+            assert verify_resp.status_code == 200
+            response_data = verify_resp.json()
+
+            # Aprobar el rol del conductor
+            driver_role = session.exec(
+                select(UserHasRole).where(
+                    UserHasRole.id_user == UUID(str(driver_id)),
+                    UserHasRole.id_rol == "DRIVER"
+                )
+            ).first()
+            assert driver_role is not None
+            driver_role.status = RoleStatus.APPROVED
+            session.add(driver_role)
+            session.commit()
+            session.refresh(driver_role)
+
+            return response_data["access_token"], driver_id
+
+        except Exception as e:
+            print(f"Error en create_and_approve_driver: {str(e)}")
+            raise
+        finally:
+            session.close()
