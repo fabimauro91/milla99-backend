@@ -153,8 +153,7 @@ class BankAccountService:
 
             # Campos que no se pueden modificar
             protected_fields = {
-                "id", "user_id", "created_at", "is_verified",
-                "verification_date"
+                "id", "user_id", "created_at", "verification_date"
             }
             for field in protected_fields:
                 update_data.pop(field, None)
@@ -166,7 +165,6 @@ class BankAccountService:
                 print(f"Service: Encrypting account_number")
                 update_data["account_number"] = encryption_service.encrypt(
                     update_data["account_number"])
-                update_data["is_verified"] = False
                 update_data["verification_date"] = None
 
             # Si se modifica la cédula, requiere encriptación
@@ -233,7 +231,6 @@ class BankAccountService:
             raise HTTPException(
                 status_code=404, detail="Bank account not found")
 
-        bank_account.is_verified = True
         bank_account.verification_date = datetime.utcnow()
         bank_account.updated_at = datetime.utcnow()
         self.session.add(bank_account)
@@ -264,6 +261,6 @@ class BankAccountService:
 
         return self.session.query(BankAccount).filter(
             BankAccount.user_id == user_id,
-            BankAccount.is_verified == True,
+            BankAccount.verification_date.isnot(None),
             BankAccount.is_active == True
         ).all()
