@@ -46,11 +46,13 @@ class BankAccountService:
 
         # Limitar a 3 cuentas bancarias por usuario
         count_accounts = self.session.query(BankAccount).filter(
-            BankAccount.user_id == user_id).count()
+            BankAccount.user_id == user_id,
+            BankAccount.is_active == True
+        ).count()
         if count_accounts >= 3:
             raise HTTPException(
                 status_code=400,
-                detail="Solo puede tener hasta 3 cuentas bancarias. Elimine una existente para agregar otra."
+                detail="Solo puede tener hasta 3 cuentas bancarias activas. Desactive una existente para agregar otra."
             )
 
         # Verificar que no existe una cuenta idéntica para el mismo usuario, banco, tipo de cuenta y número de cuenta
