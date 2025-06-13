@@ -609,3 +609,68 @@ def test_driver_cannot_skip_states_to_finished():
     assert status_resp_finished.status_code == 400
     assert "Transición de estbanado no permitida" in status_resp_finished.json()[
         "detail"]
+
+
+def test_client_cancel_request():
+    """
+    Test básico para verificar que el endpoint de cancelación del cliente funciona.
+    """
+    # Datos del cliente
+    phone_number = "3004444456"
+    country_code = "+57"
+
+    # Autenticar cliente
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear solicitud de cliente
+    request_data = {
+        "fare_offered": 20000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,  # Car
+        "payment_method_id": 1  # Cash
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+
+    # Intentar cancelar la solicitud
+    cancel_data = {
+        "id_client_request": client_request_id
+    }
+    cancel_resp = client.patch(
+        "/client-request/clientCanceled", json=cancel_data, headers=headers)
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["success"] is True
+    assert "Solicitud cancelada" in cancel_resp.json()["message"]
+
+    # Verificar que el estado de la solicitud cambió a CANCELLED
+    detail_resp = client.get(
+        f"/client-request/{client_request_id}", headers=headers)
+    assert detail_resp.status_code == 200
+
+    # Imprimir información para debug
+    print("\n=== DEBUG INFO ===")
+    print(f"Status from API: {detail_resp.json()['status']}")
+    print(f"Type of status: {type(detail_resp.json()['status'])}")
+    print(f"StatusEnum.CANCELLED value: {StatusEnum.CANCELLED}")
+    print(f"StatusEnum.CANCELLED type: {type(StatusEnum.CANCELLED)}")
+    print("=================\n")
+
+    # Comparar con el valor del enum
+    assert detail_resp.json()["status"] == str(StatusEnum.CANCELLED)

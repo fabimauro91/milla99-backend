@@ -815,9 +815,12 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
 
 def client_canceled_service(session: Session, id_client_request: int, user_id: int):
     """
-    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED) 
+    Permite al cliente (dueño de la solicitud) cancelar su solicitud (cambiando su estado a CANCELLED)
     únicamente si la solicitud está en CREATED, ACCEPTED, ON_THE_WAY o ARRIVED.
     """
+    # Inicializar multa como None
+    multa = None
+
     # Validar rol del cliente (que sea CLIENT y esté aprobado)
     user_role = session.query(UserHasRole).filter(
         UserHasRole.id_user == user_id,
@@ -881,13 +884,18 @@ def client_canceled_service(session: Session, id_client_request: int, user_id: i
     client_request.status = StatusEnum.CANCELLED
     client_request.updated_at = datetime.utcnow()
     session.commit()
-    # si se genera una multa se le informa al usuario que se pagará una multa en el proximo servicio que tome
-    if (multa):
+
+    # si se generó una multa se le informa al usuario que se pagará una multa en el próximo servicio que tome
+    if multa is not None:
         return {
             "success": True,
-            "message": f"Solicitud cancelada correctamente. Se le aplicará una multa de {multa} en su próximo servicio."
+            "message": f"Solicitud cancelada. Se aplicará una multa de {multa} pesos en su próximo servicio."
         }
-    return {"success": True, "message": "Solicitud cancelada (estado actualizado a CANCELLED) correctamente."}
+
+    return {
+        "success": True,
+        "message": "Solicitud cancelada exitosamente."
+    }
 
 
 def update_status_to_paid_service(session: Session, id_client_request: int, user_id: int):
