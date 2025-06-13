@@ -77,6 +77,35 @@ class TransactionService:
                 check_and_notify_low_balance(
                     self.session, user_id, verify_mount.mount)
 
+        # Validación para COMMISSION
+        elif type == TransactionType.COMMISSION:
+            if (income > 0 and expense == 0):
+                # Ingreso por comisión (ej: para la empresa)
+                if verify_mount:
+                    verify_mount.mount += income
+                    check_and_notify_low_balance(
+                        self.session, user_id, verify_mount.mount)
+                else:
+                    verify_mount = VerifyMount(user_id=user_id, mount=income)
+                    self.session.add(verify_mount)
+                    check_and_notify_low_balance(
+                        self.session, user_id, verify_mount.mount)
+            elif (income == 0 and expense > 0):
+                # Egreso por comisión (ej: para el conductor)
+                if not verify_mount or verify_mount.mount < expense:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Saldo insuficiente para realizar la comisión."
+                    )
+                verify_mount.mount -= expense
+                check_and_notify_low_balance(
+                    self.session, user_id, verify_mount.mount)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Las transacciones de tipo COMMISSION solo pueden ser ingresos (income > 0, expense == 0) o egresos (income == 0, expense > 0)."
+                )
+
         # Otros tipos (por defecto solo ingresos)
         elif type != TransactionType.BONUS:
             if income <= 0 or expense != 0:

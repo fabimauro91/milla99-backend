@@ -87,16 +87,31 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
 
         transaction_service = TransactionService(session)
 
+        # Calcular el ingreso del conductor (85% del valor del viaje)
+        driver_income_pct = Decimal("0.85")  # 85%
+        driver_income = (
+            fare * driver_income_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        print(
+            f"[DEBUG] Creando transacción SERVICE ingreso para conductor: user_id={request.id_driver_assigned}, income={int(driver_income)}")
+        transaction_service.create_transaction(
+            user_id=request.id_driver_assigned,
+            income=int(driver_income),
+            type="SERVICE",
+            client_request_id=request.id,
+            description=f"Ingreso por servicio del viaje {request.id}"
+        )
+
         driver_expense_pct = Decimal("0.10")  # 10%
         driver_expense = (
             fare * driver_expense_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         print(
-            f"[DEBUG] Creando transacción SERVICE egreso para conductor: user_id={request.id_driver_assigned}, expense={int(driver_expense)}")
+            f"[DEBUG] Creando transacción COMMISSION egreso para conductor: user_id={request.id_driver_assigned}, expense={int(driver_expense)}")
         transaction_service.create_transaction(
             user_id=request.id_driver_assigned,
             expense=int(driver_expense),
-            type="SERVICE",
+            type="COMMISSION",
             client_request_id=request.id,
             description=f"Comisión por uso de la plataforma para el viaje {request.id}"
         )
@@ -157,7 +172,7 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
 
         if request.penality > 0:
             penality = pay_penality_user(session, request.id_client)
-            
+
         session.add_all(earnings)
         session.commit()
     except Exception as e:
@@ -245,7 +260,7 @@ def get_referral_earnings_structured(session, user_id: UUID):
     }
 
 
-def pay_penality_user(session: SQLAlchemySession, request:ClientRequest)->None:
+def pay_penality_user(session: SQLAlchemySession, request: ClientRequest) -> None:
     """
     Paga una penalidad de usuario y actualiza su estado a PAID.
     """
@@ -253,8 +268,8 @@ def pay_penality_user(session: SQLAlchemySession, request:ClientRequest)->None:
         penalties = session.query(PenalityUser).filter(
             PenalityUser.user_id == request.id_client,
             PenalityUser.status == statusEnum.PENDING
-            ).all()
-        
+        ).all()
+
         if not penalties:
             return None
 
@@ -265,7 +280,7 @@ def pay_penality_user(session: SQLAlchemySession, request:ClientRequest)->None:
                 continue
 
             # Crear transacción de pago de penalidad
-            
+
             transaction_service.create_transaction(
                 user_id=penality.id_driver_assigned,
                 income=int(penality.amount),
