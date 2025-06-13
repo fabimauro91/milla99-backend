@@ -140,19 +140,23 @@ def test_driver_cancellation_penalty_arrived(session: Session):
     create_resp = client.post(
         "/client-request/", json=request_data, headers=headers)
     assert create_resp.status_code == 201
-    client_request_id = create_resp.json()["id"]
+    client_request_id = UUID(create_resp.json()["id"])  # Convertir a UUID
+    # Guardar el ID del cliente
+    client_id = UUID(create_resp.json()["id_client"])
 
     # Crear y aprobar conductor
     driver_phone = "3010000006"
     driver_country_code = "+57"
     driver_token, driver_id = create_and_approve_driver(
         client, driver_phone, driver_country_code)
+    driver_id = UUID(driver_id)  # Convertir a UUID
     driver_headers = {"Authorization": f"Bearer {driver_token}"}
 
     # Asignar el conductor a la solicitud
     assign_data = {
-        "id_client_request": client_request_id,
-        "id_driver": driver_id,
+        # Convertir a string para la API
+        "id_client_request": str(client_request_id),
+        "id_driver": str(driver_id),  # Convertir a string para la API
         "fare_assigned": 25000
     }
     assign_resp = client.patch(
@@ -162,7 +166,8 @@ def test_driver_cancellation_penalty_arrived(session: Session):
 
     # Cambiar el estado a ON_THE_WAY
     status_data_ontheway = {
-        "id_client_request": client_request_id,
+        # Convertir a string para la API
+        "id_client_request": str(client_request_id),
         "status": "ON_THE_WAY"
     }
     status_resp_ontheway = client.patch(
@@ -172,7 +177,8 @@ def test_driver_cancellation_penalty_arrived(session: Session):
 
     # Cambiar el estado a ARRIVED
     status_data_arrived = {
-        "id_client_request": client_request_id,
+        # Convertir a string para la API
+        "id_client_request": str(client_request_id),
         "status": "ARRIVED"
     }
     status_resp_arrived = client.patch(
@@ -182,7 +188,8 @@ def test_driver_cancellation_penalty_arrived(session: Session):
 
     # Driver cancels the request
     cancel_data = {
-        "id_client_request": client_request_id,
+        # Convertir a string para la API
+        "id_client_request": str(client_request_id),
         "reason": "Test cancellation in ARRIVED state"
     }
     cancel_resp = client.patch(
@@ -191,11 +198,12 @@ def test_driver_cancellation_penalty_arrived(session: Session):
 
     # Verify the penalty was created with correct amount (2000 pesos)
     penalty = session.query(PenalityUser).filter(
-        PenalityUser.id_client_request == client_request_id,
-        PenalityUser.id_driver_assigned == driver_id
+        PenalityUser.id_client_request == client_request_id,  # Ya es UUID
+        PenalityUser.id_driver_assigned == driver_id  # Ya es UUID
     ).first()
 
-    assert penalty is not None
-    assert penalty.amount == Decimal('2000')
-    assert penalty.status == statusEnum.PENDING
-    assert penalty.id_user == UUID(str(create_resp.json()["id_client"]))
+    assert penalty is not None, "No se creó la penalización"
+    assert penalty.amount == Decimal(
+        '2000'), f"El monto de la penalización es {penalty.amount}, se esperaba 2000"
+    assert penalty.status == statusEnum.PENDING, f"El estado de la penalización es {penalty.status}, se esperaba PENDING"
+    assert penalty.id_user == client_id, f"El ID del usuario en la penalización es {penalty.id_user}, se esperaba {client_id}"
