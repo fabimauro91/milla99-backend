@@ -127,7 +127,7 @@ def get_time_and_distance(
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 
 
-@router.get("/nearby",  tags=["Drivers"], description="""
+@router.get("/nearby", tags=["Drivers"], description="""
 Obtiene las solicitudes de viaje cercanas a un conductor en un radio de 5 km, filtrando por el tipo de servicio del vehículo del conductor.
 """)
 def get_nearby_client_requests(
@@ -139,11 +139,7 @@ def get_nearby_client_requests(
     session=Depends(get_session)
 ):
     try:
-        print("[DEBUG] Entrando a /nearby")
-        print(f"[DEBUG] Headers: {request.headers}")
-        print(f"[DEBUG] state: {request.state.__dict__}")
         user_id = getattr(request.state, 'user_id', None)
-        print(f"[DEBUG] user_id extraído: {user_id}")
         if user_id is None:
             raise Exception("user_id no está presente en request.state")
         # 1. Verificar que el usuario es DRIVER
@@ -152,7 +148,6 @@ def get_nearby_client_requests(
             UserHasRole.id_user == user_id,
             UserHasRole.id_rol == "DRIVER"
         ).first()
-        print(f"[DEBUG] user_role: {user_role}")
         if not user_role or user_role.status != RoleStatus.APPROVED:
             raise HTTPException(
                 status_code=400, detail="El usuario no tiene el rol de conductor aprobado.")
@@ -160,7 +155,6 @@ def get_nearby_client_requests(
         from app.models.driver_info import DriverInfo
         driver_info = session.query(DriverInfo).filter(
             DriverInfo.user_id == user_id).first()
-        print(f"[DEBUG] driver_info: {driver_info}")
         if not driver_info:
             raise HTTPException(
                 status_code=400, detail="El conductor no tiene información de conductor registrada")
@@ -168,7 +162,6 @@ def get_nearby_client_requests(
         from app.models.vehicle_info import VehicleInfo
         driver_vehicle = session.query(VehicleInfo).filter(
             VehicleInfo.driver_info_id == driver_info.id).first()
-        print(f"[DEBUG] driver_vehicle: {driver_vehicle}")
         if not driver_vehicle:
             raise HTTPException(
                 status_code=400, detail="El conductor no tiene un vehículo registrado")
@@ -176,7 +169,6 @@ def get_nearby_client_requests(
         from app.models.type_service import TypeService
         type_services = session.query(TypeService).filter(
             TypeService.vehicle_type_id == driver_vehicle.vehicle_type_id).all()
-        print(f"[DEBUG] type_services: {type_services}")
         if not type_services:
             raise HTTPException(
                 status_code=400, detail="No hay servicios disponibles para el tipo de vehículo del conductor")
@@ -185,7 +177,6 @@ def get_nearby_client_requests(
         results = get_nearby_client_requests_service(
             driver_lat, driver_lng, session, wkb_to_coords, type_service_ids=type_service_ids
         )
-        print(f"[DEBUG] Número de solicitudes encontradas: {len(results)}")
         if not results:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
@@ -414,22 +405,17 @@ def assign_driver(
 ):
     try:
         import traceback as tb
-        print("[DEBUG] request_data:", request_data)
         # 1. Obtener la solicitud
         client_request = session.query(ClientRequest).filter(
             ClientRequest.id == request_data.id_client_request).first()
-        print("[DEBUG] client_request:", client_request)
         if not client_request:
-            print("[ERROR] Solicitud no encontrada")
             raise HTTPException(
                 status_code=404, detail="Solicitud no encontrada")
 
         # 2. Obtener el tipo de servicio de la solicitud
         type_service = session.query(TypeService).filter(
             TypeService.id == client_request.type_service_id).first()
-        print("[DEBUG] type_service:", type_service)
         if not type_service:
-            print("[ERROR] Tipo de servicio no encontrado")
             raise HTTPException(
                 status_code=404, detail="Tipo de servicio no encontrado")
 
@@ -439,26 +425,18 @@ def assign_driver(
 
         driver_info = session.query(DriverInfo).filter(
             DriverInfo.user_id == request_data.id_driver).first()
-        print("[DEBUG] driver_info:", driver_info)
         if not driver_info:
-            print("[ERROR] El conductor no tiene información registrada")
             raise HTTPException(
                 status_code=404, detail="El conductor no tiene información registrada")
 
         vehicle = session.query(VehicleInfo).filter(
             VehicleInfo.driver_info_id == driver_info.id).first()
-        print("[DEBUG] vehicle:", vehicle)
         if not vehicle:
-            print("[ERROR] El conductor no tiene vehículo registrado")
             raise HTTPException(
                 status_code=404, detail="El conductor no tiene vehículo registrado")
 
         # 4. Validar compatibilidad de tipo de vehículo
-        print(
-            f"[DEBUG] vehicle.vehicle_type_id: {vehicle.vehicle_type_id}, type_service.vehicle_type_id: {type_service.vehicle_type_id}")
         if vehicle.vehicle_type_id != type_service.vehicle_type_id:
-            print(
-                "[ERROR] El conductor no tiene un vehículo compatible con el tipo de servicio solicitado")
             raise HTTPException(
                 status_code=400,
                 detail="El conductor no tiene un vehículo compatible con el tipo de servicio solicitado"
@@ -573,22 +551,22 @@ def update_driver_rating(
     return update_driver_rating_service(session, id_client_request, driver_rating, user_id)
 
 
-# @router.get("/nearby-drivers", description="""
-# Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
+@router.get("/nearby-drivers", description="""
+Obtiene los conductores cercanos a un cliente en un radio de 5km, filtrados por el tipo de servicio solicitado.
 
-# **Parámetros:**
-# - `client_lat`: Latitud del cliente.
-# - `client_lng`: Longitud del cliente.
-# - `type_service_id`: ID del tipo de servicio solicitado.
+**Parámetros:**
+- `client_lat`: Latitud del cliente.
+- `client_lng`: Longitud del cliente.
+- `type_service_id`: ID del tipo de servicio solicitado.
 
-# **Respuesta:**
-# Devuelve una lista de conductores cercanos con su información, incluyendo:
-# - Información del conductor
-# - Información del vehículo
-# - Distancia al cliente
-# - Calificación promedio
-# - Tiempo estimado de llegada (usando Google Distance Matrix)
-# """)
+**Respuesta:**
+Devuelve una lista de conductores cercanos con su información, incluyendo:
+- Información del conductor
+- Información del vehículo
+- Distancia al cliente
+- Calificación promedio
+- Tiempo estimado de llegada (usando Google Distance Matrix)
+""")
 def get_nearby_drivers(
     request: Request,
     client_lat: float = Query(..., example=4.708822,
@@ -606,18 +584,12 @@ def get_nearby_drivers(
     try:
         # Verificar que el usuario es CLIENT
         user_id = request.state.user_id
-        print(f"[DEBUG] user_id: {user_id}")
         user_role = session.query(UserHasRole).filter(
             UserHasRole.id_user == user_id,
             UserHasRole.id_rol == "CLIENT"
         ).first()
-        print(f"[DEBUG] user_role: {user_role}")
-        if user_role:
-            print(f"[DEBUG] user_role.status: {user_role.status}")
 
         if not user_role or user_role.status != RoleStatus.APPROVED:
-            print("[ERROR] El usuario no tiene el rol de cliente aprobado")
-            tb.print_stack()
             raise HTTPException(
                 status_code=400,
                 detail="El usuario no tiene el rol de cliente aprobado"
@@ -661,38 +633,16 @@ def check_driver_suspension_api(
     request: Request,
     session: Session = Depends(get_session)
 ):
-    print("=== INICIO DEBUG DRIVER SUSPENSION CHECK ===")
-
-    # Debug: verificar que tenemos request.state
-    print(f"request.state existe: {hasattr(request, 'state')}")
-    if hasattr(request, 'state'):
-        print(
-            f"request.state.user_id existe: {hasattr(request.state, 'user_id')}")
-        if hasattr(request.state, 'user_id'):
-            print(f"request.state.user_id valor: {request.state.user_id}")
-            print(f"request.state.user_id tipo: {type(request.state.user_id)}")
-
-    # Debug: verificar headers
-    print(
-        f"Authorization header: {request.headers.get('authorization', 'No encontrado')}")
-    print(f"Todos los headers: {dict(request.headers)}")
-
     try:
         driver_id = request.state.user_id
-        print(f"driver_id extraído: {driver_id}")
-        print(f"driver_id tipo: {type(driver_id)}")
-
         result = check_and_lift_driver_suspension(session, driver_id)
-        print(f"Resultado: {result}")
         return result
     except ValueError as e:
         print(f"ValueError: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Exception general: {str(e)}")
-        print(f"Exception tipo: {type(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
+        print(f"[ERROR] Exception en check_driver_suspension: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
