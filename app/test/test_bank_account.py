@@ -126,16 +126,13 @@ def test_bank_account_crud_flow():
         f"/bank-accounts/{account_id}", headers=headers)
     assert delete_resp.status_code == 200 or delete_resp.status_code == 204
 
-    # Verificar que la cuenta está desactivada (is_active = False)
+    # Verificar que la cuenta ya no aparece en la lista (porque está inactiva)
     list_resp_after = client.get("/bank-accounts/me", headers=headers)
     assert list_resp_after.status_code == 200
     accounts_after = list_resp_after.json()
     print(
         f"\n[DEBUG] List response after delete (is_active=False): {accounts_after}")
 
-    deleted_account = next(
-        (acc for acc in accounts_after if acc["id"] == account_id), None)
-    print(f"\n[DEBUG] Deleted account data: {deleted_account}")
-    assert deleted_account is not None, "La cuenta debería seguir existiendo pero desactivada"
-    assert deleted_account[
-        "is_active"] is False, "La cuenta debería estar desactivada (is_active = False)"
+    # La cuenta no debería aparecer en la lista porque get_bank_accounts solo muestra cuentas activas
+    assert not any(
+        acc["id"] == account_id for acc in accounts_after), "La cuenta no debería aparecer en la lista porque está inactiva"
