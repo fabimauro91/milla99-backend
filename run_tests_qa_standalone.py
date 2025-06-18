@@ -79,7 +79,7 @@ def run_tests_with_json_output() -> dict:
             os.unlink(json_report_path)
 
 
-def run_tests_with_html_output() -> str:
+def run_tests_with_html_output() -> Path:
     """Ejecuta los tests y genera un reporte HTML"""
     # FORZAR el uso de la base de datos de test
     os.environ["DATABASE_URL"] = "mysql+mysqlconnector://root:root@localhost:3306/milla99_test"
@@ -116,7 +116,7 @@ def run_tests_with_html_output() -> str:
 
     # Verificar que el archivo existe
     if html_report_path.exists():
-        return str(html_report_path)
+        return html_report_path
     else:
         raise Exception(f"Error generando reporte HTML: {stderr}")
 
