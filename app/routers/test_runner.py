@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 import asyncio
 from pathlib import Path
 from app.core.dependencies.admin_auth import get_current_admin
+from app.core.config import settings
 
 
 router = APIRouter(
@@ -26,43 +27,50 @@ class TestResult:
             "passed": 0,
             "failed": 0,
             "skipped": 0,
-            "errors": 0,
-            "duration": 0
+            "errors": 0
         }
-        self.start_time = None
-        self.end_time = None
+        self.duration = 0.0
 
     def add_result(self, test_name: str, status: str, duration: float, error_message: str = None):
-        self.results.append({
+        result = {
             "test_name": test_name,
             "status": status,
             "duration": duration,
-            "error_message": error_message,
-            "timestamp": datetime.now().isoformat()
-        })
+            "error_message": error_message
+        }
+        self.results.append(result)
+        self.update_summary(status)
 
     def update_summary(self, status: str):
-        self.summary[status] += 1
         self.summary["total"] += 1
+        if status == "passed":
+            self.summary["passed"] += 1
+        elif status == "failed":
+            self.summary["failed"] += 1
+        elif status == "skipped":
+            self.summary["skipped"] += 1
+        elif status == "error":
+            self.summary["errors"] += 1
 
     def set_duration(self, duration: float):
-        self.summary["duration"] = duration
+        self.duration = duration
 
 
 def run_tests_with_json_output() -> Dict:
-    """Ejecuta los tests y devuelve los resultados en formato JSON"""
-    # Asegura que DATABASE_URL esté definida antes de lanzar pytest
-    if not os.environ.get("DATABASE_URL"):
-        os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "")
+    """Ejecuta los tests y devuelve resultados en formato JSON"""
+    # FORZAR el uso de la base de datos de test para seguridad
+    original_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = settings.TEST_DATABASE_URL
 
-    test_result = TestResult()
-
-    # Crear archivo temporal para el reporte JSON
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-        json_report_path = temp_file.name
+    print(
+        f"🔒 FORZANDO uso de base de datos de test: {settings.TEST_DATABASE_URL}")
+    print(f"📊 Entorno actual: {settings.ENVIRONMENT}")
 
     try:
-        # Ejecutar pytest con reporte JSON
+        # Crear archivo temporal para el reporte JSON
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+            json_report_path = temp_file.name
+
         cmd = [
             "pytest",
             "app/test/",
@@ -72,7 +80,6 @@ def run_tests_with_json_output() -> Dict:
             "-v"
         ]
 
-        # Ejecutar el comando
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -84,48 +91,22 @@ def run_tests_with_json_output() -> Dict:
         stdout, stderr = process.communicate()
 
         # Leer el reporte JSON
+        results = {"success": process.returncode ==
+                   0, "stdout": stdout, "stderr": stderr}
+
         if os.path.exists(json_report_path):
             with open(json_report_path, 'r') as f:
                 json_data = json.load(f)
+            results.update(json_data)
 
-            # Procesar los resultados
-            if 'tests' in json_data:
-                for test in json_data['tests']:
-                    status = test.get('outcome', 'unknown')
-                    duration = test.get('duration', 0)
-                    test_name = test.get('nodeid', 'unknown')
-                    error_message = None
-
-                    if status == 'failed':
-                        error_message = test.get(
-                            'call', {}).get('longrepr', '')
-
-                    test_result.add_result(
-                        test_name, status, duration, error_message)
-                    test_result.update_summary(status)
-
-            # Actualizar duración total
-            if 'summary' in json_data:
-                test_result.set_duration(
-                    json_data['summary'].get('duration', 0))
-
-        return {
-            "success": process.returncode == 0,
-            "summary": test_result.summary,
-            "results": test_result.results,
-            "stdout": stdout,
-            "stderr": stderr,
-            "return_code": process.returncode
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "summary": test_result.summary,
-            "results": test_result.results
-        }
+        return results
     finally:
+        # Restaurar la configuración original
+        if original_database_url:
+            os.environ["DATABASE_URL"] = original_database_url
+        else:
+            os.environ.pop("DATABASE_URL", None)
+
         # Limpiar archivo temporal
         if os.path.exists(json_report_path):
             os.unlink(json_report_path)
@@ -133,19 +114,23 @@ def run_tests_with_json_output() -> Dict:
 
 def run_tests_with_html_output() -> str:
     """Ejecuta los tests y genera un reporte HTML"""
-    # Asegura que DATABASE_URL esté definida antes de lanzar pytest
-    if not os.environ.get("DATABASE_URL"):
-        os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "")
+    # FORZAR el uso de la base de datos de test para seguridad
+    original_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = settings.TEST_DATABASE_URL
 
-    # Crear directorio para reportes si no existe
-    reports_dir = Path("static/reports")
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    # Generar nombre único para el reporte
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    html_report_path = reports_dir / f"test_report_{timestamp}.html"
+    print(
+        f"🔒 FORZANDO uso de base de datos de test: {settings.TEST_DATABASE_URL}")
+    print(f"📊 Entorno actual: {settings.ENVIRONMENT}")
 
     try:
+        # Crear directorio para reportes si no existe
+        reports_dir = Path("static/reports")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generar nombre único para el reporte
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        html_report_path = reports_dir / f"test_report_{timestamp}.html"
+
         # Ejecutar pytest con reporte HTML
         cmd = [
             "pytest",
@@ -165,20 +150,82 @@ def run_tests_with_html_output() -> str:
 
         stdout, stderr = process.communicate()
 
-        # Cambiado: solo verifica que el archivo exista
+        # Verificar que el archivo existe
         if html_report_path.exists():
             return str(html_report_path)
         else:
             raise Exception(f"Error generando reporte HTML: {stderr}")
 
+    finally:
+        # Restaurar la configuración original
+        if original_database_url:
+            os.environ["DATABASE_URL"] = original_database_url
+        else:
+            os.environ.pop("DATABASE_URL", None)
+
+
+def run_tests_qa_standalone() -> Dict:
+    """
+    Ejecuta tests en entorno QA completamente aislado.
+    Este método ejecuta un script independiente que no afecta el servidor principal.
+    """
+    print("Ejecutando tests en entorno QA aislado...")
+
+    try:
+        # Ejecutar el script independiente de QA
+        cmd = ["python", "run_tests_qa_standalone.py"]
+
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=os.getcwd()
+        )
+
+        stdout, stderr = process.communicate()
+
+        print("Salida del script QA:")
+        print(stdout)
+
+        if stderr:
+            print("Errores del script QA:")
+            print(stderr)
+
+        # Intentar parsear el resultado JSON del script
+        try:
+            # Buscar el JSON en la salida (está al final del output)
+            lines = stdout.strip().split('\n')
+            for line in reversed(lines):
+                if line.strip().startswith('{') and line.strip().endswith('}'):
+                    result = json.loads(line.strip())
+                    return result
+        except json.JSONDecodeError:
+            pass
+
+        # Si no se pudo parsear JSON, devolver resultado básico
+        return {
+            "success": process.returncode == 0,
+            "stdout": stdout,
+            "stderr": stderr,
+            "environment": "qa_standalone",
+            "message": "Tests ejecutados en entorno QA aislado"
+        }
+
     except Exception as e:
-        raise Exception(f"Error ejecutando tests: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "environment": "qa_standalone"
+        }
 
 
 @router.post("/run", description="""
 Ejecuta todos los tests del proyecto y devuelve los resultados en formato JSON.
 
 **Permisos:** Solo administradores pueden ejecutar tests.
+
+**Seguridad:** Este endpoint SIEMPRE usa la base de datos de test para proteger los datos de producción.
 
 **Respuesta:**
 - `success`: Boolean indicando si todos los tests pasaron
@@ -207,26 +254,32 @@ Ejecuta todos los tests del proyecto y genera un reporte HTML visual.
 
 **Permisos:** Solo administradores pueden ejecutar tests.
 
+**Seguridad:** Este endpoint ejecuta tests en un entorno QA completamente aislado.
+El servidor principal continúa usando la base de datos de producción sin interrupciones.
+
 **Respuesta:**
-- URL del reporte HTML generado que se puede abrir en el navegador
+- Mensaje de éxito y recomendación de consultar /tests/reports
 """)
 async def run_tests_html():
     """Ejecuta todos los tests y genera un reporte HTML - Solo ADMIN"""
     try:
-        html_report_path = run_tests_with_html_output()
+        # Usar el método aislado de QA
+        result = run_tests_qa_standalone()
 
-        # Devolver la URL del reporte
-        report_url = f"/static/reports/{Path(html_report_path).name}"
+        if result.get("success"):
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "success": True,
+                    "message": "Reporte HTML generado exitosamente. Consulta /tests/reports para ver la lista de reportes."
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error ejecutando tests en QA: {result.get('error', 'Error desconocido')}"
+            )
 
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "success": True,
-                "message": "Reporte HTML generado exitosamente",
-                "report_url": report_url,
-                "file_path": html_report_path
-            }
-        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -272,11 +325,17 @@ Ejecuta tests específicos basados en patrones o nombres de archivo.
 
 **Permisos:** Solo administradores pueden ejecutar tests.
 
+**Seguridad:** Este endpoint SIEMPRE usa la base de datos de test.
+
 **Parámetros:**
 - `test_pattern`: Patrón para filtrar tests (ej: "test_auth", "test_client_request")
 """)
 async def run_specific_tests(test_pattern: str):
     """Ejecuta tests específicos basados en un patrón - Solo ADMIN"""
+    # FORZAR el uso de la base de datos de test para seguridad
+    original_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = settings.TEST_DATABASE_URL
+
     try:
         # Crear archivo temporal para el reporte JSON
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
@@ -310,10 +369,6 @@ async def run_specific_tests(test_pattern: str):
                 json_data = json.load(f)
             results.update(json_data)
 
-        # Limpiar archivo temporal
-        if os.path.exists(json_report_path):
-            os.unlink(json_report_path)
-
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content=results
@@ -324,3 +379,13 @@ async def run_specific_tests(test_pattern: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error ejecutando tests específicos: {str(e)}"
         )
+    finally:
+        # Restaurar la configuración original
+        if original_database_url:
+            os.environ["DATABASE_URL"] = original_database_url
+        else:
+            os.environ.pop("DATABASE_URL", None)
+
+        # Limpiar archivo temporal
+        if os.path.exists(json_report_path):
+            os.unlink(json_report_path)

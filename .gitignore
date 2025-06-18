@@ -6,6 +6,9 @@ env/
 
 # Archivos de configuración sensibles
 .env
+.env.local
+.env.production
+env.qa
 
 # Archivos de bases de datos locales
 *.sqlite3
@@ -27,3 +30,6 @@ __pycache__/
 
 # Nueva carpeta
 static/
+
+# Reportes de testing
+static/reports/
