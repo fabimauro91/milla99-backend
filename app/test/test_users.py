@@ -71,9 +71,13 @@ def test_update_me():
     assert verify_resp.status_code == 200
     token = verify_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    update_data = {"full_name": "User Updated"}
+
+    # Enviar como form data en lugar de JSON
     patch_resp = client.patch(
-        "/users/me/update", json=update_data, headers=headers)
+        "/users/me/update",
+        data={"full_name": "User Updated"},
+        headers=headers
+    )
     assert patch_resp.status_code == 200
     patch_data = patch_resp.json()
     assert patch_data["full_name"] == "User Updated"

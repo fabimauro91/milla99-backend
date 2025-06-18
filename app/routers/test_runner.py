@@ -220,33 +220,33 @@ def run_tests_qa_standalone() -> Dict:
         }
 
 
-@router.post("/run", description="""
-Ejecuta todos los tests del proyecto y devuelve los resultados en formato JSON.
+# @router.post("/run", description="""
+# Ejecuta todos los tests del proyecto y devuelve los resultados en formato JSON.
 
-**Permisos:** Solo administradores pueden ejecutar tests.
+# **Permisos:** Solo administradores pueden ejecutar tests.
 
-**Seguridad:** Este endpoint SIEMPRE usa la base de datos de test para proteger los datos de producción.
+# **Seguridad:** Este endpoint SIEMPRE usa la base de datos de test para proteger los datos de producción.
 
-**Respuesta:**
-- `success`: Boolean indicando si todos los tests pasaron
-- `summary`: Resumen de resultados (total, passed, failed, skipped, errors, duration)
-- `results`: Lista detallada de cada test con su estado y duración
-- `stdout`: Salida estándar de pytest
-- `stderr`: Salida de errores de pytest
-""")
-async def run_tests():
-    """Ejecuta todos los tests y devuelve resultados en JSON - Solo ADMIN"""
-    try:
-        results = run_tests_with_json_output()
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content=results
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error ejecutando tests: {str(e)}"
-        )
+# **Respuesta:**
+# - `success`: Boolean indicando si todos los tests pasaron
+# - `summary`: Resumen de resultados (total, passed, failed, skipped, errors, duration)
+# - `results`: Lista detallada de cada test con su estado y duración
+# - `stdout`: Salida estándar de pytest
+# - `stderr`: Salida de errores de pytest
+# """)
+# async def run_tests():
+#     """Ejecuta todos los tests y devuelve resultados en JSON - Solo ADMIN"""
+#     try:
+#         results = run_tests_with_json_output()
+#         return JSONResponse(
+#             status_code=status.HTTP_200_OK,
+#             content=results
+#         )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Error ejecutando tests: {str(e)}"
+#         )
 
 
 @router.post("/run-html", description="""

@@ -43,12 +43,17 @@ engine = create_engine(
 )
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_db_data():
-    SQLModel.metadata.create_all(engine)
-    init_data()  # Pobla la base de datos con datos mínimos y de ejemplo
-    yield
+# Fixture para limpiar y poblar la base de datos antes de cada test
+def reset_db():
     SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.create_all(engine)
+    init_data()
+
+
+@pytest.fixture(autouse=True)
+def clean_and_init_db():
+    reset_db()
+    yield
 
 
 @pytest.fixture(name="session")
