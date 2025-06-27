@@ -1,9 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import datetime
-import pytz
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class DocumentTypeBase(SQLModel):
@@ -14,12 +11,9 @@ class DocumentType(DocumentTypeBase, table=True):
     __tablename__ = "document_type"
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ),
-        nullable=False,
-        sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)}
-    )
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
     # Relaciones
     driver_documents: List["DriverDocuments"] = Relationship(
         back_populates="documenttype")

@@ -3,7 +3,6 @@ from sqlalchemy import Column, String
 from typing import Optional, TYPE_CHECKING, List
 from datetime import date, datetime
 from uuid import UUID, uuid4
-import pytz
 
 if TYPE_CHECKING:
     from .user import User
@@ -29,14 +28,10 @@ class DriverInfo(DriverInfoBase, table=True):
         back_populates="driver_info")
     documents: List["DriverDocuments"] = Relationship(
         back_populates="driver_info")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(
-        pytz.timezone("America/Bogota")), nullable=False)
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(pytz.timezone("America/Bogota")),
-        nullable=False,
-        sa_column_kwargs={"onupdate": lambda: datetime.now(
-            pytz.timezone("America/Bogota"))}
-    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
 
 
 class DriverInfoCreate(DriverInfoBase):

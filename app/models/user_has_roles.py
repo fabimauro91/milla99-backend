@@ -3,9 +3,6 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
-import pytz
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class RoleStatus(str, Enum):
@@ -26,6 +23,6 @@ class UserHasRole(SQLModel, table=True):
     verified_at: Optional[datetime] = Field(default=None)
     suspension: bool = Field(default=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(
-        COLOMBIA_TZ), nullable=False, sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)})
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})

@@ -2,16 +2,12 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from enum import Enum
 from datetime import datetime
-import pytz
 
 
 class AllowedRole(str, Enum):
     DRIVER = "DRIVER"
     CLIENT = "CLIENT"
     ADMIN = "ADMIN"
-
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class TypeService(SQLModel, table=True):
@@ -22,12 +18,9 @@ class TypeService(SQLModel, table=True):
     vehicle_type_id: int = Field(foreign_key="vehicle_type.id")
     allowed_role: AllowedRole
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ),
-        nullable=False,
-        sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)}
-    )
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
 
     # Relaciones
     vehicle_type: "VehicleType" = Relationship(back_populates="type_services")

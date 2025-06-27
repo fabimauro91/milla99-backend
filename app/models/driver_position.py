@@ -5,10 +5,6 @@ from geoalchemy2 import Geometry
 from pydantic import BaseModel
 from uuid import UUID
 from datetime import datetime
-import pytz
-
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class DriverPosition(SQLModel, table=True):
@@ -20,10 +16,8 @@ class DriverPosition(SQLModel, table=True):
             nullable=False
         )
     )
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(
-        COLOMBIA_TZ), nullable=False, sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)})
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
     user: Optional["User"] = Relationship(back_populates="driver_position")
 
 

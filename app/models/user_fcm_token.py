@@ -2,9 +2,6 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional
 from uuid import UUID, uuid4
 from datetime import datetime
-import pytz
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class UserFCMToken(SQLModel, table=True):
@@ -22,9 +19,9 @@ class UserFCMToken(SQLModel, table=True):
     last_used: Optional[datetime] = Field(
         default_factory=datetime.utcnow, description="Última vez que se usó el token")
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(COLOMBIA_TZ),
-                                 nullable=False, sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)})
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
 
     # Relación inversa (opcional, si quieres acceder desde User)
     # user: Optional["User"] = Relationship(back_populates="fcm_tokens")

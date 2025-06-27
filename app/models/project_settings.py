@@ -1,9 +1,6 @@
 from sqlmodel import SQLModel, Field
 from datetime import datetime
 from typing import Optional
-import pytz
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class ProjectSettingsBase(SQLModel):
@@ -30,9 +27,9 @@ class ProjectSettings(ProjectSettingsBase, table=True):
     __tablename__ = "project_settings"
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(
-        COLOMBIA_TZ), nullable=False, sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)})
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
 
 
 class ProjectSettingsCreate(ProjectSettingsBase):

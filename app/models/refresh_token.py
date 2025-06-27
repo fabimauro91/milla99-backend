@@ -2,9 +2,6 @@ from datetime import datetime
 from typing import Optional
 from sqlmodel import SQLModel, Field, Relationship
 from uuid import UUID, uuid4
-import pytz
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class RefreshToken(SQLModel, table=True):
@@ -16,10 +13,8 @@ class RefreshToken(SQLModel, table=True):
     token_hash: str = Field(max_length=255, index=True)
     expires_at: datetime = Field(index=True)
     is_revoked: bool = Field(default=False, index=True)
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ))
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Información adicional para auditoría
     user_agent: Optional[str] = Field(default=None, max_length=500)

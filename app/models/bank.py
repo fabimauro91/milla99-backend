@@ -1,8 +1,5 @@
 from sqlmodel import SQLModel, Field
 from datetime import datetime
-import pytz
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
 
 class Bank(SQLModel, table=True):
@@ -13,6 +10,6 @@ class Bank(SQLModel, table=True):
                            unique=True, index=True)
     bank_name: str = Field(max_length=100, nullable=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False, sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)})
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})

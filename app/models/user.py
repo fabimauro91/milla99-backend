@@ -9,7 +9,6 @@ from app.models.user_has_roles import UserHasRole
 from app.models.driver_documents import DriverDocuments
 from sqlalchemy.orm import relationship
 from uuid import UUID, uuid4
-import pytz
 
 
 # Custom validated types
@@ -38,12 +37,9 @@ class User(UserBase, table=True):
         default_factory=uuid4, primary_key=True, unique=True)
     selfie_url: Optional[str] = None
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ), nullable=False)
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(COLOMBIA_TZ),
-        nullable=False,
-        sa_column_kwargs={"onupdate": lambda: datetime.now(COLOMBIA_TZ)}
-    )
+        default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow,
+                                 nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
 
     # Relaciones
     roles: List["Role"] = Relationship(
@@ -195,6 +191,3 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
-
-
-COLOMBIA_TZ = pytz.timezone("America/Bogota")
