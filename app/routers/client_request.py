@@ -34,6 +34,7 @@ from datetime import datetime
 from app.utils.geo import wkb_to_coords
 from uuid import UUID
 from app.core.dependencies.auth import get_current_user
+from app.utils.timezone_utils import utc_to_colombia
 
 bearer_scheme = HTTPBearer()
 
@@ -64,6 +65,8 @@ class ClientRequestResponse(BaseModel):
     type_service_name: str | None = None
     created_at: str
     updated_at: str
+    created_at_colombia: str | None = None
+    updated_at_colombia: str | None = None
 
 
 class AssignDriverRequest(BaseModel):
@@ -371,7 +374,9 @@ def create_request(
             "pickup_position": wkb_to_coords(db_obj.pickup_position),
             "destination_position": wkb_to_coords(db_obj.destination_position),
             "created_at": db_obj.created_at.isoformat(),
+            "created_at_colombia": utc_to_colombia(db_obj.created_at).isoformat(),
             "updated_at": db_obj.updated_at.isoformat(),
+            "updated_at_colombia": utc_to_colombia(db_obj.updated_at).isoformat(),
             "type_service_id": db_obj.type_service_id,
             "type_service_name": type_service.name if type_service else None
         }
