@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from uuid import UUID
 from app.models.user import User
 from app.utils.balance_notifications import check_and_notify_low_balance
+from app.core.cache import get_cached_user_balance, set_cached_user_balance, invalidate_user_balance_cache
 
 
 class TransactionService:
@@ -133,6 +134,9 @@ class TransactionService:
         )
         self.session.add(transaction)
         # No commit aquí
+
+        # Invalidar cache de balance del usuario
+        invalidate_user_balance_cache(str(user_id))
         if type != TransactionType.BONUS:
             return {
                 "message": "Transacción exitosa",
@@ -148,6 +152,12 @@ class TransactionService:
             }
 
     def get_user_balance(self, user_id: UUID):
+        # Intentar obtener del cache primero
+        cached_balance = get_cached_user_balance(str(user_id))
+        if cached_balance:
+            return cached_balance
+
+        # Si no está en cache, calcular desde base de datos
         total_income = self.session.query(func.sum(Transaction.income)).filter(
             Transaction.user_id == user_id).scalar() or 0
         total_expense = self.session.query(func.sum(Transaction.expense)).filter(
@@ -162,11 +172,17 @@ class TransactionService:
         verify_mount = self.session.query(VerifyMount).filter(
             VerifyMount.user_id == user_id).first()
         mount = verify_mount.mount if verify_mount else 0
-        return {
+
+        balance = {
             "available": available,
             "withdrawable": withdrawable,
             "mount": mount
         }
+
+        # Cachear resultado
+        set_cached_user_balance(str(user_id), balance)
+
+        return balance
 
     def list_transactions(self, user_id: UUID):
         return self.session.query(Transaction).filter(Transaction.user_id == user_id).order_by(Transaction.date.desc()).all()

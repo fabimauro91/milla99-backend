@@ -8,6 +8,7 @@ from app.services.config_service_value_service import ConfigServiceValueService
 from app.utils.geo_utils import get_time_and_distance_from_google, wkb_to_coords
 from datetime import datetime, timedelta
 import pytz
+from app.core.cache import get_cached_driver_search, set_cached_driver_search, invalidate_driver_search_cache
 
 COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
@@ -62,6 +63,13 @@ class DriverSearchService:
             Lista de conductores disponibles ordenados por proximidad
         """
         try:
+            # Intentar obtener del cache primero
+            cached_drivers = get_cached_driver_search(
+                latitude, longitude, vehicle_type_id)
+            if cached_drivers:
+                return cached_drivers
+
+            # Si no está en cache, buscar en base de datos
             # Query base para conductores disponibles
             # Un conductor está disponible si:
             # 1. No tiene solicitudes pendientes
@@ -123,6 +131,10 @@ class DriverSearchService:
 
             # Ordenar por distancia (más cercanos primero)
             drivers_with_distance.sort(key=lambda x: x["distance"])
+
+            # Cachear resultado
+            set_cached_driver_search(
+                latitude, longitude, vehicle_type_id, drivers_with_distance)
 
             return drivers_with_distance
 

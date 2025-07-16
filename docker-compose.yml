@@ -47,6 +47,21 @@ services:
       - milla99-network
 
   # ============================================================================
+  # SERVICIO: REDIS CACHE
+  # ============================================================================
+  milla99-redis:
+    image: redis:7-alpine
+    container_name: milla99-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - milla99-redis-data:/data
+    networks:
+      - milla99-network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ============================================================================
   # SERVICIO: PHPMYADMIN (GESTIÓN VISUAL DE BD - OPCIONAL)
   # ============================================================================
   milla99-phpmyadmin:
@@ -72,6 +87,8 @@ volumes:
   milla99-mysql-data:
     driver: local
   milla99-mysql-backups:
+    driver: local
+  milla99-redis-data:
     driver: local
 
 # ============================================================================

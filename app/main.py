@@ -11,6 +11,7 @@ from app.routers.bank import router as bank_router
 from app.routers.test_runner import router as test_runner_router
 from app.routers.metrics import router as metrics_router
 from app.routers.admin_logs import router as admin_logs_router
+from app.routers.cache_test import router as cache_test_router
 
 from .core.db import create_all_tables, get_environment_info
 from .core.config import settings
@@ -97,6 +98,7 @@ fastapi_app.include_router(transaction_admin.router)
 fastapi_app.include_router(test_runner_router)
 fastapi_app.include_router(metrics_router)
 fastapi_app.include_router(admin_logs_router)
+fastapi_app.include_router(cache_test_router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

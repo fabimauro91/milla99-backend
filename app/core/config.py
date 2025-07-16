@@ -64,6 +64,16 @@ class Settings(BaseSettings):
     FIREBASE_CLIENT_ID: Optional[str] = None
     FIREBASE_CLIENT_CERT_URL: Optional[str] = None
 
+    # Configuración de Redis Cache
+    REDIS_URL: str = "redis://localhost:6379"
+    # Alternativa: Redis Cloud (gratis)
+    # REDIS_URL: str = "redis://username:password@redis-cloud-host:port"
+    REDIS_CACHE_TTL: int = 300  # 5 minutos por defecto
+    REDIS_USER_BALANCE_TTL: int = 60  # 1 minuto para balance de usuario
+    REDIS_PROJECT_SETTINGS_TTL: int = 300  # 5 minutos para configuraciones
+    REDIS_STATISTICS_TTL: int = 600  # 10 minutos para estadísticas
+    REDIS_DRIVER_SEARCH_TTL: int = 120    # 2 minutos para búsqueda de conductores
+
     model_config = ConfigDict(
         env_file=".env",  # Por defecto, pero se sobreescribe abajo
         case_sensitive=True,

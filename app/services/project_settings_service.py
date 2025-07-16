@@ -3,26 +3,49 @@ from fastapi import HTTPException
 from app.models.project_settings import ProjectSettings, ProjectSettingsUpdate, ProjectSettingsCreate
 from datetime import datetime
 from typing import Dict
+from app.core.cache import get_cached_project_settings, set_cached_project_settings
 
 
 def get_busy_driver_config(session: Session) -> Dict[str, float]:
     """
     Obtiene la configuración para conductores ocupados desde project_settings
     """
+    # Intentar obtener del cache primero
+    cached_settings = get_cached_project_settings()
+    if cached_settings:
+        return {
+            "max_wait_time": cached_settings.get("max_wait_time_for_busy_driver", 15.0),
+            "max_distance": cached_settings.get("max_distance_for_busy_driver", 2.0),
+            "max_transit_time": cached_settings.get("max_transit_time_for_busy_driver", 5.0)
+        }
+
+    # Si no está en cache, consultar base de datos
     settings = session.query(ProjectSettings).first()
     if not settings:
         # Valores por defecto si no hay configuración
-        return {
+        default_config = {
             "max_wait_time": 15.0,
             "max_distance": 2.0,
             "max_transit_time": 5.0
         }
+        return default_config
 
-    return {
+    # Crear configuración y cachearla
+    config = {
         "max_wait_time": settings.max_wait_time_for_busy_driver or 15.0,
         "max_distance": settings.max_distance_for_busy_driver or 2.0,
         "max_transit_time": settings.max_transit_time_for_busy_driver or 5.0
     }
+
+    # Cachear configuración completa
+    settings_dict = {
+        "max_wait_time_for_busy_driver": config["max_wait_time"],
+        "max_distance_for_busy_driver": config["max_distance"],
+        "max_transit_time_for_busy_driver": config["max_transit_time"]
+    }
+    set_cached_project_settings(settings_dict)
+
+    return config
 
 
 def update_project_settings_service(session: Session, settings_data: ProjectSettingsUpdate):
