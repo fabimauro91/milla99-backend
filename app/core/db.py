@@ -15,7 +15,7 @@ from app.models import (
 )
 
 # ============================================================================
-# CONFIGURACIÓN DE BASE DE DATOS DINÁMICA
+# CONFIGURACIÓN DE BASE DE DATOS DINÁMICA CON CONNECTION POOLING
 # ============================================================================
 
 
@@ -49,8 +49,40 @@ def validate_database_environment():
     print(f" URL de base de datos: {get_database_url()}")
 
 
-# Crear el engine con la URL dinámica
-engine = create_engine(get_database_url(), echo=False)
+# ============================================================================
+# CONNECTION POOLING OPTIMIZADO
+# ============================================================================
+
+def create_optimized_engine():
+    """Crea un engine optimizado con connection pooling"""
+    database_url = get_database_url()
+
+    # Configuración de connection pooling optimizada
+    pool_config = {
+        "pool_size": 20,  # Número de conexiones en el pool
+        "max_overflow": 30,  # Conexiones adicionales si el pool está lleno
+        "pool_pre_ping": True,  # Verificar conexiones antes de usar
+        "pool_recycle": 3600,  # Reciclar conexiones cada hora
+        "pool_timeout": 30,  # Timeout para obtener conexión del pool
+        "echo": False,  # No mostrar SQL en logs
+    }
+
+    # Crear engine con pooling
+    engine = create_engine(
+        database_url,
+        **pool_config
+    )
+
+    print(f"🔧 Engine creado con connection pooling:")
+    print(f"   - Pool size: {pool_config['pool_size']}")
+    print(f"   - Max overflow: {pool_config['max_overflow']}")
+    print(f"   - Pool timeout: {pool_config['pool_timeout']}s")
+
+    return engine
+
+
+# Crear el engine optimizado
+engine = create_optimized_engine()
 
 
 def create_all_tables():
@@ -68,6 +100,40 @@ def get_session():
 
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+# ============================================================================
+# FUNCIONES DE MONITOREO DEL POOL
+# ============================================================================
+
+
+def get_pool_status():
+    """Obtiene el estado del connection pool"""
+    try:
+        pool = engine.pool
+        return {
+            "pool_size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "invalid": pool.invalid()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def print_pool_stats():
+    """Imprime estadísticas del connection pool"""
+    stats = get_pool_status()
+    if "error" not in stats:
+        print(f"📊 Connection Pool Stats:")
+        print(f"   - Pool size: {stats['pool_size']}")
+        print(f"   - Checked in: {stats['checked_in']}")
+        print(f"   - Checked out: {stats['checked_out']}")
+        print(f"   - Overflow: {stats['overflow']}")
+        print(f"   - Invalid: {stats['invalid']}")
+    else:
+        print(f"❌ Error obteniendo stats del pool: {stats['error']}")
+
 
 # ============================================================================
 # FUNCIONES DE VALIDACIÓN ADICIONALES
@@ -104,5 +170,6 @@ def get_environment_info() -> dict:
         "is_development": settings.is_development,
         "is_qa": settings.is_qa,
         "is_production": settings.is_production,
-        "safe_for_init": is_safe_for_data_initialization()
+        "safe_for_init": is_safe_for_data_initialization(),
+        "pool_status": get_pool_status()
     }
