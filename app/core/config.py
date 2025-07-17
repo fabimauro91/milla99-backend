@@ -64,6 +64,15 @@ class Settings(BaseSettings):
     FIREBASE_CLIENT_ID: Optional[str] = None
     FIREBASE_CLIENT_CERT_URL: Optional[str] = None
 
+    # ============================================================================
+    # CONFIGURACIÓN AWS PARA VERIFICACIÓN DE DOCUMENTOS
+    # ============================================================================
+    # IMPORTANTE: Reemplazar con tus credenciales reales de AWS
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_REGION: str = "us-east-1"
+    AWS_REKOGNITION_COLLECTION_ID: str = "milla99-drivers"
+
     model_config = ConfigDict(
         env_file=".env",  # Por defecto, pero se sobreescribe abajo
         case_sensitive=True,
