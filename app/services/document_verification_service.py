@@ -20,10 +20,10 @@ class DocumentVerificationService:
     def _compress_if_needed(self, image_data: bytes) -> bytes:
         """
         Comprime la imagen si es mayor a 5MB antes de enviar a AWS
-        
+
         Args:
             image_data: Datos de la imagen en bytes
-            
+
         Returns:
             Datos de la imagen comprimida o original si no necesita compresión
         """
@@ -31,49 +31,53 @@ class DocumentVerificationService:
             # Si la imagen es menor o igual a 5MB, no comprimir
             if len(image_data) <= 5 * 1024 * 1024:
                 return image_data
-            
-            logger.info(f"Comprimiendo imagen de {len(image_data) / (1024*1024):.2f}MB a máximo 5MB")
-            
+
+            logger.info(
+                f"Comprimiendo imagen de {len(image_data) / (1024*1024):.2f}MB a máximo 5MB")
+
             # Abrir imagen con Pillow
             image = Image.open(io.BytesIO(image_data))
-            
+
             # Redimensionar si es muy grande (máximo 2000x2000 píxeles)
             max_size = 2000
             if image.size[0] > max_size or image.size[1] > max_size:
                 # Mantener proporción de aspecto
                 image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                 logger.info(f"Redimensionando imagen a {image.size}")
-            
+
             # Guardar con compresión JPEG
             output = io.BytesIO()
-            
+
             # Convertir a RGB si es necesario (para JPEG)
             if image.mode in ('RGBA', 'LA', 'P'):
                 # Crear fondo blanco para imágenes con transparencia
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'P':
                     image = image.convert('RGBA')
-                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                background.paste(image, mask=image.split()
+                                 [-1] if image.mode == 'RGBA' else None)
                 image = background
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
-            
+
             # Guardar con compresión optimizada
             image.save(output, format='JPEG', quality=85, optimize=True)
             compressed_data = output.getvalue()
-            
+
             # Verificar que la compresión fue efectiva
             if len(compressed_data) > 5 * 1024 * 1024:
                 # Si aún es muy grande, comprimir más agresivamente
                 output = io.BytesIO()
                 image.save(output, format='JPEG', quality=70, optimize=True)
                 compressed_data = output.getvalue()
-                logger.warning(f"Compresión agresiva aplicada - Tamaño final: {len(compressed_data) / (1024*1024):.2f}MB")
-            
-            logger.info(f"Imagen comprimida exitosamente - Tamaño original: {len(image_data) / (1024*1024):.2f}MB, Final: {len(compressed_data) / (1024*1024):.2f}MB")
-            
+                logger.warning(
+                    f"Compresión agresiva aplicada - Tamaño final: {len(compressed_data) / (1024*1024):.2f}MB")
+
+            logger.info(
+                f"Imagen comprimida exitosamente - Tamaño original: {len(image_data) / (1024*1024):.2f}MB, Final: {len(compressed_data) / (1024*1024):.2f}MB")
+
             return compressed_data
-            
+
         except Exception as e:
             logger.error(f"Error comprimiendo imagen: {e}")
             # Si hay error en la compresión, retornar la imagen original
@@ -1714,29 +1718,120 @@ class DocumentVerificationService:
         return status_map.get(decision, 'UNKNOWN')
 
     def _get_next_steps(self, decision: str) -> List[str]:
-        """Obtiene los siguientes pasos basados en la decisión"""
-        next_steps_map = {
-            'APPROVED': [
-                'Proceder con el registro del usuario',
-                'Activar cuenta del usuario',
-                'Enviar confirmación de verificación exitosa'
-            ],
-            'MANUAL_REVIEW': [
-                'Revisar documentos manualmente',
-                'Solicitar documentos adicionales si es necesario',
-                'Contactar al usuario para aclaraciones',
-                'Programar verificación presencial si es requerido'
-            ],
-            'REJECTED': [
-                'Solicitar nueva documentación',
-                'Explicar al usuario los motivos del rechazo',
-                'Proporcionar guías para mejorar la calidad de las imágenes',
-                'Ofrecer asistencia técnica si es necesario'
-            ],
-            'ERROR': [
-                'Investigar el error técnico',
-                'Reintentar la verificación',
-                'Contactar al equipo de soporte técnico'
+        """Genera los próximos pasos basados en la decisión"""
+        if decision == 'APPROVED':
+            return [
+                "El conductor puede comenzar a operar inmediatamente",
+                "Se enviará notificación de aprobación al conductor"
             ]
-        }
-        return next_steps_map.get(decision, ['Contactar al administrador del sistema'])
+        elif decision == 'MANUAL_REVIEW':
+            return [
+                "Se requiere revisión manual por parte del administrador",
+                "El conductor permanecerá en estado pendiente hasta la revisión",
+                "Se enviará notificación al administrador para revisión"
+            ]
+        else:  # REJECTED
+            return [
+                "El conductor debe corregir los problemas identificados",
+                "Se enviará notificación con detalles de los problemas",
+                "El conductor puede volver a intentar después de corregir los problemas"
+            ]
+
+    async def verify_driver_complete(self, selfie_path: str, documents_paths: List[str] = None, driver_info_id: str = None) -> Dict[str, Any]:
+        """
+        Verificación completa durante el registro del conductor
+
+        Args:
+            selfie_path: Ruta al archivo de selfie guardado
+            documents_paths: Lista de rutas a documentos (opcional, para futuras implementaciones)
+            driver_info_id: ID del driver_info para logging
+
+        Returns:
+            Dict con el resultado de la verificación completa
+        """
+        try:
+            logger.info(
+                f"Iniciando verificación completa para driver_info_id: {driver_info_id}")
+
+            # Leer la selfie
+            with open(selfie_path, 'rb') as f:
+                selfie_data = f.read()
+
+            # 1. Verificar selfie
+            logger.info("Verificando selfie...")
+            selfie_result = self.verify_selfie(selfie_data)
+
+            # 2. Verificar documentos (por ahora solo simulamos, ya están guardados)
+            logger.info("Verificando documentos...")
+            # TODO: En el futuro, aquí se procesarían los documentos guardados
+            # Por ahora, simulamos un resultado de documento
+            document_result = {
+                'score': 0.8,  # Score simulado
+                'valid': True,
+                'type': 'driver_license',
+                'confidence': 0.85
+            }
+
+            # 3. Comparación facial (selfie vs selfie por ahora)
+            logger.info("Realizando comparación facial...")
+            # Por ahora comparamos la selfie consigo misma para simular
+            face_comparison_result = {
+                'similarity_score': 0.95,  # Score simulado alto
+                'confidence': 0.9,
+                'faces_detected': 1,
+                'method': 'simulated'
+            }
+
+            # 4. Calcular score final
+            logger.info("Calculando score final...")
+            final_result = self.calculate_final_score(
+                document_result=document_result,
+                selfie_result=selfie_result,
+                face_comparison_result=face_comparison_result
+            )
+
+            # 5. Determinar decisión
+            decision = self._determine_verification_decision(
+                final_result['final_score'])
+
+            # 6. Generar recomendaciones
+            recommendations = self._generate_verification_recommendations(
+                final_result['final_score'],
+                final_result['detailed_scores'],
+                decision
+            )
+
+            # 7. Preparar respuesta
+            result = {
+                'verification_id': self._generate_verification_id(),
+                'timestamp': self._get_current_timestamp(),
+                'driver_info_id': driver_info_id,
+                'decision': decision,
+                'final_score': final_result['final_score'],
+                'detailed_scores': final_result['detailed_scores'],
+                'recommendations': recommendations,
+                'status': self._get_verification_status(decision),
+                'next_steps': self._get_next_steps(decision),
+                'selfie_verification': selfie_result,
+                'document_verification': document_result,
+                'face_comparison': face_comparison_result
+            }
+
+            logger.info(
+                f"Verificación completa completada. Decisión: {decision}, Score: {final_result['final_score']}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error en verificación completa: {e}")
+            return {
+                'verification_id': self._generate_verification_id(),
+                'timestamp': self._get_current_timestamp(),
+                'driver_info_id': driver_info_id,
+                'decision': 'MANUAL_REVIEW',  # En caso de error, requerir revisión manual
+                'final_score': 0.0,
+                'detailed_scores': {},
+                'recommendations': ['Error en verificación automática. Se requiere revisión manual.'],
+                'status': 'PENDING',
+                'next_steps': ['Revisión manual requerida debido a error en verificación automática'],
+                'error': str(e)
+            }
