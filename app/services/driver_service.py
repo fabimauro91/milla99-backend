@@ -357,6 +357,17 @@ class DriverService:
                     print(
                         f"Recomendaciones: {verification_result['recommendations']}")
 
+                    # ============================================================================
+                    # ACTUALIZAR DRIVER_INFO CON RESULTADOS DE VERIFICACIÓN
+                    # ============================================================================
+                    driver_info.document_verification_status = verification_result['decision']
+                    driver_info.document_verification_score = verification_result['final_score']
+                    driver_info.document_verification_details = verification_result
+                    driver_info.document_verification_date = datetime.now()
+                    driver_info.document_verification_id = verification_result['verification_id']
+                    driver_info.verification_attempts += 1
+                    driver_info.last_verification_attempt = datetime.now()
+
                     # Actualizar el estado del rol DRIVER basado en la verificación automática
                     driver_role_record = session.exec(
                         select(UserHasRole).where(
@@ -365,32 +376,76 @@ class DriverService:
                         )
                     ).first()
 
+                    # Importar el servicio de notificaciones
+                    from app.services.notification_service import NotificationService
+                    notification_service = NotificationService(session)
+
                     if driver_role_record:
                         if verification_result['decision'] == 'APPROVED':
                             # Aprobación automática
                             driver_role_record.is_verified = True
                             driver_role_record.status = RoleStatus.APPROVED
-                            driver_role_record.verified_at = datetime.utcnow()
-                            print("✅ Conductor aprobado automáticamente")
+                            driver_role_record.verified_at = datetime.now()
+                            session.add(driver_role_record)
+                            session.commit()
+                            session.refresh(driver_role_record)
+
+                            # Enviar notificación de aprobación
+                            notification_result = notification_service.notify_verification_approved(
+                                user.id)
+                            print(
+                                f"✅ Conductor aprobado automáticamente. Notificación: {notification_result}")
+
                         elif verification_result['decision'] == 'MANUAL_REVIEW':
                             # Requiere revisión manual
                             driver_role_record.is_verified = False
                             driver_role_record.status = RoleStatus.PENDING
-                            print("⚠️ Conductor requiere revisión manual")
+                            session.add(driver_role_record)
+                            session.commit()
+                            session.refresh(driver_role_record)
+
+                            # Enviar notificación de revisión manual
+                            notification_result = notification_service.notify_verification_manual_review(
+                                user.id)
+                            print(
+                                f"⚠️ Conductor requiere revisión manual. Notificación: {notification_result}")
+
                         else:  # REJECTED
                             # Rechazado automáticamente
                             driver_role_record.is_verified = False
                             driver_role_record.status = RoleStatus.PENDING
-                            print("❌ Conductor rechazado automáticamente")
+                            session.add(driver_role_record)
+                            session.commit()
+                            session.refresh(driver_role_record)
 
-                        session.add(driver_role_record)
-                        session.commit()
-                        session.refresh(driver_role_record)
+                            # Enviar notificación de rechazo
+                            recommendations = verification_result.get(
+                                'recommendations', [])
+                            notification_result = notification_service.notify_verification_rejected(
+                                user.id, recommendations)
+                            print(
+                                f"❌ Conductor rechazado automáticamente. Notificación: {notification_result}")
+
+                    # Guardar los cambios en DriverInfo
+                    session.add(driver_info)
+                    session.commit()
+                    session.refresh(driver_info)
 
                 except Exception as e:
                     print(f"⚠️ Error en verificación automática: {str(e)}")
                     # En caso de error, mantener estado PENDING para revisión manual
                     print("Manteniendo estado PENDING para revisión manual")
+
+                    # Actualizar DriverInfo con estado de error
+                    driver_info.document_verification_status = "MANUAL_REVIEW"
+                    driver_info.document_verification_score = 0.0
+                    driver_info.document_verification_details = {
+                        "error": str(e)}
+                    driver_info.document_verification_date = datetime.now()
+                    driver_info.verification_attempts += 1
+                    driver_info.last_verification_attempt = datetime.now()
+                    session.add(driver_info)
+                    session.commit()
 
                 # Consultar documentos actualizados desde la base de datos
                 property_card_doc = session.exec(

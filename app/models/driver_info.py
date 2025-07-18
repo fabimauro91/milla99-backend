@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, String
-from typing import Optional, TYPE_CHECKING, List
+from sqlalchemy import Column, String, JSON
+from typing import Optional, TYPE_CHECKING, List, Dict
 from datetime import date, datetime
 from uuid import UUID, uuid4
 import pytz
@@ -42,6 +42,39 @@ class DriverInfo(DriverInfoBase, table=True):
         description="Fecha y hora cuando el conductor aceptó la solicitud pendiente"
     )
 
+    # ============================================================================
+    # CAMPOS PARA VERIFICACIÓN DE DOCUMENTOS
+    # ============================================================================
+    document_verification_status: Optional[str] = Field(
+        default="PENDING",
+        description="Estado de verificación de documentos: PENDING, APPROVED, REJECTED, MANUAL_REVIEW"
+    )
+    document_verification_score: Optional[float] = Field(
+        default=0.0,
+        description="Puntuación de verificación de documentos (0.0 - 1.0)"
+    )
+    document_verification_details: Optional[Dict] = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="Detalles completos de la verificación de documentos"
+    )
+    document_verification_date: Optional[datetime] = Field(
+        default=None,
+        description="Fecha y hora de la última verificación de documentos"
+    )
+    document_verification_id: Optional[str] = Field(
+        default=None,
+        description="ID único de la verificación de documentos"
+    )
+    verification_attempts: int = Field(
+        default=0,
+        description="Número de intentos de verificación realizados"
+    )
+    last_verification_attempt: Optional[datetime] = Field(
+        default=None,
+        description="Fecha y hora del último intento de verificación"
+    )
+
     # Relación con la solicitud pendiente
     pending_request: Optional["ClientRequest"] = Relationship(
         back_populates="driver_pending_request"
@@ -69,3 +102,11 @@ class DriverInfoUpdate(SQLModel):
     # selfie_url: Optional[str] = None  # Eliminado
     pending_request_id: Optional[UUID] = None
     pending_request_accepted_at: Optional[datetime] = None
+    # Campos de verificación de documentos
+    document_verification_status: Optional[str] = None
+    document_verification_score: Optional[float] = None
+    document_verification_details: Optional[Dict] = None
+    document_verification_date: Optional[datetime] = None
+    document_verification_id: Optional[str] = None
+    verification_attempts: Optional[int] = None
+    last_verification_attempt: Optional[datetime] = None

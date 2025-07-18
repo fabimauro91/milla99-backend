@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from uuid import UUID
 
 
@@ -253,11 +253,82 @@ class NotificationTemplates:
             message += f": {reason}"
 
         return {
-            "title": "Solicitud pendiente cancelada",
+            "title": "Solicitud cancelada",
             "body": message,
             "data": {
                 "type": "pending_request_cancelled",
                 "request_id": str(request_id),
-                "action": "find_new_trip"
+                "action": "create_new_request"
+            }
+        }
+
+    # ===== NOTIFICACIONES DE VERIFICACIÓN DE DOCUMENTOS =====
+
+    @staticmethod
+    def verification_approved() -> Dict[str, Any]:
+        """Notificación cuando la verificación de documentos es aprobada automáticamente"""
+        return {
+            "title": "¡Verificación aprobada!",
+            "body": "Tu documentación ha sido verificada y aprobada automáticamente. Ya puedes comenzar a operar.",
+            "data": {
+                "type": "verification_approved",
+                "action": "start_operating"
+            }
+        }
+
+    @staticmethod
+    def verification_rejected(recommendations: List[str]) -> Dict[str, Any]:
+        """Notificación cuando la verificación de documentos es rechazada"""
+        recommendations_text = "\n".join(
+            # Máximo 3 recomendaciones
+            [f"• {rec}" for rec in recommendations[:3]])
+        return {
+            "title": "Verificación rechazada",
+            "body": f"Tu documentación no pudo ser verificada automáticamente. Revisa los detalles y vuelve a intentar:\n{recommendations_text}",
+            "data": {
+                "type": "verification_rejected",
+                "recommendations": recommendations,
+                "action": "review_documents"
+            }
+        }
+
+    @staticmethod
+    def verification_manual_review() -> Dict[str, Any]:
+        """Notificación cuando la verificación requiere revisión manual"""
+        return {
+            "title": "Verificación en revisión",
+            "body": "Tu documentación está siendo revisada manualmente por nuestro equipo. Te notificaremos cuando tengamos una respuesta.",
+            "data": {
+                "type": "verification_manual_review",
+                "action": "wait_for_review"
+            }
+        }
+
+    @staticmethod
+    def verification_manual_approved() -> Dict[str, Any]:
+        """Notificación cuando la verificación es aprobada manualmente por admin"""
+        return {
+            "title": "¡Verificación aprobada!",
+            "body": "Tu documentación ha sido revisada y aprobada por nuestro equipo. Ya puedes comenzar a operar.",
+            "data": {
+                "type": "verification_manual_approved",
+                "action": "start_operating"
+            }
+        }
+
+    @staticmethod
+    def verification_manual_rejected(reason: Optional[str] = None) -> Dict[str, Any]:
+        """Notificación cuando la verificación es rechazada manualmente por admin"""
+        message = "Tu documentación no fue aprobada después de la revisión manual"
+        if reason:
+            message += f": {reason}"
+
+        return {
+            "title": "Verificación no aprobada",
+            "body": message,
+            "data": {
+                "type": "verification_manual_rejected",
+                "reason": reason,
+                "action": "contact_support"
             }
         }

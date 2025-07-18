@@ -6,9 +6,12 @@ from app.core.dependencies.auth import get_current_user
 from app.models.user import User
 from app.core.db import SessionDep
 from app.services.document_verification_service import DocumentVerificationService
+from app.models.driver_info import DriverInfo
+from sqlmodel import select
 from PIL import Image
 import io
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +143,136 @@ async def get_verification_status(
     except Exception as e:
         logger.error(
             f"Error obteniendo estado de verificación para usuario {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.get("/driver-status", response_model=Dict[str, Any])
+async def get_driver_verification_status(
+    session: SessionDep,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Obtiene el estado de verificación de documentos del driver actual.
+
+    **Respuesta:**
+    Devuelve información detallada sobre el estado de verificación de documentos:
+    - Estado de verificación (PENDING, APPROVED, REJECTED, MANUAL_REVIEW)
+    - Puntuación de verificación
+    - Fecha de la última verificación
+    - Número de intentos realizados
+    - Detalles de la verificación
+    """
+    try:
+        # Buscar DriverInfo del usuario actual
+        driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.user_id == current_user.id)
+        ).first()
+
+        if not driver_info:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontró información de conductor para este usuario"
+            )
+
+        # Preparar respuesta con información de verificación
+        response = {
+            "user_id": str(current_user.id),
+            "driver_info_id": str(driver_info.id),
+            "verification_status": driver_info.document_verification_status,
+            "verification_score": driver_info.document_verification_score,
+            "verification_date": driver_info.document_verification_date.isoformat() if driver_info.document_verification_date else None,
+            "verification_attempts": driver_info.verification_attempts,
+            "last_attempt": driver_info.last_verification_attempt.isoformat() if driver_info.last_verification_attempt else None,
+            "verification_id": driver_info.document_verification_id,
+            "can_operate": driver_info.document_verification_status == "APPROVED",
+            "requires_manual_review": driver_info.document_verification_status == "MANUAL_REVIEW",
+            "needs_correction": driver_info.document_verification_status == "REJECTED"
+        }
+
+        # Agregar detalles de verificación si existen
+        if driver_info.document_verification_details:
+            response["verification_details"] = driver_info.document_verification_details
+            # Agregar recomendaciones si existen
+            if "recommendations" in driver_info.document_verification_details:
+                response["recommendations"] = driver_info.document_verification_details["recommendations"]
+
+        logger.info(
+            f"Estado de verificación consultado - User: {current_user.id} - Status: {driver_info.document_verification_status}"
+        )
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error obteniendo estado de verificación para usuario {current_user.id}: {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.post("/request-reverification", response_model=Dict[str, Any])
+async def request_reverification(
+    session: SessionDep,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Solicita una nueva verificación de documentos para el driver actual.
+
+    **Respuesta:**
+    Devuelve confirmación de la solicitud de re-verificación.
+    """
+    try:
+        # Buscar DriverInfo del usuario actual
+        driver_info = session.exec(
+            select(DriverInfo).where(DriverInfo.user_id == current_user.id)
+        ).first()
+
+        if not driver_info:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontró información de conductor para este usuario"
+            )
+
+        # Verificar que el estado actual permita re-verificación
+        if driver_info.document_verification_status == "APPROVED":
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede solicitar re-verificación cuando ya está aprobado"
+            )
+
+        # Actualizar estado para indicar nueva verificación pendiente
+        driver_info.document_verification_status = "PENDING"
+        driver_info.verification_attempts += 1
+        driver_info.last_verification_attempt = datetime.now()
+
+        session.add(driver_info)
+        session.commit()
+        session.refresh(driver_info)
+
+        logger.info(
+            f"Re-verificación solicitada - User: {current_user.id} - Intentos: {driver_info.verification_attempts}"
+        )
+
+        return {
+            "message": "Solicitud de re-verificación registrada exitosamente",
+            "user_id": str(current_user.id),
+            "verification_attempts": driver_info.verification_attempts,
+            "last_attempt": driver_info.last_verification_attempt.isoformat() if driver_info.last_verification_attempt else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error solicitando re-verificación para usuario {current_user.id}: {e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}"

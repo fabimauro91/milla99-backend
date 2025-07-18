@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, UploadFile, File
+from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, UploadFile, File, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Dict, Any
+from datetime import datetime
 
 from app.core.dependencies.admin_auth import get_current_admin
 from app.models.user import UserRead
@@ -15,6 +16,7 @@ from app.models.driver_documents import DocumentsUpdate, DriverDocumentsCreateRe
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.services.document_verification_service import DocumentVerificationService
+from app.services.notification_service import NotificationService
 
 
 bearer_scheme = HTTPBearer()
@@ -360,4 +362,149 @@ def force_approve_driver(
             "is_verified": user_role.is_verified,
             "status": user_role.status
         }
+    }
+
+
+@router.post("/manual-approve-driver/{user_id}")
+def manual_approve_driver(
+    user_id: str,
+    session: SessionDep
+):
+    """
+    Aprobar manualmente un conductor después de revisión administrativa.
+    Envía notificación de aprobación al conductor.
+    """
+    from uuid import UUID
+    from sqlmodel import select
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+    from app.models.driver_info import DriverInfo
+    from app.services.notification_service import NotificationService
+
+    try:
+        user_uuid = UUID(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Buscar el UserHasRole del conductor
+    user_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user_uuid,
+            UserHasRole.id_rol == "DRIVER"
+        )
+    ).first()
+
+    if not user_role:
+        raise HTTPException(status_code=404, detail="Driver role not found")
+
+    # Buscar DriverInfo
+    driver_info = session.exec(
+        select(DriverInfo).where(DriverInfo.user_id == user_uuid)
+    ).first()
+
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
+
+    # Aprobar conductor
+    user_role.is_verified = True
+    user_role.status = RoleStatus.APPROVED
+    user_role.verified_at = datetime.now()
+
+    # Actualizar estado de verificación en DriverInfo
+    driver_info.document_verification_status = "APPROVED"
+    driver_info.document_verification_date = datetime.now()
+
+    session.add(user_role)
+    session.add(driver_info)
+    session.commit()
+    session.refresh(user_role)
+    session.refresh(driver_info)
+
+    # Enviar notificación de aprobación manual
+    notification_service = NotificationService(session)
+    notification_result = notification_service.notify_verification_manual_approved(
+        user_uuid)
+
+    return {
+        "message": "Driver manually approved",
+        "user_id": str(user_uuid),
+        "new_status": {
+            "is_verified": user_role.is_verified,
+            "status": user_role.status,
+            "verified_at": user_role.verified_at.isoformat() if user_role.verified_at else None
+        },
+        "verification_status": driver_info.document_verification_status,
+        "notification_result": notification_result
+    }
+
+
+@router.post("/manual-reject-driver/{user_id}")
+def manual_reject_driver(
+    user_id: str,
+    session: SessionDep,
+    reason: str = Query(None, description="Razón del rechazo manual")
+):
+    """
+    Rechazar manualmente un conductor después de revisión administrativa.
+    Envía notificación de rechazo al conductor.
+    """
+    from uuid import UUID
+    from sqlmodel import select
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+    from app.models.driver_info import DriverInfo
+    from app.services.notification_service import NotificationService
+
+    try:
+        user_uuid = UUID(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Buscar el UserHasRole del conductor
+    user_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user_uuid,
+            UserHasRole.id_rol == "DRIVER"
+        )
+    ).first()
+
+    if not user_role:
+        raise HTTPException(status_code=404, detail="Driver role not found")
+
+    # Buscar DriverInfo
+    driver_info = session.exec(
+        select(DriverInfo).where(DriverInfo.user_id == user_uuid)
+    ).first()
+
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
+
+    # Rechazar conductor
+    user_role.is_verified = False
+    # Mantener en PENDING para que pueda corregir
+    user_role.status = RoleStatus.PENDING
+
+    # Actualizar estado de verificación en DriverInfo
+    driver_info.document_verification_status = "REJECTED"
+    driver_info.document_verification_date = datetime.now()
+
+    session.add(user_role)
+    session.add(driver_info)
+    session.commit()
+    session.refresh(user_role)
+    session.refresh(driver_info)
+
+    # Enviar notificación de rechazo manual
+    notification_service = NotificationService(session)
+    notification_result = notification_service.notify_verification_manual_rejected(
+        user_uuid, reason)
+
+    return {
+        "message": "Driver manually rejected",
+        "user_id": str(user_uuid),
+        "new_status": {
+            "is_verified": user_role.is_verified,
+            "status": user_role.status
+        },
+        "verification_status": driver_info.document_verification_status,
+        "rejection_reason": reason,
+        "notification_result": notification_result
     }
