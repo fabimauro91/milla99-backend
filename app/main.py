@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 
 # Imports de routers
-from app.routers import users, auth, drivers, client_request, trip_stops, driver_position, config_service_value, driver_trip_offer, withdrawal, driver_savings, referrals, user_fcm_token, chat, login_admin, verify_docs, config_service_value_admin, withdrawal_admin, project_settings, admin_statistics, admin_drivers, transaction_admin
+from app.routers import users, auth, drivers, client_request, trip_stops, driver_position, config_service_value, driver_trip_offer, withdrawal, driver_savings, referrals, user_fcm_token, chat, login_admin, verify_docs, config_service_value_admin, withdrawal_admin, project_settings, admin_statistics, admin_drivers, transaction_admin, document_verification
 from app.routers.transaction import router as transaction_router
 from app.routers.bank_accounts import router as bank_accounts_router
 from app.routers.bank import router as bank_router
@@ -97,6 +97,7 @@ fastapi_app.include_router(transaction_admin.router)
 fastapi_app.include_router(test_runner_router)
 fastapi_app.include_router(metrics_router)
 fastapi_app.include_router(admin_logs_router)
+fastapi_app.include_router(document_verification.router)
 
 # Socket.IO debe ser lo último
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

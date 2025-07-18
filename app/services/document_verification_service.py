@@ -17,6 +17,69 @@ class DocumentVerificationService:
     def __init__(self):
         self.aws_config = aws_config
 
+    def _compress_if_needed(self, image_data: bytes) -> bytes:
+        """
+        Comprime la imagen si es mayor a 5MB antes de enviar a AWS
+        
+        Args:
+            image_data: Datos de la imagen en bytes
+            
+        Returns:
+            Datos de la imagen comprimida o original si no necesita compresión
+        """
+        try:
+            # Si la imagen es menor o igual a 5MB, no comprimir
+            if len(image_data) <= 5 * 1024 * 1024:
+                return image_data
+            
+            logger.info(f"Comprimiendo imagen de {len(image_data) / (1024*1024):.2f}MB a máximo 5MB")
+            
+            # Abrir imagen con Pillow
+            image = Image.open(io.BytesIO(image_data))
+            
+            # Redimensionar si es muy grande (máximo 2000x2000 píxeles)
+            max_size = 2000
+            if image.size[0] > max_size or image.size[1] > max_size:
+                # Mantener proporción de aspecto
+                image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                logger.info(f"Redimensionando imagen a {image.size}")
+            
+            # Guardar con compresión JPEG
+            output = io.BytesIO()
+            
+            # Convertir a RGB si es necesario (para JPEG)
+            if image.mode in ('RGBA', 'LA', 'P'):
+                # Crear fondo blanco para imágenes con transparencia
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                if image.mode == 'P':
+                    image = image.convert('RGBA')
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Guardar con compresión optimizada
+            image.save(output, format='JPEG', quality=85, optimize=True)
+            compressed_data = output.getvalue()
+            
+            # Verificar que la compresión fue efectiva
+            if len(compressed_data) > 5 * 1024 * 1024:
+                # Si aún es muy grande, comprimir más agresivamente
+                output = io.BytesIO()
+                image.save(output, format='JPEG', quality=70, optimize=True)
+                compressed_data = output.getvalue()
+                logger.warning(f"Compresión agresiva aplicada - Tamaño final: {len(compressed_data) / (1024*1024):.2f}MB")
+            
+            logger.info(f"Imagen comprimida exitosamente - Tamaño original: {len(image_data) / (1024*1024):.2f}MB, Final: {len(compressed_data) / (1024*1024):.2f}MB")
+            
+            return compressed_data
+            
+        except Exception as e:
+            logger.error(f"Error comprimiendo imagen: {e}")
+            # Si hay error en la compresión, retornar la imagen original
+            # AWS puede rechazar la imagen, pero es mejor que fallar completamente
+            return image_data
+
     def verify_selfie(self, image_data: bytes) -> Dict[str, Any]:
         """
         Verify selfie quality, face detection, and liveness detection
