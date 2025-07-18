@@ -6,6 +6,7 @@ import base64
 import logging
 from typing import Dict, List, Tuple, Optional, Any
 from app.core.aws_config import aws_config
+# import face_recognition  # Comentado por problemas de compatibilidad en Windows
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +198,93 @@ class DocumentVerificationService:
                 'success': False,
                 'error': str(e),
                 'score': 0.0
+            }
+
+    def compare_faces(self, document_image_data: bytes, selfie_image_data: bytes) -> Dict[str, Any]:
+        """
+        Compara rostros entre un documento y una selfie para verificar identidad
+        (Implementación simplificada usando OpenCV - sin face_recognition)
+
+        Args:
+            document_image_data: Imagen del documento en bytes
+            selfie_image_data: Imagen de la selfie en bytes
+
+        Returns:
+            Dict con resultados de la comparación facial
+        """
+        try:
+            # Detectar rostros en el documento usando OpenCV
+            document_faces = self._detect_faces_in_document_opencv(
+                document_image_data)
+
+            # Detectar rostros en la selfie usando OpenCV
+            selfie_faces = self._detect_faces_in_selfie_opencv(
+                selfie_image_data)
+
+            # Manejar casos donde no se detecten rostros
+            if not document_faces['faces_found']:
+                return {
+                    'success': False,
+                    'error': 'No se detectaron rostros en el documento',
+                    'document_faces': 0,
+                    'selfie_faces': selfie_faces['face_count'],
+                    'similarity_score': 0.0,
+                    'note': 'Using OpenCV face detection (face_recognition not available)'
+                }
+
+            if not selfie_faces['faces_found']:
+                return {
+                    'success': False,
+                    'error': 'No se detectaron rostros en la selfie',
+                    'document_faces': document_faces['face_count'],
+                    'selfie_faces': 0,
+                    'similarity_score': 0.0,
+                    'note': 'Using OpenCV face detection (face_recognition not available)'
+                }
+
+            # Comparar rostros usando características básicas de OpenCV
+            similarity_results = self._compare_faces_with_opencv(
+                document_faces['face_features'],
+                selfie_faces['face_features']
+            )
+
+            # Calcular score de similitud
+            similarity_score = self._calculate_facial_similarity_score_opencv(
+                similarity_results)
+
+            # Determinar si es la misma persona (umbral más bajo para OpenCV)
+            is_same_person = similarity_score >= 0.4  # Umbral más bajo para OpenCV
+
+            return {
+                'success': True,
+                'is_same_person': is_same_person,
+                'similarity_score': similarity_score,
+                'document_faces': document_faces['face_count'],
+                'selfie_faces': selfie_faces['face_count'],
+                'comparison_details': {
+                    'best_match_score': similarity_results.get('best_match_score', 0.0),
+                    'average_similarity': similarity_results.get('average_similarity', 0.0),
+                    'matches_found': similarity_results.get('matches_found', 0),
+                    'total_comparisons': similarity_results.get('total_comparisons', 0)
+                },
+                'face_locations': {
+                    'document_faces': document_faces['face_locations'],
+                    'selfie_faces': selfie_faces['face_locations']
+                },
+                'quality_indicators': {
+                    'document_face_quality': document_faces['quality_score'],
+                    'selfie_face_quality': selfie_faces['quality_score']
+                },
+                'note': 'Using OpenCV face detection (face_recognition not available)'
+            }
+
+        except Exception as e:
+            logger.error(f"Error in face comparison: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'similarity_score': 0.0,
+                'note': 'Using OpenCV face detection (face_recognition not available)'
             }
 
     def _analyze_image_quality(self, image: np.ndarray) -> float:
@@ -660,3 +748,584 @@ class DocumentVerificationService:
         except Exception as e:
             logger.error(f"Error checking photo of photo: {e}")
             return 0.5
+
+    def _detect_faces_in_document(self, image_data: bytes) -> Dict[str, Any]:
+        """Detecta rostros en una imagen de documento"""
+        try:
+            # Convertir bytes a numpy array
+            nparr = np.frombuffer(image_data, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if image is None:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_encodings': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'Invalid image format'
+                }
+
+            # Convertir BGR a RGB para face_recognition
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+            # Detectar ubicaciones de rostros
+            face_locations = face_recognition.face_locations(rgb_image)
+
+            if not face_locations:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_encodings': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'No faces detected in document'
+                }
+
+            # Extraer encodings de rostros
+            face_encodings = face_recognition.face_encodings(
+                rgb_image, face_locations)
+
+            # Calcular calidad de los rostros detectados
+            quality_score = self._calculate_face_quality_for_comparison(
+                image, face_locations)
+
+            return {
+                'faces_found': True,
+                'face_count': len(face_locations),
+                'face_encodings': face_encodings,
+                'face_locations': face_locations,
+                'quality_score': quality_score
+            }
+
+        except Exception as e:
+            logger.error(f"Error detecting faces in document: {e}")
+            return {
+                'faces_found': False,
+                'face_count': 0,
+                'face_encodings': [],
+                'face_locations': [],
+                'quality_score': 0.0,
+                'error': str(e)
+            }
+
+    def _detect_faces_in_selfie(self, image_data: bytes) -> Dict[str, Any]:
+        """Detecta rostros en una selfie"""
+        try:
+            # Convertir bytes a numpy array
+            nparr = np.frombuffer(image_data, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if image is None:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_encodings': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'Invalid image format'
+                }
+
+            # Convertir BGR a RGB para face_recognition
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+            # Detectar ubicaciones de rostros
+            face_locations = face_recognition.face_locations(rgb_image)
+
+            if not face_locations:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_encodings': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'No faces detected in selfie'
+                }
+
+            # Extraer encodings de rostros
+            face_encodings = face_recognition.face_encodings(
+                rgb_image, face_locations)
+
+            # Calcular calidad de los rostros detectados
+            quality_score = self._calculate_face_quality_for_comparison(
+                image, face_locations)
+
+            return {
+                'faces_found': True,
+                'face_count': len(face_locations),
+                'face_encodings': face_encodings,
+                'face_locations': face_locations,
+                'quality_score': quality_score
+            }
+
+        except Exception as e:
+            logger.error(f"Error detecting faces in selfie: {e}")
+            return {
+                'faces_found': False,
+                'face_count': 0,
+                'face_encodings': [],
+                'face_locations': [],
+                'quality_score': 0.0,
+                'error': str(e)
+            }
+
+    def _compare_faces_with_face_recognition(self, document_encodings: List, selfie_encodings: List) -> Dict[str, Any]:
+        """Compara rostros usando face_recognition"""
+        try:
+            if not document_encodings or not selfie_encodings:
+                return {
+                    'best_match_score': 0.0,
+                    'average_similarity': 0.0,
+                    'matches_found': 0,
+                    'total_comparisons': 0,
+                    'comparison_matrix': []
+                }
+
+            # Realizar todas las comparaciones posibles
+            comparison_matrix = []
+            total_comparisons = len(document_encodings) * len(selfie_encodings)
+            matches_found = 0
+            similarity_scores = []
+
+            for doc_encoding in document_encodings:
+                for selfie_encoding in selfie_encodings:
+                    # Calcular distancia entre encodings
+                    distance = face_recognition.face_distance(
+                        [doc_encoding], selfie_encoding)[0]
+
+                    # Convertir distancia a score de similitud (1 - distancia)
+                    similarity = 1.0 - distance
+                    similarity_scores.append(similarity)
+
+                    # Considerar match si similitud > 0.6
+                    is_match = similarity > 0.6
+                    if is_match:
+                        matches_found += 1
+
+                    comparison_matrix.append({
+                        'document_face_idx': document_encodings.index(doc_encoding),
+                        'selfie_face_idx': selfie_encodings.index(selfie_encoding),
+                        'similarity_score': similarity,
+                        'is_match': is_match
+                    })
+
+            # Calcular estadísticas
+            best_match_score = max(
+                similarity_scores) if similarity_scores else 0.0
+            average_similarity = sum(
+                similarity_scores) / len(similarity_scores) if similarity_scores else 0.0
+
+            return {
+                'best_match_score': best_match_score,
+                'average_similarity': average_similarity,
+                'matches_found': matches_found,
+                'total_comparisons': total_comparisons,
+                'comparison_matrix': comparison_matrix
+            }
+
+        except Exception as e:
+            logger.error(f"Error comparing faces with face_recognition: {e}")
+            return {
+                'best_match_score': 0.0,
+                'average_similarity': 0.0,
+                'matches_found': 0,
+                'total_comparisons': 0,
+                'comparison_matrix': [],
+                'error': str(e)
+            }
+
+    def _calculate_facial_similarity_score(self, comparison_results: Dict[str, Any]) -> float:
+        """Calcula el score final de similitud facial"""
+        try:
+            best_match = comparison_results.get('best_match_score', 0.0)
+            average_similarity = comparison_results.get(
+                'average_similarity', 0.0)
+            matches_found = comparison_results.get('matches_found', 0)
+            total_comparisons = comparison_results.get('total_comparisons', 1)
+
+            # Pesos para diferentes factores
+            weights = {
+                'best_match': 0.6,      # El mejor match es más importante
+                'average_similarity': 0.3,  # Promedio de similitud
+                'match_ratio': 0.1       # Proporción de matches
+            }
+
+            # Calcular ratio de matches
+            match_ratio = matches_found / total_comparisons if total_comparisons > 0 else 0.0
+
+            # Calcular score final ponderado
+            final_score = (
+                best_match * weights['best_match'] +
+                average_similarity * weights['average_similarity'] +
+                match_ratio * weights['match_ratio']
+            )
+
+            return max(0.0, min(1.0, final_score))
+
+        except Exception as e:
+            logger.error(f"Error calculating facial similarity score: {e}")
+            return 0.0
+
+    def _calculate_face_quality_for_comparison(self, image: np.ndarray, face_locations: List) -> float:
+        """Calcula la calidad de los rostros para comparación"""
+        try:
+            if not face_locations:
+                return 0.0
+
+            quality_scores = []
+
+            for face_location in face_locations:
+                top, right, bottom, left = face_location
+
+                # Extraer región del rostro
+                face_region = image[top:bottom, left:right]
+
+                if face_region.size == 0:
+                    continue
+
+                # Calcular métricas de calidad
+                # Tamaño del rostro
+                face_size = (right - left) * (bottom - top)
+                image_size = image.shape[0] * image.shape[1]
+                size_ratio = face_size / image_size
+
+                # Nitidez del rostro
+                gray_face = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY)
+                sharpness = cv2.Laplacian(gray_face, cv2.CV_64F).var()
+
+                # Brillo del rostro
+                brightness = np.mean(gray_face)
+
+                # Normalizar scores
+                # Rostro debe ser al menos 10% de la imagen
+                size_score = min(size_ratio * 10, 1.0)
+                sharpness_score = min(sharpness / 1000, 1.0)
+                brightness_score = 1.0 - abs(brightness - 128) / 128
+
+                # Score de calidad para este rostro
+                face_quality = (size_score + sharpness_score +
+                                brightness_score) / 3
+                quality_scores.append(face_quality)
+
+            # Retornar el promedio de calidad de todos los rostros
+            return sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
+
+        except Exception as e:
+            logger.error(f"Error calculating face quality for comparison: {e}")
+            return 0.0
+
+    def _detect_faces_in_document_opencv(self, image_data: bytes) -> Dict[str, Any]:
+        """Detecta rostros en una imagen de documento usando OpenCV"""
+        try:
+            # Convertir bytes a numpy array
+            nparr = np.frombuffer(image_data, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if image is None:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_features': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'Invalid image format'
+                }
+
+            # Convertir a escala de grises para detección
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+            # Cargar el clasificador de rostros de OpenCV
+            face_cascade = cv2.CascadeClassifier(
+                cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+            # Detectar rostros
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+
+            if len(faces) == 0:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_features': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'No faces detected in document'
+                }
+
+            # Extraer características básicas de los rostros
+            face_features = []
+            face_locations = []
+
+            for (x, y, w, h) in faces:
+                # Extraer región del rostro
+                face_region = gray[y:y+h, x:x+w]
+
+                # Calcular características básicas
+                features = self._extract_face_features_opencv(face_region)
+                face_features.append(features)
+                # top, right, bottom, left
+                face_locations.append([y, x+w, y+h, x])
+
+            # Calcular calidad de los rostros detectados
+            quality_score = self._calculate_face_quality_for_comparison(
+                image, faces)
+
+            return {
+                'faces_found': True,
+                'face_count': len(faces),
+                'face_features': face_features,
+                'face_locations': face_locations,
+                'quality_score': quality_score
+            }
+
+        except Exception as e:
+            logger.error(f"Error detecting faces in document: {e}")
+            return {
+                'faces_found': False,
+                'face_count': 0,
+                'face_features': [],
+                'face_locations': [],
+                'quality_score': 0.0,
+                'error': str(e)
+            }
+
+    def _detect_faces_in_selfie_opencv(self, image_data: bytes) -> Dict[str, Any]:
+        """Detecta rostros en una selfie usando OpenCV"""
+        try:
+            # Convertir bytes a numpy array
+            nparr = np.frombuffer(image_data, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if image is None:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_features': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'Invalid image format'
+                }
+
+            # Convertir a escala de grises para detección
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+            # Cargar el clasificador de rostros de OpenCV
+            face_cascade = cv2.CascadeClassifier(
+                cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+            # Detectar rostros
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+
+            if len(faces) == 0:
+                return {
+                    'faces_found': False,
+                    'face_count': 0,
+                    'face_features': [],
+                    'face_locations': [],
+                    'quality_score': 0.0,
+                    'error': 'No faces detected in selfie'
+                }
+
+            # Extraer características básicas de los rostros
+            face_features = []
+            face_locations = []
+
+            for (x, y, w, h) in faces:
+                # Extraer región del rostro
+                face_region = gray[y:y+h, x:x+w]
+
+                # Calcular características básicas
+                features = self._extract_face_features_opencv(face_region)
+                face_features.append(features)
+                # top, right, bottom, left
+                face_locations.append([y, x+w, y+h, x])
+
+            # Calcular calidad de los rostros detectados
+            quality_score = self._calculate_face_quality_for_comparison(
+                image, faces)
+
+            return {
+                'faces_found': True,
+                'face_count': len(faces),
+                'face_features': face_features,
+                'face_locations': face_locations,
+                'quality_score': quality_score
+            }
+
+        except Exception as e:
+            logger.error(f"Error detecting faces in selfie: {e}")
+            return {
+                'faces_found': False,
+                'face_count': 0,
+                'face_features': [],
+                'face_locations': [],
+                'quality_score': 0.0,
+                'error': str(e)
+            }
+
+    def _extract_face_features_opencv(self, face_region: np.ndarray) -> Dict[str, float]:
+        """Extrae características básicas de un rostro usando OpenCV"""
+        try:
+            # Redimensionar a un tamaño estándar para comparación
+            face_resized = cv2.resize(face_region, (64, 64))
+
+            # Calcular histograma
+            hist = cv2.calcHist([face_resized], [0], None, [256], [0, 256])
+            hist_normalized = hist.flatten() / np.sum(hist)
+
+            # Calcular características básicas
+            features = {
+                'histogram': hist_normalized.tolist(),
+                'mean_brightness': np.mean(face_resized),
+                'std_brightness': np.std(face_resized),
+                'face_size': face_region.shape[0] * face_region.shape[1],
+                'aspect_ratio': face_region.shape[1] / face_region.shape[0] if face_region.shape[0] > 0 else 1.0
+            }
+
+            return features
+
+        except Exception as e:
+            logger.error(f"Error extracting face features: {e}")
+            return {
+                'histogram': [0.0] * 256,
+                'mean_brightness': 0.0,
+                'std_brightness': 0.0,
+                'face_size': 0.0,
+                'aspect_ratio': 1.0
+            }
+
+    def _compare_faces_with_opencv(self, document_features: List, selfie_features: List) -> Dict[str, Any]:
+        """Compara rostros usando características básicas de OpenCV"""
+        try:
+            if not document_features or not selfie_features:
+                return {
+                    'best_match_score': 0.0,
+                    'average_similarity': 0.0,
+                    'matches_found': 0,
+                    'total_comparisons': 0,
+                    'comparison_matrix': []
+                }
+
+            # Realizar todas las comparaciones posibles
+            comparison_matrix = []
+            total_comparisons = len(document_features) * len(selfie_features)
+            matches_found = 0
+            similarity_scores = []
+
+            for doc_features in document_features:
+                for selfie_features_item in selfie_features:
+                    # Calcular similitud basada en características básicas
+                    similarity = self._calculate_face_similarity_opencv(
+                        doc_features, selfie_features_item)
+                    similarity_scores.append(similarity)
+
+                    # Considerar match si similitud > 0.4 (umbral más bajo para OpenCV)
+                    is_match = similarity > 0.4
+                    if is_match:
+                        matches_found += 1
+
+                    comparison_matrix.append({
+                        'document_face_idx': document_features.index(doc_features),
+                        'selfie_face_idx': selfie_features.index(selfie_features_item),
+                        'similarity_score': similarity,
+                        'is_match': is_match
+                    })
+
+            # Calcular estadísticas
+            best_match_score = max(
+                similarity_scores) if similarity_scores else 0.0
+            average_similarity = sum(
+                similarity_scores) / len(similarity_scores) if similarity_scores else 0.0
+
+            return {
+                'best_match_score': best_match_score,
+                'average_similarity': average_similarity,
+                'matches_found': matches_found,
+                'total_comparisons': total_comparisons,
+                'comparison_matrix': comparison_matrix
+            }
+
+        except Exception as e:
+            logger.error(f"Error comparing faces with OpenCV: {e}")
+            return {
+                'best_match_score': 0.0,
+                'average_similarity': 0.0,
+                'matches_found': 0,
+                'total_comparisons': 0,
+                'comparison_matrix': [],
+                'error': str(e)
+            }
+
+    def _calculate_face_similarity_opencv(self, features1: Dict, features2: Dict) -> float:
+        """Calcula similitud entre dos rostros usando características básicas"""
+        try:
+            # Comparar histogramas usando correlación
+            hist1 = np.array(features1['histogram'])
+            hist2 = np.array(features2['histogram'])
+
+            # Correlación de histogramas
+            hist_similarity = np.corrcoef(hist1, hist2)[0, 1]
+            hist_similarity = max(0.0, hist_similarity) if not np.isnan(
+                hist_similarity) else 0.0
+
+            # Comparar características básicas
+            brightness_similarity = 1.0 - \
+                abs(features1['mean_brightness'] -
+                    features2['mean_brightness']) / 255.0
+            std_similarity = 1.0 - \
+                abs(features1['std_brightness'] -
+                    features2['std_brightness']) / 255.0
+            aspect_similarity = 1.0 - abs(features1['aspect_ratio'] - features2['aspect_ratio']) / max(
+                features1['aspect_ratio'], features2['aspect_ratio'])
+
+            # Calcular similitud ponderada
+            weights = {
+                'histogram': 0.5,
+                'brightness': 0.2,
+                'std': 0.2,
+                'aspect': 0.1
+            }
+
+            final_similarity = (
+                hist_similarity * weights['histogram'] +
+                brightness_similarity * weights['brightness'] +
+                std_similarity * weights['std'] +
+                aspect_similarity * weights['aspect']
+            )
+
+            return max(0.0, min(1.0, final_similarity))
+
+        except Exception as e:
+            logger.error(f"Error calculating face similarity: {e}")
+            return 0.0
+
+    def _calculate_facial_similarity_score_opencv(self, comparison_results: Dict[str, Any]) -> float:
+        """Calcula el score final de similitud facial usando OpenCV"""
+        try:
+            best_match = comparison_results.get('best_match_score', 0.0)
+            average_similarity = comparison_results.get(
+                'average_similarity', 0.0)
+            matches_found = comparison_results.get('matches_found', 0)
+            total_comparisons = comparison_results.get('total_comparisons', 1)
+
+            # Pesos para diferentes factores (ajustados para OpenCV)
+            weights = {
+                'best_match': 0.7,      # El mejor match es más importante
+                'average_similarity': 0.2,  # Promedio de similitud
+                'match_ratio': 0.1       # Proporción de matches
+            }
+
+            # Calcular ratio de matches
+            match_ratio = matches_found / total_comparisons if total_comparisons > 0 else 0.0
+
+            # Calcular score final ponderado
+            final_score = (
+                best_match * weights['best_match'] +
+                average_similarity * weights['average_similarity'] +
+                match_ratio * weights['match_ratio']
+            )
+
+            return max(0.0, min(1.0, final_score))
+
+        except Exception as e:
+            logger.error(f"Error calculating facial similarity score: {e}")
+            return 0.0
