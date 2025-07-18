@@ -1329,3 +1329,351 @@ class DocumentVerificationService:
         except Exception as e:
             logger.error(f"Error calculating facial similarity score: {e}")
             return 0.0
+
+    def calculate_final_score(self, document_result: Dict[str, Any], selfie_result: Dict[str, Any],
+                              face_comparison_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calcula la puntuación final de verificación combinando todos los resultados
+
+        Args:
+            document_result: Resultado de verificación de documento
+            selfie_result: Resultado de verificación de selfie
+            face_comparison_result: Resultado de comparación facial
+
+        Returns:
+            Dict con puntuación final y decisión de verificación
+        """
+        try:
+            # Extraer puntuaciones individuales
+            document_score = document_result.get('score', 0.0)
+            selfie_score = selfie_result.get('score', 0.0)
+            face_comparison_score = face_comparison_result.get(
+                'similarity_score', 0.0)
+
+            # Pesos acordados (65% documento, 20% selfie, 15% comparación facial)
+            weights = {
+                'document': 0.65,
+                'selfie': 0.20,
+                'face_comparison': 0.15
+            }
+
+            # Calcular puntuación final ponderada
+            final_score = (
+                document_score * weights['document'] +
+                selfie_score * weights['selfie'] +
+                face_comparison_score * weights['face_comparison']
+            )
+
+            # Determinar decisión basada en puntuación final
+            decision = self._determine_verification_decision(final_score)
+
+            # Calcular puntuaciones detalladas por componente
+            detailed_scores = {
+                'document': {
+                    'score': document_score,
+                    'weight': weights['document'],
+                    'weighted_score': document_score * weights['document'],
+                    'details': {
+                        'quality_score': document_result.get('quality_score', 0.0),
+                        'textract_confidence': document_result.get('textract_result', {}).get('confidence', 0.0),
+                        'rekognition_confidence': document_result.get('rekognition_result', {}).get('confidence', 0.0),
+                        'format_valid': document_result.get('format_validation', {}).get('valid', False),
+                        'detected_type': document_result.get('detected_type', 'unknown')
+                    }
+                },
+                'selfie': {
+                    'score': selfie_score,
+                    'weight': weights['selfie'],
+                    'weighted_score': selfie_score * weights['selfie'],
+                    'details': {
+                        'quality_score': selfie_result.get('quality_score', 0.0),
+                        'selfie_quality_score': selfie_result.get('selfie_quality_score', 0.0),
+                        'liveness_score': selfie_result.get('liveness_score', 0.0),
+                        'aws_confidence': selfie_result.get('aws_confidence', 0.0),
+                        'face_detected': selfie_result.get('face_detected', False),
+                        'face_count': selfie_result.get('face_count', 0)
+                    }
+                },
+                'face_comparison': {
+                    'score': face_comparison_score,
+                    'weight': weights['face_comparison'],
+                    'weighted_score': face_comparison_score * weights['face_comparison'],
+                    'details': {
+                        'best_match_score': face_comparison_result.get('best_match_score', 0.0),
+                        'average_similarity': face_comparison_result.get('average_similarity', 0.0),
+                        'matches_found': face_comparison_result.get('matches_found', 0),
+                        'document_faces': face_comparison_result.get('document_faces', 0),
+                        'selfie_faces': face_comparison_result.get('selfie_faces', 0),
+                        'comparison_method': 'OpenCV (face_recognition not available)'
+                    }
+                }
+            }
+
+            # Información adicional para auditoría
+            audit_info = {
+                'verification_timestamp': self._get_current_timestamp(),
+                'component_scores': detailed_scores,
+                'decision_thresholds': {
+                    'approval_threshold': 0.75,
+                    'manual_review_threshold': 0.60,
+                    'rejection_threshold': 0.40
+                },
+                'weight_justification': {
+                    'document_priority': 'Documentos son la base de identidad legal',
+                    'selfie_importance': 'Verificación de identidad en tiempo real',
+                    'face_comparison': 'Validación adicional de similitud facial'
+                }
+            }
+
+            return {
+                'success': True,
+                'final_score': final_score,
+                'decision': decision,
+                'detailed_scores': detailed_scores,
+                'audit_info': audit_info,
+                'recommendations': self._generate_verification_recommendations(
+                    final_score, detailed_scores, decision
+                )
+            }
+
+        except Exception as e:
+            logger.error(f"Error calculating final score: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'final_score': 0.0,
+                'decision': 'ERROR'
+            }
+
+    def _determine_verification_decision(self, final_score: float) -> str:
+        """
+        Determina la decisión de verificación basada en la puntuación final
+
+        Args:
+            final_score: Puntuación final (0.0 - 1.0)
+
+        Returns:
+            Decisión: 'APPROVED', 'MANUAL_REVIEW', 'REJECTED'
+        """
+        if final_score >= 0.75:
+            return 'APPROVED'
+        elif final_score >= 0.60:
+            return 'MANUAL_REVIEW'
+        else:
+            return 'REJECTED'
+
+    def _generate_verification_recommendations(self, final_score: float,
+                                               detailed_scores: Dict, decision: str) -> List[str]:
+        """
+        Genera recomendaciones basadas en los resultados de verificación
+
+        Args:
+            final_score: Puntuación final
+            detailed_scores: Puntuaciones detalladas por componente
+            decision: Decisión de verificación
+
+        Returns:
+            Lista de recomendaciones
+        """
+        recommendations = []
+
+        # Recomendaciones basadas en la decisión
+        if decision == 'APPROVED':
+            recommendations.append("Verificación aprobada automáticamente")
+        elif decision == 'MANUAL_REVIEW':
+            recommendations.append(
+                "Revisión manual requerida - verificar documentos adicionales")
+        else:  # REJECTED
+            recommendations.append(
+                "Verificación rechazada - solicitar nueva documentación")
+
+        # Recomendaciones específicas por componente
+        doc_score = detailed_scores['document']['score']
+        selfie_score = detailed_scores['selfie']['score']
+        face_score = detailed_scores['face_comparison']['score']
+
+        if doc_score < 0.6:
+            recommendations.append(
+                "Calidad del documento baja - solicitar imagen más clara")
+
+        if selfie_score < 0.5:
+            recommendations.append(
+                "Selfie de baja calidad - solicitar nueva foto")
+
+        if face_score < 0.3:
+            recommendations.append(
+                "Similitud facial baja - verificar identidad manualmente")
+
+        # Recomendaciones de mejora
+        if final_score < 0.75:
+            recommendations.append(
+                "Considerar implementar verificación biométrica adicional")
+
+        return recommendations
+
+    def _get_current_timestamp(self) -> str:
+        """Obtiene timestamp actual para auditoría"""
+        from datetime import datetime
+        return datetime.now().isoformat()
+
+    def verify_identity(self, document_image_data: bytes, selfie_image_data: bytes,
+                        document_type: str = None) -> Dict[str, Any]:
+        """
+        Verificación completa de identidad: documento, selfie y comparación facial
+
+        Args:
+            document_image_data: Imagen del documento en bytes
+            selfie_image_data: Imagen de la selfie en bytes
+            document_type: Tipo de documento esperado (opcional)
+
+        Returns:
+            Dict con resultado completo de verificación de identidad
+        """
+        try:
+            logger.info("Iniciando verificación completa de identidad")
+
+            # Paso 1: Verificar documento
+            logger.info("Verificando documento...")
+            document_result = self.verify_document(
+                document_image_data, document_type)
+
+            if not document_result['success']:
+                logger.warning(
+                    f"Error en verificación de documento: {document_result.get('error', 'Unknown error')}")
+                return {
+                    'success': False,
+                    'error': f"Error en verificación de documento: {document_result.get('error', 'Unknown error')}",
+                    'document_result': document_result,
+                    'final_score': 0.0,
+                    'decision': 'ERROR'
+                }
+
+            # Paso 2: Verificar selfie
+            logger.info("Verificando selfie...")
+            selfie_result = self.verify_selfie(selfie_image_data)
+
+            if not selfie_result['success']:
+                logger.warning(
+                    f"Error en verificación de selfie: {selfie_result.get('error', 'Unknown error')}")
+                return {
+                    'success': False,
+                    'error': f"Error en verificación de selfie: {selfie_result.get('error', 'Unknown error')}",
+                    'document_result': document_result,
+                    'selfie_result': selfie_result,
+                    'final_score': 0.0,
+                    'decision': 'ERROR'
+                }
+
+            # Paso 3: Comparar rostros
+            logger.info("Comparando rostros...")
+            face_comparison_result = self.compare_faces(
+                document_image_data, selfie_image_data)
+
+            if not face_comparison_result['success']:
+                logger.warning(
+                    f"Error en comparación facial: {face_comparison_result.get('error', 'Unknown error')}")
+                # Continuar con el proceso aunque falle la comparación facial
+                face_comparison_result['similarity_score'] = 0.0
+
+            # Paso 4: Calcular puntuación final
+            logger.info("Calculando puntuación final...")
+            final_score_result = self.calculate_final_score(
+                document_result,
+                selfie_result,
+                face_comparison_result
+            )
+
+            # Paso 5: Preparar resultado final
+            verification_summary = {
+                'success': True,
+                'verification_id': self._generate_verification_id(),
+                'timestamp': self._get_current_timestamp(),
+                'final_score': final_score_result['final_score'],
+                'decision': final_score_result['decision'],
+                'detailed_scores': final_score_result['detailed_scores'],
+                'recommendations': final_score_result['recommendations'],
+                'audit_info': final_score_result['audit_info'],
+                'component_results': {
+                    'document': {
+                        'success': document_result['success'],
+                        'score': document_result['score'],
+                        'detected_type': document_result.get('detected_type', 'unknown'),
+                        'quality_score': document_result.get('quality_score', 0.0),
+                        'confidence': document_result.get('confidence', 0.0)
+                    },
+                    'selfie': {
+                        'success': selfie_result['success'],
+                        'score': selfie_result['score'],
+                        'face_detected': selfie_result.get('face_detected', False),
+                        'face_count': selfie_result.get('face_count', 0),
+                        'liveness_score': selfie_result.get('liveness_score', 0.0)
+                    },
+                    'face_comparison': {
+                        'success': face_comparison_result['success'],
+                        'similarity_score': face_comparison_result.get('similarity_score', 0.0),
+                        'best_match_score': face_comparison_result.get('best_match_score', 0.0),
+                        'document_faces': face_comparison_result.get('document_faces', 0),
+                        'selfie_faces': face_comparison_result.get('selfie_faces', 0)
+                    }
+                },
+                'verification_status': self._get_verification_status(final_score_result['decision']),
+                'next_steps': self._get_next_steps(final_score_result['decision'])
+            }
+
+            logger.info(
+                f"Verificación completada. Puntuación final: {final_score_result['final_score']:.3f}, Decisión: {final_score_result['decision']}")
+
+            return verification_summary
+
+        except Exception as e:
+            logger.error(f"Error en verificación completa de identidad: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'final_score': 0.0,
+                'decision': 'ERROR',
+                'verification_status': 'FAILED'
+            }
+
+    def _generate_verification_id(self) -> str:
+        """Genera ID único para la verificación"""
+        import uuid
+        return f"verif_{uuid.uuid4().hex[:8]}_{int(self._get_current_timestamp().replace('-', '').replace(':', '').replace('.', '')[-8:])}"
+
+    def _get_verification_status(self, decision: str) -> str:
+        """Obtiene el estado de verificación basado en la decisión"""
+        status_map = {
+            'APPROVED': 'VERIFIED',
+            'MANUAL_REVIEW': 'PENDING_REVIEW',
+            'REJECTED': 'REJECTED',
+            'ERROR': 'FAILED'
+        }
+        return status_map.get(decision, 'UNKNOWN')
+
+    def _get_next_steps(self, decision: str) -> List[str]:
+        """Obtiene los siguientes pasos basados en la decisión"""
+        next_steps_map = {
+            'APPROVED': [
+                'Proceder con el registro del usuario',
+                'Activar cuenta del usuario',
+                'Enviar confirmación de verificación exitosa'
+            ],
+            'MANUAL_REVIEW': [
+                'Revisar documentos manualmente',
+                'Solicitar documentos adicionales si es necesario',
+                'Contactar al usuario para aclaraciones',
+                'Programar verificación presencial si es requerido'
+            ],
+            'REJECTED': [
+                'Solicitar nueva documentación',
+                'Explicar al usuario los motivos del rechazo',
+                'Proporcionar guías para mejorar la calidad de las imágenes',
+                'Ofrecer asistencia técnica si es necesario'
+            ],
+            'ERROR': [
+                'Investigar el error técnico',
+                'Reintentar la verificación',
+                'Contactar al equipo de soporte técnico'
+            ]
+        }
+        return next_steps_map.get(decision, ['Contactar al administrador del sistema'])

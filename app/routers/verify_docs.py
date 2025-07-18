@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
+from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, UploadFile, File
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Dict, Any
 
@@ -14,6 +14,7 @@ from app.services.verify_docs_service import (
 from app.models.driver_documents import DocumentsUpdate, DriverDocumentsCreateRequest
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
+from app.services.document_verification_service import DocumentVerificationService
 
 
 bearer_scheme = HTTPBearer()
@@ -26,6 +27,91 @@ router = APIRouter(prefix="/verify-docs",
 def get_verify_docs_service(session: SessionDep) -> VerifyDocsService:
     """Dependency para obtener el servicio de verificación de documentos"""
     return VerifyDocsService(session)
+
+
+def get_document_verification_service() -> DocumentVerificationService:
+    """Dependency para obtener el servicio de verificación de identidad"""
+    return DocumentVerificationService()
+
+
+@router.post("/verify-identity", response_model=Dict[str, Any])
+async def verify_identity_endpoint(
+    document_image: UploadFile = File(...,
+                                      description="Imagen del documento de identidad"),
+    selfie_image: UploadFile = File(..., description="Selfie del usuario"),
+    document_type: str = None,
+    service: DocumentVerificationService = Depends(
+        get_document_verification_service)
+):
+    """
+    Verificación completa de identidad: documento, selfie y comparación facial
+
+    **Parámetros:**
+    - document_image: Imagen del documento de identidad (JPG, PNG)
+    - selfie_image: Selfie del usuario (JPG, PNG)
+    - document_type: Tipo de documento esperado (opcional)
+
+    **Respuesta:**
+    Devuelve el resultado completo de la verificación incluyendo:
+    - Puntuación final
+    - Decisión (APPROVED, MANUAL_REVIEW, REJECTED)
+    - Puntuaciones detalladas por componente
+    - Recomendaciones
+    - Próximos pasos
+    """
+    try:
+        # Validar tipos de archivo
+        allowed_extensions = {'.jpg', '.jpeg', '.png'}
+        doc_ext = '.' + \
+            document_image.filename.split(
+                '.')[-1].lower() if '.' in document_image.filename else ''
+        selfie_ext = '.' + \
+            selfie_image.filename.split(
+                '.')[-1].lower() if '.' in selfie_image.filename else ''
+
+        if doc_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Formato de documento no soportado. Use: {', '.join(allowed_extensions)}"
+            )
+
+        if selfie_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Formato de selfie no soportado. Use: {', '.join(allowed_extensions)}"
+            )
+
+        # Leer contenido de los archivos
+        document_data = await document_image.read()
+        selfie_data = await selfie_image.read()
+
+        # Validar tamaño de archivos (máximo 10MB cada uno)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(document_data) > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo del documento es demasiado grande. Máximo 10MB"
+            )
+
+        if len(selfie_data) > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo de la selfie es demasiado grande. Máximo 10MB"
+            )
+
+        # Ejecutar verificación completa
+        result = service.verify_identity(
+            document_data, selfie_data, document_type)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/pending", response_model=List[UserWithDocs])
@@ -41,7 +127,6 @@ def get_users_with_pending_docs(
     """
     service = VerifyDocsService(session)
     return service.get_users_with_pending_docs()
-
 
 
 # @router.get("/approved", response_model=List[UserRead])
@@ -76,7 +161,6 @@ def get_users_with_rejected_docs(
     return service.get_users_with_rejected_docs()
 
 
-
 # @router.get("/expired", response_model=List[UserWithDocs])
 
 def get_users_with_expired_docs(
@@ -86,7 +170,6 @@ def get_users_with_expired_docs(
     """Obtiene usuarios con documentos expirados y sus documentos asociados"""
     service = VerifyDocsService(session)
     return service.get_users_with_expired_docs()
-
 
 
 # @router.post("/check-expired", status_code=status.HTTP_200_OK)
@@ -100,7 +183,6 @@ def update_expired_documents(
     service = VerifyDocsService(session)
     updated_count = service.update_expired_documents()
     return {"message": f"Updated {updated_count} expired documents"}
-
 
 
 # @router.get("/check-expiring-soon", response_model=List[UserWithExpiringDocsResponse])
