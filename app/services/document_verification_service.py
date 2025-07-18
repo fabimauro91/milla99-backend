@@ -18,13 +18,13 @@ class DocumentVerificationService:
 
     def verify_selfie(self, image_data: bytes) -> Dict[str, Any]:
         """
-        Verify selfie quality and face detection
+        Verify selfie quality, face detection, and liveness detection
 
         Args:
             image_data: Image bytes
 
         Returns:
-            Dict with verification results
+            Dict with verification results including liveness detection
         """
         try:
             # Convert bytes to numpy array
@@ -68,12 +68,22 @@ class DocumentVerificationService:
             # Analyze image quality
             quality_score = self._analyze_image_quality(image)
 
+            # Analyze selfie-specific quality
+            selfie_quality = self._analyze_selfie_quality(image, faces[0])
+
+            # Detect liveness
+            liveness_score = self._detect_liveness(image, faces[0])
+
             # Use AWS Rekognition for additional face analysis
             aws_face_analysis = self._analyze_face_with_aws(image_data)
 
-            # Calculate final score
-            final_score = (quality_score +
-                           aws_face_analysis.get('confidence', 0.0)) / 2
+            # Calculate final score with weighted components
+            final_score = self._calculate_selfie_score(
+                quality_score,
+                selfie_quality,
+                liveness_score,
+                aws_face_analysis.get('confidence', 0.0)
+            )
 
             return {
                 'success': True,
@@ -81,8 +91,33 @@ class DocumentVerificationService:
                 'face_detected': True,
                 'face_count': len(faces),
                 'quality_score': quality_score,
+                'selfie_quality_score': selfie_quality,
+                'liveness_score': liveness_score,
                 'aws_confidence': aws_face_analysis.get('confidence', 0.0),
-                'aws_analysis': aws_face_analysis
+                'aws_analysis': aws_face_analysis,
+                'face_position': {
+                    'x': int(faces[0][0]),
+                    'y': int(faces[0][1]),
+                    'width': int(faces[0][2]),
+                    'height': int(faces[0][3])
+                },
+                'verification_details': {
+                    'quality_analysis': {
+                        'sharpness': self._calculate_sharpness(image),
+                        'brightness': self._calculate_brightness(image),
+                        'contrast': self._calculate_contrast(image)
+                    },
+                    'face_analysis': {
+                        'face_size_ratio': self._calculate_face_size_ratio(image, faces[0]),
+                        'face_centered': self._is_face_centered(image, faces[0]),
+                        'face_angle': self._estimate_face_angle(image, faces[0])
+                    },
+                    'liveness_indicators': {
+                        'natural_lighting': self._check_natural_lighting(image),
+                        'no_screen_reflection': self._check_no_screen_reflection(image),
+                        'natural_skin_tone': self._check_natural_skin_tone(image)
+                    }
+                }
             }
 
         except Exception as e:
@@ -361,3 +396,267 @@ class DocumentVerificationService:
         )
 
         return max(0.0, min(1.0, final_score))
+
+    def _analyze_selfie_quality(self, image: np.ndarray, face_rect: tuple) -> float:
+        """Analiza la calidad específica de una selfie"""
+        try:
+            # Extraer la región del rostro
+            x, y, w, h = face_rect
+            face_region = image[y:y+h, x:x+w]
+
+            # Calcular el tamaño relativo del rostro
+            face_size_ratio = self._calculate_face_size_ratio(image, face_rect)
+
+            # Verificar si el rostro está centrado
+            face_centered = self._is_face_centered(image, face_rect)
+
+            # Estimar el ángulo del rostro
+            face_angle = self._estimate_face_angle(image, face_rect)
+
+            # Calcular scores individuales
+            # Rostro debe ocupar al menos 50% de la imagen
+            size_score = min(face_size_ratio * 2, 1.0)
+            center_score = 1.0 if face_centered else 0.5
+            # Penalizar ángulos muy pronunciados
+            angle_score = 1.0 - abs(face_angle) / 45.0
+
+            # Score final de calidad de selfie
+            selfie_score = (size_score + center_score + angle_score) / 3
+            return max(0.0, min(1.0, selfie_score))
+
+        except Exception as e:
+            logger.error(f"Error analyzing selfie quality: {e}")
+            return 0.0
+
+    def _detect_liveness(self, image: np.ndarray, face_rect: tuple) -> float:
+        """Detecta si la selfie es de una persona real (liveness detection)"""
+        try:
+            # Extraer la región del rostro
+            x, y, w, h = face_rect
+            face_region = image[y:y+h, x:x+w]
+
+            # Verificar iluminación natural
+            natural_lighting = self._check_natural_lighting(image)
+
+            # Verificar que no hay reflejos de pantalla
+            no_screen_reflection = self._check_no_screen_reflection(image)
+
+            # Verificar tono de piel natural
+            natural_skin_tone = self._check_natural_skin_tone(image)
+
+            # Verificar que no es una foto de una foto
+            not_photo_of_photo = self._check_not_photo_of_photo(image)
+
+            # Calcular score de liveness
+            liveness_indicators = [
+                natural_lighting,
+                no_screen_reflection,
+                natural_skin_tone,
+                not_photo_of_photo
+            ]
+
+            liveness_score = sum(liveness_indicators) / \
+                len(liveness_indicators)
+            return max(0.0, min(1.0, liveness_score))
+
+        except Exception as e:
+            logger.error(f"Error in liveness detection: {e}")
+            return 0.0
+
+    def _calculate_selfie_score(self, quality_score: float, selfie_quality: float,
+                                liveness_score: float, aws_confidence: float) -> float:
+        """Calcula el score final de la selfie con pesos ponderados"""
+        # Pesos para cada componente
+        weights = {
+            'quality': 0.25,        # Calidad general de la imagen
+            'selfie_quality': 0.25,  # Calidad específica de selfie
+            'liveness': 0.30,        # Detección de liveness (más importante)
+            'aws_confidence': 0.20   # Confianza de AWS Rekognition
+        }
+
+        final_score = (
+            quality_score * weights['quality'] +
+            selfie_quality * weights['selfie_quality'] +
+            liveness_score * weights['liveness'] +
+            aws_confidence * weights['aws_confidence']
+        )
+
+        return max(0.0, min(1.0, final_score))
+
+    def _calculate_face_size_ratio(self, image: np.ndarray, face_rect: tuple) -> float:
+        """Calcula la proporción del tamaño del rostro respecto a la imagen"""
+        try:
+            x, y, w, h = face_rect
+            face_area = w * h
+            image_area = image.shape[0] * image.shape[1]
+            ratio = face_area / image_area
+            return min(ratio, 1.0)  # Normalizar a máximo 1.0
+        except Exception as e:
+            logger.error(f"Error calculating face size ratio: {e}")
+            return 0.0
+
+    def _is_face_centered(self, image: np.ndarray, face_rect: tuple) -> bool:
+        """Verifica si el rostro está centrado en la imagen"""
+        try:
+            x, y, w, h = face_rect
+            face_center_x = x + w // 2
+            face_center_y = y + h // 2
+
+            image_center_x = image.shape[1] // 2
+            image_center_y = image.shape[0] // 2
+
+            # Tolerancia del 20% del tamaño de la imagen
+            tolerance_x = image.shape[1] * 0.2
+            tolerance_y = image.shape[0] * 0.2
+
+            return (abs(face_center_x - image_center_x) < tolerance_x and
+                    abs(face_center_y - image_center_y) < tolerance_y)
+        except Exception as e:
+            logger.error(f"Error checking if face is centered: {e}")
+            return False
+
+    def _estimate_face_angle(self, image: np.ndarray, face_rect: tuple) -> float:
+        """Estima el ángulo del rostro (simplificado)"""
+        try:
+            # Implementación simplificada - en producción usar landmarks faciales
+            x, y, w, h = face_rect
+
+            # Calcular la proporción ancho/alto del rostro
+            aspect_ratio = w / h if h > 0 else 1.0
+
+            # Si la proporción es muy diferente de 1, puede indicar rotación
+            angle_estimate = abs(aspect_ratio - 1.0) * 45  # Máximo 45 grados
+
+            return min(angle_estimate, 45.0)
+        except Exception as e:
+            logger.error(f"Error estimating face angle: {e}")
+            return 0.0
+
+    def _calculate_sharpness(self, image: np.ndarray) -> float:
+        """Calcula la nitidez de la imagen"""
+        try:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+            return min(laplacian_var / 1000, 1.0)
+        except Exception as e:
+            logger.error(f"Error calculating sharpness: {e}")
+            return 0.0
+
+    def _calculate_brightness(self, image: np.ndarray) -> float:
+        """Calcula el brillo de la imagen"""
+        try:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            brightness = np.mean(gray)
+            return 1.0 - abs(brightness - 128) / 128
+        except Exception as e:
+            logger.error(f"Error calculating brightness: {e}")
+            return 0.0
+
+    def _calculate_contrast(self, image: np.ndarray) -> float:
+        """Calcula el contraste de la imagen"""
+        try:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            contrast = np.std(gray)
+            return min(contrast / 50, 1.0)
+        except Exception as e:
+            logger.error(f"Error calculating contrast: {e}")
+            return 0.0
+
+    def _check_natural_lighting(self, image: np.ndarray) -> float:
+        """Verifica si la iluminación es natural (no artificial)"""
+        try:
+            # Convertir a HSV para analizar la iluminación
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+            # Analizar el canal de valor (V) para detectar iluminación uniforme
+            v_channel = hsv[:, :, 2]
+
+            # Calcular la desviación estándar del valor
+            v_std = np.std(v_channel)
+
+            # Iluminación natural tiende a tener más variación
+            natural_score = min(v_std / 50, 1.0)
+
+            return natural_score
+        except Exception as e:
+            logger.error(f"Error checking natural lighting: {e}")
+            return 0.5
+
+    def _check_no_screen_reflection(self, image: np.ndarray) -> float:
+        """Verifica que no hay reflejos de pantalla"""
+        try:
+            # Convertir a HSV
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+            # Buscar áreas muy brillantes que podrían ser reflejos
+            v_channel = hsv[:, :, 2]
+
+            # Contar píxeles muy brillantes (> 200)
+            bright_pixels = np.sum(v_channel > 200)
+            total_pixels = v_channel.size
+
+            bright_ratio = bright_pixels / total_pixels
+
+            # Si hay muchos píxeles brillantes, puede ser un reflejo
+            no_reflection_score = 1.0 - min(bright_ratio * 5, 1.0)
+
+            return max(0.0, no_reflection_score)
+        except Exception as e:
+            logger.error(f"Error checking screen reflection: {e}")
+            return 0.5
+
+    def _check_natural_skin_tone(self, image: np.ndarray) -> float:
+        """Verifica que el tono de piel es natural"""
+        try:
+            # Convertir a HSV
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+            # Rango de tonos de piel en HSV
+            lower_skin = np.array([0, 20, 70])
+            upper_skin = np.array([20, 255, 255])
+
+            # Crear máscara para tonos de piel
+            skin_mask = cv2.inRange(hsv, lower_skin, upper_skin)
+
+            # Contar píxeles de piel
+            skin_pixels = np.sum(skin_mask > 0)
+            total_pixels = skin_mask.size
+
+            skin_ratio = skin_pixels / total_pixels
+
+            # Un ratio razonable de piel indica tono natural
+            natural_skin_score = min(skin_ratio * 3, 1.0)
+
+            return natural_skin_score
+        except Exception as e:
+            logger.error(f"Error checking natural skin tone: {e}")
+            return 0.5
+
+    def _check_not_photo_of_photo(self, image: np.ndarray) -> float:
+        """Verifica que no es una foto de una foto (detección de moiré)"""
+        try:
+            # Convertir a escala de grises
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+            # Aplicar FFT para detectar patrones repetitivos
+            f_transform = np.fft.fft2(gray)
+            f_shift = np.fft.fftshift(f_transform)
+
+            # Calcular el espectro de potencia
+            magnitude_spectrum = np.log(np.abs(f_shift) + 1)
+
+            # Buscar patrones de alta frecuencia que indican moiré
+            high_freq_energy = np.sum(magnitude_spectrum > np.mean(
+                magnitude_spectrum) + 2 * np.std(magnitude_spectrum))
+
+            # Normalizar
+            total_energy = magnitude_spectrum.size
+            high_freq_ratio = high_freq_energy / total_energy
+
+            # Si hay mucha energía de alta frecuencia, puede ser una foto de foto
+            not_photo_of_photo_score = 1.0 - min(high_freq_ratio * 10, 1.0)
+
+            return max(0.0, not_photo_of_photo_score)
+        except Exception as e:
+            logger.error(f"Error checking photo of photo: {e}")
+            return 0.5
