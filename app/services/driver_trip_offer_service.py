@@ -255,6 +255,7 @@ class DriverTripOfferService:
             ) if vehicle_info_obj else None
 
             driver_info_response = DriverInfoResponse(
+                id=driver_info_obj.id,
                 first_name=driver_info_obj.first_name,
                 last_name=driver_info_obj.last_name,
                 birth_date=str(driver_info_obj.birth_date),

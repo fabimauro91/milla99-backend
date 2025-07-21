@@ -362,7 +362,22 @@ class DriverService:
                     # ============================================================================
                     driver_info.document_verification_status = verification_result['decision']
                     driver_info.document_verification_score = verification_result['final_score']
-                    driver_info.document_verification_details = verification_result
+
+                    # Convertir UUIDs a string en verification_result
+                    from uuid import UUID
+
+                    def convert_uuids_to_strings(obj):
+                        if isinstance(obj, dict):
+                            return {k: convert_uuids_to_strings(v) for k, v in obj.items()}
+                        elif isinstance(obj, list):
+                            return [convert_uuids_to_strings(i) for i in obj]
+                        elif isinstance(obj, UUID):
+                            return str(obj)
+                        else:
+                            return obj
+                    driver_info.document_verification_details = convert_uuids_to_strings(
+                        verification_result)
+
                     driver_info.document_verification_date = datetime.now()
                     driver_info.document_verification_id = verification_result['verification_id']
                     driver_info.verification_attempts += 1
@@ -488,6 +503,7 @@ class DriverService:
                         selfie_url=user.selfie_url
                     ),
                     driver_info=DriverInfoResponse(
+                        id=driver_info.id,
                         first_name=driver_info.first_name,
                         last_name=driver_info.last_name,
                         birth_date=str(driver_info.birth_date),

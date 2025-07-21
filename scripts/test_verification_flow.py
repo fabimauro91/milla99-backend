@@ -26,6 +26,8 @@ class VerificationFlowTester:
         self.test_user_id = None
         self.test_driver_info_id = None
         self.access_token = None
+        self.test_phone_number = None  # Nuevo para guardar el número de teléfono
+        self.test_headers = None  # Nuevo para guardar los headers de autenticación
 
     def print_step(self, step_name: str):
         """Imprime un paso del test con formato"""
@@ -72,6 +74,8 @@ class VerificationFlowTester:
         }
         resp = self.session.post(
             f"{base_url}/drivers/", data=data, files=files)
+        print(
+            f"DEBUG respuesta backend /drivers: {resp.status_code} {resp.text}")
         assert resp.status_code == 201, f"Error creando driver: {resp.text}"
         phone_number = user_data["phone_number"]
         country_code = user_data["country_code"]
@@ -142,6 +146,9 @@ class VerificationFlowTester:
 
             self.test_user_id = user_id
             self.test_driver_info_id = driver_info_id
+            # Guardar para reutilizar
+            self.test_phone_number = user_data["phone_number"]
+            self.test_headers = headers  # Guardar headers para endpoints administrativos
 
             self.print_success(f"Driver registrado exitosamente")
             self.print_info(f"User ID: {self.test_user_id}")
@@ -160,45 +167,31 @@ class VerificationFlowTester:
             return False
 
         try:
-            # Primero necesitamos autenticarnos
-            auth_response = self.session.post(
-                f"{BASE_URL}{API_PREFIX}/auth/login",
-                json={
-                    "phone_number": f"300{str(uuid4().int)[:8]}",
-                    "password": "testpassword123"
-                }
+            # Usar el token que ya obtuvimos del registro exitoso
+            # No necesitamos hacer login porque ya tenemos el token del registro
+            headers = self.test_headers  # Usar los headers guardados del registro
+
+            # Consultar estado de verificación
+            response = self.session.get(
+                f"{BASE_URL}{API_PREFIX}/document-verification/driver-status",
+                headers=headers
             )
 
-            if auth_response.status_code == 200:
-                auth_data = auth_response.json()
-                self.access_token = auth_data.get("access_token")
-
-                # Consultar estado de verificación
-                headers = {"Authorization": f"Bearer {self.access_token}"}
-                response = self.session.get(
-                    f"{BASE_URL}{API_PREFIX}/document-verification/driver-status",
-                    headers=headers
-                )
-
-                if response.status_code == 200:
-                    status_data = response.json()
-                    self.print_success(
-                        "Estado de verificación consultado exitosamente")
-                    self.print_info(
-                        f"Status: {status_data.get('verification_status')}")
-                    self.print_info(
-                        f"Score: {status_data.get('verification_score')}")
-                    self.print_info(
-                        f"Can Operate: {status_data.get('can_operate')}")
-                    return True
-                else:
-                    self.print_error(
-                        f"Error consultando estado: {response.status_code}")
-                    self.print_error(f"Respuesta: {response.text}")
-                    return False
+            if response.status_code == 200:
+                status_data = response.json()
+                self.print_success(
+                    "Estado de verificación consultado exitosamente")
+                self.print_info(
+                    f"Status: {status_data.get('verification_status')}")
+                self.print_info(
+                    f"Score: {status_data.get('verification_score')}")
+                self.print_info(
+                    f"Can Operate: {status_data.get('can_operate')}")
+                return True
             else:
                 self.print_error(
-                    f"Error en autenticación: {auth_response.status_code}")
+                    f"Error consultando estado: {response.status_code}")
+                self.print_error(f"Respuesta: {response.text}")
                 return False
 
         except Exception as e:
@@ -214,9 +207,13 @@ class VerificationFlowTester:
             return False
 
         try:
+            # Usar los headers de autenticación guardados del registro
+            headers = self.test_headers
+
             # Probar endpoint de aprobación manual
             approve_response = self.session.post(
-                f"{BASE_URL}{API_PREFIX}/verify-docs/manual-approve-driver/{self.test_user_id}"
+                f"{BASE_URL}{API_PREFIX}/verify-docs/manual-approve-driver/{self.test_user_id}",
+                headers=headers  # Agregar headers de autenticación
             )
 
             if approve_response.status_code == 200:
@@ -231,7 +228,8 @@ class VerificationFlowTester:
             # Probar endpoint de rechazo manual
             reject_response = self.session.post(
                 f"{BASE_URL}{API_PREFIX}/verify-docs/manual-reject-driver/{self.test_user_id}",
-                params={"reason": "Prueba de rechazo manual"}
+                params={"reason": "Prueba de rechazo manual"},
+                headers=headers  # Agregar headers de autenticación
             )
 
             if reject_response.status_code == 200:
