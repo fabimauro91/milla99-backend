@@ -10,6 +10,7 @@ from uuid import UUID
 import pytz
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
+import threading
 
 COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
@@ -3496,3 +3497,163 @@ def test_driver_cancel_request():
         f"Status code de cancelación desde ARRIVED: {cancel_resp_arrived.status_code}")
     print(f"Respuesta: {cancel_resp_arrived.json()}")
     print("============================================\n")
+
+
+def test_driver_status_change_spam():
+    """
+    Simula múltiples requests simultáneos de cambio de estado para detectar race conditions o errores de concurrencia.
+    """
+    import threading
+    # Crear cliente y solicitud
+    phone_number = "3004444458"
+    country_code = "+57"
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    request_data = {
+        "fare_offered": 20000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,
+        "payment_method_id": 1
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+    # Crear y aprobar conductor
+    driver_phone = "3005555555"
+    driver_country_code = "+57"
+    driver_token, driver_id = create_and_approve_driver(
+        client, driver_phone, driver_country_code)
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+    # Asignar el conductor a la solicitud
+    assign_data = {
+        "id_client_request": client_request_id,
+        "id_driver": str(driver_id),
+        "fare_assigned": 25000
+    }
+    assign_resp = client.patch(
+        "/client-request/updateDriverAssigned", json=assign_data, headers=headers)
+    assert assign_resp.status_code == 200
+    assert assign_resp.json()["success"] is True
+    # Simular múltiples requests simultáneos para cambiar a ON_THE_WAY
+    status_data = {
+        "id_client_request": client_request_id,
+        "status": "ON_THE_WAY"
+    }
+    responses = []
+
+    def send_patch():
+        resp = client.patch(
+            "/client-request/updateStatusByDriver", json=status_data, headers=driver_headers)
+        responses.append(resp.status_code)
+    threads = [threading.Thread(target=send_patch) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    # Solo uno debe ser 200, los demás 400
+    assert responses.count(200) == 1
+    assert responses.count(400) == 4
+    print(f"✅ test_driver_status_change_spam: {responses}")
+
+
+def test_eta_cancelled_request():
+    """
+    Intenta consultar ETA de una solicitud cancelada y espera error 400 o 404.
+    """
+    # Crear cliente y solicitud
+    phone_number = "3004444459"
+    country_code = "+57"
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    request_data = {
+        "fare_offered": 20000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,
+        "payment_method_id": 1
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+    # Cancelar la solicitud
+    cancel_data = {"id_client_request": client_request_id}
+    cancel_resp = client.patch(
+        "/client-request/clientCanceled", json=cancel_data, headers=headers)
+    assert cancel_resp.status_code == 200
+    # Intentar consultar ETA
+    eta_resp = client.get(
+        f"/client-request/eta?client_request_id={client_request_id}", headers=headers)
+    assert eta_resp.status_code in (400, 404)
+    print(f"✅ test_eta_cancelled_request: status_code={eta_resp.status_code}")
+
+
+def test_rating_wrong_state():
+    """
+    Intenta calificar un viaje en un estado diferente a PAID y espera error 400.
+    """
+    # Crear cliente y solicitud
+    phone_number = "3004444460"
+    country_code = "+57"
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    request_data = {
+        "fare_offered": 20000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,
+        "payment_method_id": 1
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+    # Intentar calificar antes de que el viaje esté PAID
+    rating_data = {
+        "id_client_request": client_request_id,
+        "driver_rating": 5
+    }
+    rating_resp = client.patch(
+        "/client-request/updateDriverRating", json=rating_data, headers=headers)
+    assert rating_resp.status_code == 400
+    assert "Solo se puede calificar cuando el viaje está PAID" in rating_resp.json()[
+        "detail"]
+    print(f"✅ test_rating_wrong_state: status_code={rating_resp.status_code}")

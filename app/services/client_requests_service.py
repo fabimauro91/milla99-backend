@@ -1094,26 +1094,31 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
     """
     Permite al conductor cambiar el estado de la solicitud solo a los estados permitidos.
     """
+    logger.info(f"🔍 CAMBIO ESTADO CONDUCTOR: Iniciando cambio - Request: {id_client_request}, User: {user_id}, New Status: {status}")
+    
     try:
         new_status = StatusEnum(status)
     except ValueError:
+        logger.error(f"❌ CAMBIO ESTADO CONDUCTOR: Estado inválido '{status}'. Estados válidos: {[s.value for s in StatusEnum]}")
         raise HTTPException(
             status_code=400, detail=f"Estado inválido. Estados válidos: {[s.value for s in StatusEnum]}")
 
-    # Validar rol del conductor
     user_role = session.query(UserHasRole).filter(
         UserHasRole.id_user == user_id,
         UserHasRole.id_rol == "DRIVER",
         UserHasRole.status == RoleStatus.APPROVED
     ).first()
     if not user_role:
+        logger.error(f"❌ CAMBIO ESTADO CONDUCTOR: Usuario {user_id} no tiene rol DRIVER aprobado.")
         raise HTTPException(
             status_code=403, detail="Solo conductores aprobados pueden cambiar este estado")
 
-    # Obtener la solicitud actual
+    # Obtener la solicitud con lock de fila para evitar race condition
     client_request = session.query(ClientRequest).filter(
-        ClientRequest.id == id_client_request).first()
+        ClientRequest.id == id_client_request
+    ).with_for_update().first()
     if not client_request:
+        logger.error(f"❌ CAMBIO ESTADO CONDUCTOR: Solicitud {id_client_request} no encontrada.")
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
 
     # Validar que el conductor asignado sea el que hace la petición
