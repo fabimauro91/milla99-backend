@@ -9,6 +9,9 @@ import os
 import sys
 import logging
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Add the project root to the Python path
 project_root = Path(__file__).parent.parent

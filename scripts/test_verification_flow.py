@@ -62,6 +62,38 @@ class VerificationFlowTester:
             self.print_error(f"No se puede conectar al servidor: {e}")
             return False
 
+    def create_driver_and_get_token(self, base_url, user_data, driver_info_data, vehicle_info_data, driver_documents_data, files):
+        # 1. Crear driver
+        data = {
+            "user": json.dumps(user_data),
+            "driver_info": json.dumps(driver_info_data),
+            "vehicle_info": json.dumps(vehicle_info_data),
+            "driver_documents": json.dumps(driver_documents_data),
+        }
+        resp = self.session.post(
+            f"{base_url}/drivers/", data=data, files=files)
+        assert resp.status_code == 201, f"Error creando driver: {resp.text}"
+        phone_number = user_data["phone_number"]
+        country_code = user_data["country_code"]
+        user_id = resp.json()["user"]["id"]
+        driver_info_id = resp.json()["driver_info"]["id"]
+
+        # 2. Enviar código de verificación
+        send_resp = self.session.post(
+            f"{base_url}/auth/verify/{country_code}/{phone_number}/send")
+        assert send_resp.status_code == 201, f"Error enviando código: {send_resp.text}"
+        code = send_resp.json()["message"].split()[-1]
+
+        # 3. Verificar el código y obtener el token
+        verify_resp = self.session.post(
+            f"{base_url}/auth/verify/{country_code}/{phone_number}/code",
+            json={"code": code}
+        )
+        assert verify_resp.status_code == 200, f"Error verificando código: {verify_resp.text}"
+        token = verify_resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        return headers, user_id, driver_info_id
+
     def test_driver_registration_flow(self):
         """Prueba el flujo de registro de driver"""
         self.print_step("REGISTRO DE DRIVER")
@@ -70,7 +102,7 @@ class VerificationFlowTester:
         user_data = {
             "full_name": "Test Driver",
             "country_code": "+57",
-            "phone_number": f"300{str(uuid4().int)[:8]}",
+            "phone_number": f"300{str(uuid4().int)[:7]}",
             "password": "testpassword123"
         }
 
@@ -99,47 +131,22 @@ class VerificationFlowTester:
         try:
             # Crear archivos de prueba
             import io
-
-            # Crear una imagen de prueba simple
             test_image_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf5\x8d\xb0\xfd\x00\x00\x00\x00IEND\xaeB`\x82'
-
-            # Registrar driver con Form data
             files = {
                 'selfie': ('test_selfie.png', io.BytesIO(test_image_data), 'image/png')
             }
 
-            data = {
-                'user': json.dumps(user_data),
-                'driver_info': json.dumps(driver_info_data),
-                'vehicle_info': json.dumps(vehicle_info_data),
-                'driver_documents': json.dumps(driver_documents_data)
-            }
+            # Usa 'headers', 'user_id' y 'driver_info_id' para los siguientes requests
+            headers, user_id, driver_info_id = self.create_driver_and_get_token(
+                BASE_URL, user_data, driver_info_data, vehicle_info_data, driver_documents_data, files)
 
-            url = f"{BASE_URL}{API_PREFIX}/drivers"
-            print(f"🔍 DEBUG: Haciendo POST a: {url}")
-            print(f"🔍 DEBUG: Data: {data}")
-            print(f"🔍 DEBUG: Files: {files}")
+            self.test_user_id = user_id
+            self.test_driver_info_id = driver_info_id
 
-            response = self.session.post(
-                url,
-                data=data,
-                files=files
-            )
-
-            if response.status_code == 201:
-                result = response.json()
-                self.test_user_id = result.get("user_id")
-                self.test_driver_info_id = result.get("driver_info_id")
-                self.print_success(f"Driver registrado exitosamente")
-                self.print_info(f"User ID: {self.test_user_id}")
-                self.print_info(f"Driver Info ID: {self.test_driver_info_id}")
-                return True
-            else:
-                self.print_error(
-                    f"Error registrando driver: {response.status_code}")
-                self.print_error(f"Respuesta: {response.text}")
-                return False
-
+            self.print_success(f"Driver registrado exitosamente")
+            self.print_info(f"User ID: {self.test_user_id}")
+            self.print_info(f"Driver Info ID: {self.test_driver_info_id}")
+            return True
         except Exception as e:
             self.print_error(f"Error en registro de driver: {e}")
             return False

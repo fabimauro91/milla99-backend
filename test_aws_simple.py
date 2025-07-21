@@ -2,10 +2,12 @@
 """
 Simple test script for AWS configuration
 """
-
-import os
-import sys
 import logging
+import sys
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
