@@ -42,6 +42,13 @@ class DriverInfo(DriverInfoBase, table=True):
         description="Fecha y hora cuando el conductor aceptó la solicitud pendiente"
     )
 
+    # Campos de verificación de documentos (agregados para coincidir con la BD)
+    document_verification_status: Optional[str] = Field(
+        default=None, nullable=True)
+    document_verification_score: Optional[float] = Field(
+        default=None, nullable=True)
+    verification_attempts: Optional[int] = Field(default=0, nullable=True)
+
     # Relación con la solicitud pendiente
     pending_request: Optional["ClientRequest"] = Relationship(
         back_populates="driver_pending_request"

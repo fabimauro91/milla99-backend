@@ -8,6 +8,8 @@ from app.main import fastapi_app as app
 from app.core.db import get_session
 from app.core.init_data import init_data
 from app.core.config import settings
+from dotenv import load_dotenv
+load_dotenv()
 
 TEST_DB_NAME = "milla99_test"
 

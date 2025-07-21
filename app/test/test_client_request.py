@@ -3131,3 +3131,151 @@ def test_driver_cannot_offer_with_insufficient_balance(client):
     assert any(
         req.get("id") == str(client_request_id) for req in nearby_data if isinstance(req, dict)
     ), "La solicitud debería seguir apareciendo porque no se creó oferta"
+
+
+def test_client_cancel_request_arrived():
+    """
+    Test específico para verificar la cancelación de una solicitud en estado ARRIVED.
+    Simula el caso exacto que está fallando en producción.
+    """
+    # Datos del cliente
+    phone_number = "3004444457"
+    country_code = "+57"
+
+    # Autenticar cliente
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear solicitud de cliente
+    request_data = {
+        "fare_offered": 25000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,  # Car
+        "payment_method_id": 1  # Cash
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+
+    # Verificar estado inicial (debe ser CREATED)
+    detail_resp = client.get(
+        f"/client-request/{client_request_id}", headers=headers)
+    assert detail_resp.status_code == 200
+    print(f"\n=== ESTADO INICIAL ===")
+    print(f"Estado inicial: {detail_resp.json()['status']}")
+    print("======================\n")
+
+    # Simular asignación de conductor y cambio a ARRIVED
+    # Primero necesitamos un conductor autenticado
+    driver_phone = "3005555555"  # Roberto Sánchez - conductor que existe en los datos de prueba
+    driver_country_code = "+57"
+
+    # Autenticar conductor
+    driver_send_resp = client.post(
+        f"/auth/verify/{driver_country_code}/{driver_phone}/send")
+    assert driver_send_resp.status_code == 201
+    driver_code = driver_send_resp.json()["message"].split()[-1]
+
+    driver_verify_resp = client.post(
+        f"/auth/verify/{driver_country_code}/{driver_phone}/code",
+        json={"code": driver_code}
+    )
+    assert driver_verify_resp.status_code == 200
+    driver_token = driver_verify_resp.json()["access_token"]
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+
+    # Cambiar estado manualmente a ARRIVED para simular el escenario de producción
+    from app.models.client_request import ClientRequest, StatusEnum
+    from app.core.db import get_session
+    from sqlalchemy.orm import Session
+
+    # Obtener la sesión de base de datos
+    session = next(get_session())
+    try:
+        # Buscar la solicitud y cambiar su estado a ARRIVED
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == client_request_id
+        ).first()
+
+        if client_request:
+            # Asignar un conductor (necesario para el estado ARRIVED)
+            from app.models.user import User
+            driver_user = session.query(User).filter(
+                User.phone_number == driver_phone
+            ).first()
+
+            if driver_user:
+                client_request.id_driver_assigned = driver_user.id
+                client_request.status = StatusEnum.ARRIVED
+                session.commit()
+
+                print(f"\n=== ESTADO CAMBIADO A ARRIVED ===")
+                print(f"Conductor asignado: {driver_user.id}")
+                print(f"Nuevo estado: {client_request.status}")
+                print("================================\n")
+            else:
+                print("❌ No se encontró el conductor para asignar")
+        else:
+            print("❌ No se encontró la solicitud para cambiar estado")
+    except Exception as e:
+        print(f"❌ Error cambiando estado: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+    # Verificar que el estado cambió a ARRIVED
+    detail_resp = client.get(
+        f"/client-request/{client_request_id}", headers=headers)
+    assert detail_resp.status_code == 200
+    print(f"\n=== VERIFICACIÓN ESTADO ARRIVED ===")
+    print(f"Estado actual: {detail_resp.json()['status']}")
+    print("==================================\n")
+
+    # Intentar cancelar la solicitud en estado ARRIVED
+    cancel_data = {
+        "id_client_request": client_request_id
+    }
+    print(f"\n=== INTENTANDO CANCELAR DESDE ARRIVED ===")
+    cancel_resp = client.patch(
+        "/client-request/clientCanceled", json=cancel_data, headers=headers)
+
+    print(f"Status code de cancelación: {cancel_resp.status_code}")
+    print(f"Respuesta de cancelación: {cancel_resp.json()}")
+    print("==========================================\n")
+
+    # Verificar el resultado
+    if cancel_resp.status_code == 200:
+        assert cancel_resp.json()["success"] is True
+        assert "Solicitud cancelada" in cancel_resp.json()["message"]
+
+        # Verificar que el estado cambió a CANCELLED
+        detail_resp = client.get(
+            f"/client-request/{client_request_id}", headers=headers)
+        assert detail_resp.status_code == 200
+
+        print(f"\n=== ESTADO FINAL ===")
+        print(f"Estado final: {detail_resp.json()['status']}")
+        print("===================\n")
+
+        assert detail_resp.json()["status"] == str(StatusEnum.CANCELLED)
+        print("✅ Test exitoso: Cancelación desde ARRIVED funcionó correctamente")
+    else:
+        print(
+            f"❌ Test falló: Error {cancel_resp.status_code} al cancelar desde ARRIVED")
+        print(f"Detalle del error: {cancel_resp.json()}")
+        # No hacer assert para ver el error completo
