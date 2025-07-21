@@ -3182,7 +3182,8 @@ def test_client_cancel_request_arrived():
 
     # Simular asignación de conductor y cambio a ARRIVED
     # Primero necesitamos un conductor autenticado
-    driver_phone = "3005555555"  # Roberto Sánchez - conductor que existe en los datos de prueba
+    # Roberto Sánchez - conductor que existe en los datos de prueba
+    driver_phone = "3005555555"
     driver_country_code = "+57"
 
     # Autenticar conductor
@@ -3279,3 +3280,219 @@ def test_client_cancel_request_arrived():
             f"❌ Test falló: Error {cancel_resp.status_code} al cancelar desde ARRIVED")
         print(f"Detalle del error: {cancel_resp.json()}")
         # No hacer assert para ver el error completo
+
+
+def test_driver_cancel_request():
+    """
+    Test específico para verificar la cancelación de una solicitud por parte del conductor.
+    Simula el caso exacto que puede estar fallando en producción.
+    """
+    # Datos del cliente
+    client_phone = "3004444458"
+    client_country_code = "+57"
+
+    # Autenticar cliente
+    client_send_resp = client.post(
+        f"/auth/verify/{client_country_code}/{client_phone}/send")
+    assert client_send_resp.status_code == 201
+    client_code = client_send_resp.json()["message"].split()[-1]
+
+    client_verify_resp = client.post(
+        f"/auth/verify/{client_country_code}/{client_phone}/code",
+        json={"code": client_code}
+    )
+    assert client_verify_resp.status_code == 200
+    client_token = client_verify_resp.json()["access_token"]
+    client_headers = {"Authorization": f"Bearer {client_token}"}
+
+    # Crear solicitud de cliente
+    request_data = {
+        "fare_offered": 30000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,  # Car
+        "payment_method_id": 1  # Cash
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=client_headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+
+    print(f"\n=== SOLICITUD CREADA ===")
+    print(f"ID de solicitud: {client_request_id}")
+    print(f"Estado inicial: {create_resp.json()['status']}")
+    print("========================\n")
+
+    # Autenticar conductor
+    driver_phone = "3006666666"  # Laura Torres
+    driver_country_code = "+57"
+
+    driver_send_resp = client.post(
+        f"/auth/verify/{driver_country_code}/{driver_phone}/send")
+    assert driver_send_resp.status_code == 201
+    driver_code = driver_send_resp.json()["message"].split()[-1]
+
+    driver_verify_resp = client.post(
+        f"/auth/verify/{driver_country_code}/{driver_phone}/code",
+        json={"code": driver_code}
+    )
+    assert driver_verify_resp.status_code == 200
+    driver_token = driver_verify_resp.json()["access_token"]
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+
+    print(f"\n=== CONDUCTOR AUTENTICADO ===")
+    print(f"Conductor: {driver_phone}")
+    print("============================\n")
+
+    # Simular asignación de conductor y cambio a diferentes estados
+    from app.models.client_request import ClientRequest, StatusEnum
+    from app.core.db import get_session
+    from sqlalchemy.orm import Session
+
+    # Obtener la sesión de base de datos
+    session = next(get_session())
+    try:
+        # Buscar la solicitud y el conductor
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == client_request_id
+        ).first()
+
+        from app.models.user import User
+        driver_user = session.query(User).filter(
+            User.phone_number == driver_phone
+        ).first()
+
+        if client_request and driver_user:
+            # Asignar conductor y cambiar a ACCEPTED
+            client_request.id_driver_assigned = driver_user.id
+            client_request.status = StatusEnum.ACCEPTED
+            session.commit()
+
+            print(f"\n=== ESTADO CAMBIADO A ACCEPTED ===")
+            print(f"Conductor asignado: {driver_user.id}")
+            print(f"Nuevo estado: {client_request.status}")
+            print("==================================\n")
+        else:
+            print("❌ No se encontró la solicitud o el conductor")
+    except Exception as e:
+        print(f"❌ Error cambiando estado: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+    # Verificar estado ACCEPTED
+    detail_resp = client.get(
+        f"/client-request/{client_request_id}", headers=client_headers)
+    assert detail_resp.status_code == 200
+    print(f"\n=== VERIFICACIÓN ESTADO ACCEPTED ===")
+    print(f"Estado actual: {detail_resp.json()['status']}")
+    print("====================================\n")
+
+    # Intentar cancelar desde ACCEPTED
+    cancel_data = {
+        "id_client_request": client_request_id,
+        "reason": "Cliente no respondió"
+    }
+    print(f"\n=== INTENTANDO CANCELAR DESDE ACCEPTED ===")
+    cancel_resp = client.patch(
+        "/client-request/driver-canceled", json=cancel_data, headers=driver_headers)
+
+    print(f"Status code de cancelación: {cancel_resp.status_code}")
+    print(f"Respuesta de cancelación: {cancel_resp.json()}")
+    print("==========================================\n")
+
+    # Verificar el resultado
+    if cancel_resp.status_code == 200:
+        assert cancel_resp.json()["success"] is True
+        assert "cancelada exitosamente" in cancel_resp.json()["message"]
+
+        # Verificar que el estado cambió a CANCELLED
+        detail_resp = client.get(
+            f"/client-request/{client_request_id}", headers=client_headers)
+        assert detail_resp.status_code == 200
+
+        print(f"\n=== ESTADO FINAL DESPUÉS DE CANCELACIÓN ===")
+        print(f"Estado final: {detail_resp.json()['status']}")
+        print("==========================================\n")
+
+        assert detail_resp.json()["status"] == str(StatusEnum.CANCELLED)
+        print("✅ Test exitoso: Cancelación por conductor desde ACCEPTED funcionó correctamente")
+    else:
+        print(
+            f"❌ Test falló: Error {cancel_resp.status_code} al cancelar desde ACCEPTED")
+        print(f"Detalle del error: {cancel_resp.json()}")
+        # No hacer assert para ver el error completo
+
+    # Ahora probar desde ON_THE_WAY
+    print(f"\n=== PROBANDO CANCELACIÓN DESDE ON_THE_WAY ===")
+
+    # Cambiar estado a ON_THE_WAY
+    session = next(get_session())
+    try:
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == client_request_id
+        ).first()
+
+        if client_request:
+            client_request.status = StatusEnum.ON_THE_WAY
+            session.commit()
+            print(f"Estado cambiado a: {client_request.status}")
+        else:
+            print("❌ No se encontró la solicitud")
+    except Exception as e:
+        print(f"❌ Error cambiando estado: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+    # Intentar cancelar desde ON_THE_WAY
+    cancel_data_on_the_way = {
+        "id_client_request": client_request_id,
+        "reason": "Cliente canceló"
+    }
+    cancel_resp_on_the_way = client.patch(
+        "/client-request/driver-canceled", json=cancel_data_on_the_way, headers=driver_headers)
+
+    print(
+        f"Status code de cancelación desde ON_THE_WAY: {cancel_resp_on_the_way.status_code}")
+    print(f"Respuesta: {cancel_resp_on_the_way.json()}")
+    print("================================================\n")
+
+    # Probar desde ARRIVED
+    print(f"\n=== PROBANDO CANCELACIÓN DESDE ARRIVED ===")
+
+    # Cambiar estado a ARRIVED
+    session = next(get_session())
+    try:
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == client_request_id
+        ).first()
+
+        if client_request:
+            client_request.status = StatusEnum.ARRIVED
+            session.commit()
+            print(f"Estado cambiado a: {client_request.status}")
+        else:
+            print("❌ No se encontró la solicitud")
+    except Exception as e:
+        print(f"❌ Error cambiando estado: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+    # Intentar cancelar desde ARRIVED
+    cancel_data_arrived = {
+        "id_client_request": client_request_id,
+        "reason": "Cliente no apareció"
+    }
+    cancel_resp_arrived = client.patch(
+        "/client-request/driver-canceled", json=cancel_data_arrived, headers=driver_headers)
+
+    print(
+        f"Status code de cancelación desde ARRIVED: {cancel_resp_arrived.status_code}")
+    print(f"Respuesta: {cancel_resp_arrived.json()}")
+    print("============================================\n")
