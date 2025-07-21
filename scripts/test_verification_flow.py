@@ -98,6 +98,40 @@ class VerificationFlowTester:
         headers = {"Authorization": f"Bearer {token}"}
         return headers, user_id, driver_info_id
 
+    def create_admin_and_get_token(self, base_url):
+        """Crear un admin y obtener su token de autenticación"""
+        try:
+            # Usar las credenciales del admin existente
+            login_data = {
+                "email": "admin",
+                "password": "admin"
+            }
+
+            # Intentar login de admin
+            login_response = self.session.post(
+                f"{base_url}/login-admin/login",  # Corregir endpoint
+                json=login_data
+            )
+
+            if login_response.status_code == 200:
+                login_result = login_response.json()
+                token = login_result.get("access_token")
+                if token:
+                    headers = {"Authorization": f"Bearer {token}"}
+                    self.print_success("Login de admin exitoso")
+                    return headers, login_result.get("admin_id")
+                else:
+                    self.print_error("No se pudo obtener token de admin")
+                    return None, None
+            else:
+                self.print_error(
+                    f"Error en login de admin: {login_response.status_code} - {login_response.text}")
+                return None, None
+
+        except Exception as e:
+            self.print_error(f"Error creando admin: {e}")
+            return None, None
+
     def test_driver_registration_flow(self):
         """Prueba el flujo de registro de driver"""
         self.print_step("REGISTRO DE DRIVER")
@@ -207,13 +241,17 @@ class VerificationFlowTester:
             return False
 
         try:
-            # Usar los headers de autenticación guardados del registro
-            headers = self.test_headers
+            # Crear admin y obtener su token
+            admin_headers, admin_id = self.create_admin_and_get_token(BASE_URL)
+
+            if not admin_headers:
+                self.print_error("No se pudo obtener token de admin")
+                return False
 
             # Probar endpoint de aprobación manual
             approve_response = self.session.post(
                 f"{BASE_URL}{API_PREFIX}/verify-docs/manual-approve-driver/{self.test_user_id}",
-                headers=headers  # Agregar headers de autenticación
+                headers=admin_headers  # Usar headers de admin
             )
 
             if approve_response.status_code == 200:
@@ -229,7 +267,7 @@ class VerificationFlowTester:
             reject_response = self.session.post(
                 f"{BASE_URL}{API_PREFIX}/verify-docs/manual-reject-driver/{self.test_user_id}",
                 params={"reason": "Prueba de rechazo manual"},
-                headers=headers  # Agregar headers de autenticación
+                headers=admin_headers  # Usar headers de admin
             )
 
             if reject_response.status_code == 200:

@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.services.document_verification_service import DocumentVerificationService
 from app.services.notification_service import NotificationService
+from app.core.dependencies.admin_auth import get_current_admin_user
 
 
 bearer_scheme = HTTPBearer()
@@ -368,7 +369,8 @@ def force_approve_driver(
 @router.post("/manual-approve-driver/{user_id}")
 def manual_approve_driver(
     user_id: str,
-    session: SessionDep
+    session: SessionDep,
+    current_admin=Depends(get_current_admin_user)
 ):
     """
     Aprobar manualmente un conductor después de revisión administrativa.
@@ -441,7 +443,8 @@ def manual_approve_driver(
 def manual_reject_driver(
     user_id: str,
     session: SessionDep,
-    reason: str = Query(None, description="Razón del rechazo manual")
+    reason: str = Query(None, description="Razón del rechazo manual"),
+    current_admin=Depends(get_current_admin_user)
 ):
     """
     Rechazar manualmente un conductor después de revisión administrativa.
