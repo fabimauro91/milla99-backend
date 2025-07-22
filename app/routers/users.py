@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, File, UploadFile, Form
+from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, File, UploadFile, Form, Body
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
 from uuid import UUID
@@ -10,6 +10,7 @@ from app.core.dependencies.auth import user_is_owner, get_current_user
 from app.models.user import User, UserCreate, UserUpdate, UserRead
 from app.core.db import SessionDep
 from app.services.user_service import UserService
+from app.services.user_deletion_service import delete_user_completely_service
 
 bearer_scheme = HTTPBearer()
 
@@ -140,3 +141,54 @@ def update_me(
 
     # Retornar el usuario actualizado
     return service.get_user(user_id)
+
+# Delete user completely endpoint (protegida)
+
+
+@router.delete("/me/delete-completely", status_code=status.HTTP_200_OK, description="""
+Elimina completamente un usuario del sistema manteniendo solo la información mínima 
+para evitar abuso del sistema.
+
+**Efectos:**
+- Elimina todos los datos personales del usuario
+- Elimina historial de viajes, transacciones, calificaciones
+- Permite re-registro pero sin bonificación (para conductores)
+- Mantiene solo: teléfono, fecha eliminación, balance original
+
+**Parámetros:**
+- `reason`: Razón de la eliminación (opcional, por defecto "User request")
+
+**Respuesta:**
+Confirma la eliminación del usuario.
+""")
+def delete_user_completely(
+    request: Request,
+    session: SessionDep,
+    reason: str = "User request",
+    current_user=Depends(get_current_user)
+):
+    """
+    Elimina completamente un usuario del sistema.
+    Solo el propio usuario puede eliminarse a sí mismo.
+    """
+    user_id = request.state.user_id
+
+    try:
+        result = delete_user_completely_service(
+            session=session,
+            user_id=user_id,
+            reason=reason
+        )
+        return {
+            "message": "Usuario eliminado completamente del sistema. Puede volver a registrarse pero sin bonificación.",
+            "deleted_at": result["deleted_at"],
+            "phone_number": result["phone_number"],
+            "user_type": result["user_type"],
+            "original_balance": result["original_balance"]
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logging.exception("Error eliminando usuario completamente")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor")

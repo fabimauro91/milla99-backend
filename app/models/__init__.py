@@ -31,3 +31,4 @@ from .refresh_token import RefreshToken
 from .chat_message import ChatMessage, ChatMessageCreate, ChatMessageRead, UnreadCountResponse, MessageStatus
 from .administrador import Administrador, AdminRole
 from .admin_log import AdminLog, AdminLogCreate, AdminLogRead, AdminLogUpdate, AdminLogFilter, AdminLogStatistics, AdminActionType, LogSeverity
+from .deleted_user import DeletedUser

@@ -16,6 +16,7 @@ from clicksend_client.rest import ApiException
 from sqlalchemy.orm import joinedload
 from uuid import UUID
 from .refresh_token_service import RefreshTokenService
+from .user_deletion_service import check_deleted_user_registration
 import pytz
 
 
@@ -89,6 +90,17 @@ class AuthService:
             )
 
     async def create_verification(self, country_code: str, phone_number: str) -> tuple[Verification, str]:
+        # Verificar si el teléfono pertenece a un usuario eliminado
+        deleted_user_info = check_deleted_user_registration(
+            self.session, phone_number)
+
+        # Si es un usuario eliminado, permitir pero marcar que no debe recibir bono
+        if deleted_user_info.get("no_bonus"):
+            # Guardar información en la sesión para usar después
+            self.session.info = {
+                "deleted_user_info": deleted_user_info
+            }
+
         # Verificar usuario existente
         user = self.session.exec(
             select(User).where(
@@ -97,11 +109,25 @@ class AuthService:
             )
         ).first()
 
+        # Si no existe en User, verificar si es un usuario eliminado
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+            if deleted_user_info.get("no_bonus"):
+                # Es un usuario eliminado, permitir verificación para re-registro
+                # Crear un usuario temporal para la verificación
+                user = User(
+                    country_code=country_code,
+                    phone_number=phone_number,
+                    is_active=False,
+                    is_verified_phone=False
+                )
+                self.session.add(user)
+                self.session.commit()
+                self.session.refresh(user)
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
 
         # Generar código y fecha de expiración
         verification_code = self.generate_verification_code()
@@ -161,6 +187,17 @@ class AuthService:
         Verifica el código y retorna tokens + datos del usuario
         Returns: (success, access_token, refresh_token, user_data)
         """
+        # Verificar si el teléfono pertenece a un usuario eliminado
+        deleted_user_info = check_deleted_user_registration(
+            self.session, phone_number)
+
+        # Si es un usuario eliminado, permitir pero marcar que no debe recibir bono
+        if deleted_user_info.get("no_bonus"):
+            # Guardar información en la sesión para usar después
+            self.session.info = {
+                "deleted_user_info": deleted_user_info
+            }
+
         # Buscar el usuario primero
         user = self.session.exec(
             select(User).where(
@@ -169,11 +206,28 @@ class AuthService:
             )
         ).first()
 
-        if not user:  # retirna si el telefono y pais no corresponde
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+        # Si no existe en User, verificar si es un usuario eliminado
+        if not user:
+            if deleted_user_info.get("no_bonus"):
+                # Es un usuario eliminado, buscar el usuario temporal creado para verificación
+                user = self.session.exec(
+                    select(User).where(
+                        User.country_code == country_code,
+                        User.phone_number == phone_number,
+                        User.is_active == False
+                    )
+                ).first()
+
+                if not user:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="No active verification found"
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
 
         verification = self.session.exec(  # busca codigo  si el tiempo de ducracion no a expirado
             select(Verification)

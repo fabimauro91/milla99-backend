@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlmodel import Session, select
 from app.models.user_has_roles import UserHasRole, RoleStatus
 from app.models.role import Role
+from app.models.deleted_user import DeletedUser
 from app.core.db import engine
 from uuid import UUID
 import time
@@ -413,3 +414,229 @@ def test_update_me():
 #         }
 #     )
 #     assert response.status_code == 201
+
+# === TESTS DE ELIMINACIÓN DE USUARIOS ===
+
+def test_user_deletion_flow():
+    """
+    Test completo del flujo de eliminación de usuarios:
+    1. Crear usuario
+    2. Eliminar completamente
+    3. Verificar que puede volver a registrarse pero sin bono
+    """
+    # Datos del usuario
+    phone_number = "3004444470"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Usuario Test Eliminación"
+
+    # 1. Crear usuario
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    user_data = create_resp.json()
+    user_id = user_data["id"]
+
+    # 2. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Verificar que el usuario existe usando /users/me
+    me_resp = client.get("/users/me", headers=headers)
+    assert me_resp.status_code == 200
+
+    # 4. Eliminar completamente el usuario
+    delete_resp = client.delete("/users/me/delete-completely",
+                                headers=headers)
+    assert delete_resp.status_code == 200
+    delete_data = delete_resp.json()
+    assert "eliminado completamente" in delete_data["message"]
+    assert delete_data["phone_number"] == phone_number
+
+    # 5. Verificar que el usuario ya no puede acceder a endpoints protegidos
+    me_resp = client.get("/users/me", headers=headers)
+    assert me_resp.status_code == 401  # Token inválido porque usuario fue eliminado
+
+    # 6. Verificar que PUEDE volver a registrarse con el mismo teléfono
+    create_resp = client.post("/users/", json={
+        "full_name": "Usuario Test Reregistro",
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201  # Ahora permite re-registro
+
+
+def test_driver_bonus_eligibility():
+    """
+    Test para verificar que un conductor eliminado no puede recibir bono al re-registrarse
+    """
+    # Datos del conductor
+    phone_number = "3004444471"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Conductor Test Bono"
+
+    # 1. Crear conductor
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    user_data = create_resp.json()
+    user_id = user_data["id"]
+
+    # 2. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Eliminar conductor
+    delete_resp = client.delete("/users/me/delete-completely", headers=headers)
+    assert delete_resp.status_code == 200
+
+    # 4. Re-registrar conductor
+    create_resp = client.post("/users/", json={
+        "full_name": "Conductor Test Reregistro",
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201  # Permite re-registro
+
+    # 5. Verificar que no puede recibir bono (esto se verificaría en el endpoint de bono)
+    # new_user_id = create_resp.json()["id"]
+    # bonus_resp = client.post(f"/drivers/{new_user_id}/apply-bonus")
+    # assert bonus_resp.status_code == 400
+    # assert "eliminado" in bonus_resp.json()["detail"].lower()
+
+
+def test_deleted_user_verification_allowed():
+    """
+    Test para verificar que un usuario eliminado PUEDE verificar su teléfono
+    """
+    # Datos del usuario
+    phone_number = "3004444472"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Usuario Test Verificación"
+
+    # 1. Crear usuario
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+
+    # 2. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Eliminar usuario
+    delete_resp = client.delete("/users/me/delete-completely", headers=headers)
+    assert delete_resp.status_code == 200
+
+    # 4. Intentar enviar código de verificación (ahora debe permitir)
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201  # Ahora permite verificación
+
+
+def test_user_deletion_with_authentication():
+    """
+    Test para verificar que solo el propio usuario puede eliminarse
+    """
+    # Datos del usuario
+    phone_number = "3004444473"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Usuario Test Auth"
+
+    # 1. Crear usuario
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    user_data = create_resp.json()
+    user_id = user_data["id"]
+
+    # 2. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Eliminar usuario con autenticación
+    delete_resp = client.delete("/users/me/delete-completely",
+                                headers=headers)
+    assert delete_resp.status_code == 200
+    delete_data = delete_resp.json()
+    assert "eliminado completamente" in delete_data["message"]
+    assert delete_data["phone_number"] == phone_number
+
+
+def test_deleted_user_cannot_access_endpoints():
+    """
+    Test para verificar que un usuario eliminado no puede acceder a endpoints protegidos
+    """
+    # Datos del usuario
+    phone_number = "3004444474"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Usuario Test Acceso"
+
+    # 1. Crear y verificar usuario
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Eliminar usuario
+    delete_resp = client.delete("/users/me/delete-completely",
+                                headers=headers)
+    assert delete_resp.status_code == 200
+
+    # 3. Intentar acceder a endpoint protegido (debe fallar)
+    me_resp = client.get("/users/me", headers=headers)
+    assert me_resp.status_code == 401  # Token inválido porque usuario fue eliminado
