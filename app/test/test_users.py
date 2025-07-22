@@ -478,7 +478,8 @@ def test_user_deletion_flow():
 
 def test_driver_bonus_eligibility():
     """
-    Test para verificar que un conductor eliminado no puede recibir bono al re-registrarse
+    Test para verificar que un conductor que se creó como DRIVER y fue eliminado 
+    no puede recibir bono al re-registrarse
     """
     from app.models.user_has_roles import UserHasRole, RoleStatus
 
@@ -487,7 +488,7 @@ def test_driver_bonus_eligibility():
     country_code = "+57"
     full_name = "Conductor Test Bono"
 
-    # 1. Crear conductor
+    # 1. Crear conductor con rol DRIVER desde el inicio
     create_resp = client.post("/users/", json={
         "full_name": full_name,
         "country_code": country_code,
@@ -496,6 +497,17 @@ def test_driver_bonus_eligibility():
     assert create_resp.status_code == 201
     user_data = create_resp.json()
     user_id = user_data["id"]
+
+    # 1.1. Agregar rol DRIVER al usuario (simula registro como conductor)
+    with Session(engine) as session:
+        driver_role = UserHasRole(
+            id_user=UUID(user_id),
+            id_rol="DRIVER",
+            status=RoleStatus.APPROVED,
+            is_verified=True
+        )
+        session.add(driver_role)
+        session.commit()
 
     # 2. Verificar usuario para obtener token
     send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
