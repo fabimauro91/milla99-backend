@@ -11,6 +11,11 @@ import pytz
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 import threading
+from app.models.verify_mount import VerifyMount
+from app.core.db import get_session
+from app.utils.withdrawal_utils import WITHDRAWAL_COMMISSION
+from decimal import Decimal
+from app.models.transaction import Transaction, TransactionType
 
 COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
@@ -3657,3 +3662,306 @@ def test_rating_wrong_state():
     assert "Solo se puede calificar cuando el viaje está PAID" in rating_resp.json()[
         "detail"]
     print(f"✅ test_rating_wrong_state: status_code={rating_resp.status_code}")
+
+
+def test_trip_offer_discount_from_verify_mount():
+    """
+    Test que verifica que al aceptar una oferta (asignar conductor),
+    se descuenta correctamente la comisión (10%) del saldo VerifyMount del conductor.
+    Incluye el bono de bienvenida de 20,000.
+    """
+    import traceback
+    from app.models.verify_mount import VerifyMount
+    from app.core.db import get_session
+    from sqlmodel import Session
+    from decimal import Decimal
+    from uuid import UUID
+
+    # 1. Crear y aprobar conductor (tendrá bono de bienvenida)
+    driver_phone = "3050000001"
+    driver_country_code = "+57"
+    driver_token, driver_id = create_and_approve_driver(
+        client, driver_phone, driver_country_code)
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+
+    # 2. Consultar saldo inicial del conductor (debe ser el bono)
+    session = next(get_session())
+    try:
+        verify_mount = session.query(VerifyMount).filter(
+            VerifyMount.user_id == driver_id
+        ).first()
+        assert verify_mount is not None, "No se encontró VerifyMount para el conductor"
+        initial_balance = verify_mount.mount
+        print(f"💰 Saldo inicial del conductor: ${initial_balance:,}")
+    finally:
+        session.close()
+
+    # 3. Crear y autenticar cliente
+    client_phone = "3050000002"
+    client_country_code = "+57"
+    try:
+        # Crear usuario cliente
+        user_data = {
+            "full_name": "Cliente Test Trip Offer",
+            "country_code": client_country_code,
+            "phone_number": client_phone
+        }
+        print("Creando usuario cliente...")
+        create_user_resp = client.post("/users/", json=user_data)
+        print("Respuesta creación usuario:",
+              create_user_resp.status_code, create_user_resp.text)
+        assert create_user_resp.status_code == 201
+
+        # Enviar código de verificación
+        send_resp = client.post(
+            f"/auth/verify/{client_country_code}/{client_phone}/send")
+        print("Respuesta envío código:", send_resp.status_code, send_resp.text)
+        assert send_resp.status_code == 201
+        code = send_resp.json()["message"].split()[-1]
+
+        # Verificar el código y obtener el token
+        verify_resp = client.post(
+            f"/auth/verify/{client_country_code}/{client_phone}/code",
+            json={"code": code}
+        )
+        print("Respuesta verificación código:",
+              verify_resp.status_code, verify_resp.text)
+        assert verify_resp.status_code == 200
+        client_token = verify_resp.json()["access_token"]
+        client_headers = {"Authorization": f"Bearer {client_token}"}
+    except Exception as e:
+        print("❌ Error en flujo de creación/autenticación de cliente")
+        traceback.print_exc()
+        raise
+
+    # 4. Cliente crea una solicitud de viaje
+    request_data = {
+        "fare_offered": 10000,  # Valor de la oferta
+        "pickup_description": "Test Pickup",
+        "destination_description": "Test Destination",
+        "pickup_lat": 4.7,
+        "pickup_lng": -74.1,
+        "destination_lat": 4.8,
+        "destination_lng": -74.2,
+        "type_service_id": 1,
+        "payment_method_id": 1
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=client_headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+
+    # 5. Conductor hace una oferta (trip offer)
+    offer_data = {
+        "id_client_request": client_request_id,
+        "fare_offer": 10000,
+        "time": 10,
+        "distance": 5.0
+    }
+    offer_resp = client.post(
+        "/driver-trip-offers/", json=offer_data, headers=driver_headers)
+    assert offer_resp.status_code == 201, f"Error al crear oferta: {offer_resp.text}"
+
+    # 6. Cliente acepta la oferta (asignar conductor)
+    assign_data = {
+        "id_client_request": client_request_id,
+        "id_driver": str(driver_id),
+        "fare_assigned": 10000
+    }
+    assign_resp = client.patch(
+        "/client-request/updateDriverAssigned", json=assign_data, headers=client_headers)
+    assert assign_resp.status_code == 200, f"Error al asignar conductor: {assign_resp.text}"
+    assert assign_resp.json()["success"] is True
+
+    # 7. Consultar saldo final del conductor
+    session = next(get_session())
+    try:
+        verify_mount = session.query(VerifyMount).filter(
+            VerifyMount.user_id == driver_id
+        ).first()
+        assert verify_mount is not None, "No se encontró VerifyMount para el conductor"
+        final_balance = verify_mount.mount
+        print(f"💰 Saldo final del conductor: ${final_balance:,}")
+    finally:
+        session.close()
+
+    # 8. Calcular comisión esperada y verificar descuento
+    commission = int(Decimal("10000") * Decimal("0.10"))
+    expected_balance = initial_balance - commission
+    assert final_balance == expected_balance, f"El saldo final no es correcto. Esperado: ${expected_balance:,}, Actual: ${final_balance:,}"
+    print(
+        f"✅ Comisión descontada correctamente al aceptar la oferta: ${commission:,}")
+
+
+def test_trip_cancellation_refunds_driver_commission():
+    """
+    Test que verifica que cuando se cancela un viaje después de aceptar una oferta,
+    se le devuelve correctamente la comisión al conductor.
+    """
+    import traceback
+    from app.models.verify_mount import VerifyMount
+    from app.models.transaction import Transaction, TransactionType
+    from app.core.db import get_session
+    from sqlmodel import Session
+    from decimal import Decimal
+    from uuid import UUID
+
+    # 1. Crear y aprobar conductor (tendrá bono de bienvenida)
+    driver_phone = "3050000003"
+    driver_country_code = "+57"
+    driver_token, driver_id = create_and_approve_driver(
+        client, driver_phone, driver_country_code)
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+
+    # 2. Consultar saldo inicial del conductor
+    session = next(get_session())
+    try:
+        verify_mount = session.query(VerifyMount).filter(
+            VerifyMount.user_id == driver_id
+        ).first()
+        assert verify_mount is not None, "No se encontró VerifyMount para el conductor"
+        initial_balance = verify_mount.mount
+        print(f"💰 Saldo inicial del conductor: ${initial_balance:,}")
+    finally:
+        session.close()
+
+    # 3. Crear y autenticar cliente
+    client_phone = "3050000004"
+    client_country_code = "+57"
+    try:
+        # Crear usuario cliente
+        user_data = {
+            "full_name": "Cliente Test Cancelación",
+            "country_code": client_country_code,
+            "phone_number": client_phone
+        }
+        print("Creando usuario cliente...")
+        create_user_resp = client.post("/users/", json=user_data)
+        print("Respuesta creación usuario:",
+              create_user_resp.status_code, create_user_resp.text)
+        assert create_user_resp.status_code == 201
+
+        # Enviar código de verificación
+        send_resp = client.post(
+            f"/auth/verify/{client_country_code}/{client_phone}/send")
+        print("Respuesta envío código:", send_resp.status_code, send_resp.text)
+        assert send_resp.status_code == 201
+        code = send_resp.json()["message"].split()[-1]
+
+        # Verificar el código y obtener el token
+        verify_resp = client.post(
+            f"/auth/verify/{client_country_code}/{client_phone}/code",
+            json={"code": code}
+        )
+        print("Respuesta verificación código:",
+              verify_resp.status_code, verify_resp.text)
+        assert verify_resp.status_code == 200
+        client_token = verify_resp.json()["access_token"]
+        client_headers = {"Authorization": f"Bearer {client_token}"}
+    except Exception as e:
+        print("❌ Error en flujo de creación/autenticación de cliente")
+        traceback.print_exc()
+        raise
+
+    # 4. Cliente crea una solicitud de viaje
+    request_data = {
+        "fare_offered": 15000,  # Valor de la oferta
+        "pickup_description": "Test Pickup Cancel",
+        "destination_description": "Test Destination Cancel",
+        "pickup_lat": 4.7,
+        "pickup_lng": -74.1,
+        "destination_lat": 4.8,
+        "destination_lng": -74.2,
+        "type_service_id": 1,
+        "payment_method_id": 1
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=client_headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+
+    # 5. Conductor hace una oferta (trip offer)
+    offer_data = {
+        "id_client_request": client_request_id,
+        "fare_offer": 15000,
+        "time": 10,
+        "distance": 5.0
+    }
+    offer_resp = client.post(
+        "/driver-trip-offers/", json=offer_data, headers=driver_headers)
+    assert offer_resp.status_code == 201, f"Error al crear oferta: {offer_resp.text}"
+
+    # 6. Cliente acepta la oferta (asignar conductor)
+    assign_data = {
+        "id_client_request": client_request_id,
+        "id_driver": str(driver_id),
+        "fare_assigned": 15000
+    }
+    assign_resp = client.patch(
+        "/client-request/updateDriverAssigned", json=assign_data, headers=client_headers)
+    assert assign_resp.status_code == 200, f"Error al asignar conductor: {assign_resp.text}"
+    assert assign_resp.json()["success"] is True
+
+    # 7. Verificar que se descontó la comisión
+    session = next(get_session())
+    try:
+        verify_mount = session.query(VerifyMount).filter(
+            VerifyMount.user_id == driver_id
+        ).first()
+        balance_after_assignment = verify_mount.mount
+        print(
+            f"💰 Saldo después de asignar conductor: ${balance_after_assignment:,}")
+
+        # Verificar que se descontó la comisión (10% de 15000 = 1500)
+        commission = int(Decimal("15000") * Decimal("0.10"))
+        expected_balance_after_assignment = initial_balance - commission
+        assert balance_after_assignment == expected_balance_after_assignment, f"El saldo después de asignar no es correcto. Esperado: ${expected_balance_after_assignment:,}, Actual: ${balance_after_assignment:,}"
+        print(f"✅ Comisión descontada correctamente: ${commission:,}")
+    finally:
+        session.close()
+
+    # 8. Cliente cancela el viaje
+    cancel_resp = client.patch(
+        "/client-request/clientCanceled",
+        json={"id_client_request": client_request_id},
+        headers=client_headers
+    )
+    assert cancel_resp.status_code == 200, f"Error al cancelar viaje: {cancel_resp.text}"
+    assert cancel_resp.json()["success"] is True
+
+    # 9. Verificar que se devolvió la comisión al conductor
+    session = next(get_session())
+    try:
+        verify_mount = session.query(VerifyMount).filter(
+            VerifyMount.user_id == driver_id
+        ).first()
+        final_balance = verify_mount.mount
+        print(f"💰 Saldo final después de cancelación: ${final_balance:,}")
+
+        # Verificar que se devolvió la comisión
+        expected_final_balance = initial_balance  # Debería volver al saldo inicial
+        assert final_balance == expected_final_balance, f"El saldo final no es correcto. Esperado: ${expected_final_balance:,}, Actual: ${final_balance:,}"
+        print(
+            f"✅ Comisión devuelta correctamente al cancelar el viaje: ${commission:,}")
+
+        # Verificar que la transacción de comisión fue marcada como revertida
+        # Usar ORM de SQLAlchemy como en otros tests
+        transaction = session.query(Transaction).filter(
+            Transaction.client_request_id == UUID(str(client_request_id)),
+            Transaction.type == TransactionType.COMMISSION
+        ).first()
+
+        assert transaction is not None, "No se encontró la transacción de comisión"
+        assert "[REVERTIDA POR CANCELACIÓN]" in transaction.description, "La transacción no fue marcada como revertida"
+        assert transaction.is_confirmed == False, "La transacción no fue marcada como no confirmada"
+        assert transaction.reverted == True, "La transacción no fue marcada como revertida en el campo reverted"
+        print(f"✅ Transacción de comisión marcada como revertida correctamente")
+        print(f"   - ID: {transaction.id}")
+        print(f"   - Description: {transaction.description}")
+        print(f"   - Is Confirmed: {transaction.is_confirmed}")
+        print(f"   - Reverted: {transaction.reverted}")
+
+    finally:
+        session.close()
+
+    print("✅ Test completado: La comisión se devolvió correctamente al conductor")

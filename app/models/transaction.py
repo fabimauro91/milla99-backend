@@ -57,6 +57,7 @@ class Transaction(SQLModel, table=True):
         foreign_key="bank_account.id",
         nullable=True
     )
+    reverted: bool = Field(default=False)
 
     # Relaciones
     user: Optional["User"] = Relationship(back_populates="transactions")

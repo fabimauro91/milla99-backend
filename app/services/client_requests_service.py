@@ -133,7 +133,8 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
             ST_Distance(ClientRequest.pickup_position,
                         driver_point).label("distance"),
             # ✅ CORREGIDO: Usar EXTRACT para PostgreSQL en lugar de timestampdiff de MySQL
-            (func.extract('epoch', func.now() - ClientRequest.created_at) / 60.0).label("time_difference")
+            (func.extract('epoch', func.now() - ClientRequest.created_at) /
+             60.0).label("time_difference")
         )
         .join(User, User.id == ClientRequest.id_client)
         .join(TypeService, TypeService.id == ClientRequest.type_service_id)
@@ -263,6 +264,12 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
 def assign_driver_service(session: Session, id: UUID, id_driver_assigned: UUID, fare_assigned: float = None):
     # Validación: El conductor debe tener el rol DRIVER y status APPROVED
     try:
+        from app.models.transaction import Transaction, TransactionType
+        from app.models.verify_mount import VerifyMount
+        from decimal import Decimal
+        from datetime import datetime
+        import traceback
+
         user_role = session.query(UserHasRole).filter(
             UserHasRole.id_user == id_driver_assigned,
             UserHasRole.id_rol == "DRIVER"
@@ -317,23 +324,38 @@ def assign_driver_service(session: Session, id: UUID, id_driver_assigned: UUID, 
         print(f"💰 Saldo actual del conductor: ${driver_current_balance:,}")
 
         # Calcular comisión estimada (10% del valor del viaje)
-        commission_percentage = 0.10
-        estimated_commission = float(
-            fare_assigned or client_request.fare_offered or 0) * commission_percentage
-        print(f"💸 Comisión estimada (10%): ${estimated_commission:,.0f}")
+        commission_percentage = Decimal('0.10')
+        fare = Decimal(str(fare_assigned or client_request.fare_offered or 0))
+        commission_total = int(fare * commission_percentage)
 
         # Validar que el conductor tenga saldo suficiente
-        if driver_current_balance < estimated_commission:
+        if driver_current_balance < commission_total:
             print(
-                f"❌ Saldo insuficiente: ${driver_current_balance:,} < ${estimated_commission:,.0f}")
+                f"❌ Saldo insuficiente: ${driver_current_balance:,} < ${commission_total:,})")
             raise HTTPException(
                 status_code=400,
-                detail=f"No se puede asignar el conductor porque su saldo (${driver_current_balance:,}) es insuficiente para cubrir la comisión estimada (${estimated_commission:,.0f}) del viaje."
+                detail=f"No se puede asignar el conductor porque su saldo (${driver_current_balance:,}) es insuficiente para cubrir la comisión estimada (${commission_total:,}) del viaje."
             )
 
         print(
-            f"✅ Saldo suficiente para comisión: ${driver_current_balance:,} >= ${estimated_commission:,.0f}")
+            f"✅ Saldo suficiente para comisión: ${driver_current_balance:,} >= ${commission_total:,})")
 
+        # Descontar comisión del saldo del conductor
+        driver_balance.mount -= commission_total
+        session.add(driver_balance)
+
+        # Crear transacción de egreso para el conductor (COMMISSION)
+        transaction_commission = Transaction(
+            user_id=id_driver_assigned,
+            expense=commission_total,
+            type=TransactionType.COMMISSION,
+            description=f"Comisión por viaje asignado (10%)",
+            client_request_id=id,
+            is_confirmed=True
+        )
+        session.add(transaction_commission)
+
+        # Actualizar estado y asignar conductor
         client_request.id_driver_assigned = id_driver_assigned
         client_request.status = "ACCEPTED"
         client_request.updated_at = datetime.utcnow()
@@ -341,29 +363,23 @@ def assign_driver_service(session: Session, id: UUID, id_driver_assigned: UUID, 
             client_request.fare_assigned = fare_assigned
         session.commit()
 
-        # Enviar notificaciones después de asignar el conductor
+        # Notificaciones (sin cambios)
         try:
             notification_service = NotificationService(session)
-
-            # Notificar al cliente que se asignó un conductor
             client_notification = notification_service.notify_driver_assigned(
                 request_id=id,
                 driver_id=id_driver_assigned
             )
             logger.info(
                 f"Notificación de conductor asignado enviada al cliente: {client_notification}")
-
-            # Notificar al conductor que se le asignó un viaje
             driver_notification = notification_service.notify_trip_assigned(
                 request_id=id,
                 driver_id=id_driver_assigned
             )
             logger.info(
                 f"Notificación de viaje asignado enviada al conductor: {driver_notification}")
-
         except Exception as e:
             logger.error(f"Error enviando notificaciones de asignación: {e}")
-            # No fallar la asignación si fallan las notificaciones
 
         return {"success": True, "message": "Conductor asignado correctamente"}
     except Exception as e:
@@ -1092,12 +1108,14 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
     """
     Permite al conductor cambiar el estado de la solicitud solo a los estados permitidos.
     """
-    logger.info(f"🔍 CAMBIO ESTADO CONDUCTOR: Iniciando cambio - Request: {id_client_request}, User: {user_id}, New Status: {status}")
-    
+    logger.info(
+        f"🔍 CAMBIO ESTADO CONDUCTOR: Iniciando cambio - Request: {id_client_request}, User: {user_id}, New Status: {status}")
+
     try:
         new_status = StatusEnum(status)
     except ValueError:
-        logger.error(f"❌ CAMBIO ESTADO CONDUCTOR: Estado inválido '{status}'. Estados válidos: {[s.value for s in StatusEnum]}")
+        logger.error(
+            f"❌ CAMBIO ESTADO CONDUCTOR: Estado inválido '{status}'. Estados válidos: {[s.value for s in StatusEnum]}")
         raise HTTPException(
             status_code=400, detail=f"Estado inválido. Estados válidos: {[s.value for s in StatusEnum]}")
 
@@ -1107,7 +1125,8 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
         UserHasRole.status == RoleStatus.APPROVED
     ).first()
     if not user_role:
-        logger.error(f"❌ CAMBIO ESTADO CONDUCTOR: Usuario {user_id} no tiene rol DRIVER aprobado.")
+        logger.error(
+            f"❌ CAMBIO ESTADO CONDUCTOR: Usuario {user_id} no tiene rol DRIVER aprobado.")
         raise HTTPException(
             status_code=403, detail="Solo conductores aprobados pueden cambiar este estado")
 
@@ -1116,7 +1135,8 @@ def update_status_by_driver_service(session: Session, id_client_request: int, st
         ClientRequest.id == id_client_request
     ).with_for_update().first()
     if not client_request:
-        logger.error(f"❌ CAMBIO ESTADO CONDUCTOR: Solicitud {id_client_request} no encontrada.")
+        logger.error(
+            f"❌ CAMBIO ESTADO CONDUCTOR: Solicitud {id_client_request} no encontrada.")
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
 
     # Validar que el conductor asignado sea el que hace la petición
@@ -1269,6 +1289,16 @@ def client_canceled_service(session: Session, id_client_request: UUID, user_id: 
             client_request_id=client_request.id,
             description=f"Penalización por cancelación en ARRIVED"
         )
+
+    # ✅ REVERTIR COMISIÓN AL CONDUCTOR SI HAY UNO ASIGNADO
+    if client_request.id_driver_assigned:
+        try:
+            revert_commission_on_cancel(session, id_client_request)
+            logger.info(
+                f"Comisión revertida al conductor {client_request.id_driver_assigned} por cancelación")
+        except Exception as e:
+            logger.error(f"Error revertiendo comisión al conductor: {e}")
+            # No fallar la cancelación si falla la reversión de comisión
 
     # Actualizar estado a CANCELLED
     client_request.status = StatusEnum.CANCELLED
@@ -1472,6 +1502,16 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
     # Registrar la cancelación
     record_driver_cancellation(session, user_id, id_client_request)
     session.commit()  # Hacer commit para que esté disponible para el conteo
+
+    # ✅ REVERTIR COMISIÓN AL CONDUCTOR SI HAY UNO ASIGNADO
+    if client_request.id_driver_assigned:
+        try:
+            revert_commission_on_cancel(session, id_client_request)
+            logger.info(
+                f"Comisión revertida al conductor {client_request.id_driver_assigned} por cancelación del conductor")
+        except Exception as e:
+            logger.error(f"Error revertiendo comisión al conductor: {e}")
+            # No fallar la cancelación si falla la reversión de comisión
 
     # ✅ CAMBIAR ESTADO A CANCELLED ANTES de los return statements
     if client_request.status in [StatusEnum.ACCEPTED, StatusEnum.ON_THE_WAY, StatusEnum.ARRIVED]:
@@ -2726,3 +2766,57 @@ def evaluate_and_update_trip_state(session, client_request_id, driver_position):
         # y notificar a cliente y conductor
         return client_request.status
     return None
+
+
+def revert_commission_on_cancel(session: Session, client_request_id: UUID):
+    """
+    Si el viaje se cancela antes de PAID, devuelve la comisión al conductor y marca la transacción como revertida.
+    """
+    from app.models.transaction import Transaction, TransactionType
+    from app.models.verify_mount import VerifyMount
+    from decimal import Decimal
+    from datetime import datetime
+
+    print(
+        f"🔍 DEBUG revert_commission_on_cancel: Buscando transacción para client_request_id: {client_request_id}")
+
+    # Buscar la transacción de comisión
+    transaction = session.query(Transaction).filter(
+        Transaction.client_request_id == client_request_id,
+        Transaction.type == TransactionType.COMMISSION
+    ).first()
+
+    print(
+        f"🔍 DEBUG revert_commission_on_cancel: Transacción encontrada: {transaction is not None}")
+    if transaction:
+        print(
+            f"🔍 DEBUG revert_commission_on_cancel: Transaction ID: {transaction.id}")
+        print(
+            f"🔍 DEBUG revert_commission_on_cancel: Transaction user_id: {transaction.user_id}")
+        print(
+            f"🔍 DEBUG revert_commission_on_cancel: Transaction expense: {transaction.expense}")
+        print(
+            f"🔍 DEBUG revert_commission_on_cancel: Transaction description: {transaction.description}")
+
+    if transaction and not getattr(transaction, 'reverted', False):
+        print(f"🔍 DEBUG revert_commission_on_cancel: Procesando reversión de comisión...")
+        # Devolver el monto al conductor
+        driver_balance = session.query(VerifyMount).filter(
+            VerifyMount.user_id == transaction.user_id
+        ).first()
+        if driver_balance:
+            print(
+                f"🔍 DEBUG revert_commission_on_cancel: Saldo anterior del conductor: {driver_balance.mount}")
+            driver_balance.mount += transaction.expense
+            print(
+                f"🔍 DEBUG revert_commission_on_cancel: Saldo después de devolver comisión: {driver_balance.mount}")
+            session.add(driver_balance)
+        # Marcar la transacción como revertida
+        transaction.description += " [REVERTIDA POR CANCELACIÓN]"
+        transaction.is_confirmed = False
+        transaction.reverted = True  # Marcar como revertida
+        session.add(transaction)
+        session.commit()
+        print(f"🔍 DEBUG revert_commission_on_cancel: Comisión revertida exitosamente")
+    else:
+        print(f"🔍 DEBUG revert_commission_on_cancel: No se encontró transacción o ya fue revertida")
