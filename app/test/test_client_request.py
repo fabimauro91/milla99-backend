@@ -16,6 +16,8 @@ from app.core.db import get_session
 from app.utils.withdrawal_utils import WITHDRAWAL_COMMISSION
 from decimal import Decimal
 from app.models.transaction import Transaction, TransactionType
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
@@ -3965,3 +3967,151 @@ def test_trip_cancellation_refunds_driver_commission():
         session.close()
 
     print("✅ Test completado: La comisión se devolvió correctamente al conductor")
+
+
+def test_cancel_race_condition_fix():
+    """
+    Test para verificar que el problema de race condition en cancelación está resuelto.
+    Simula múltiples requests de cancelación simultáneos.
+    """
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Datos del cliente
+    phone_number = "3004444459"
+    country_code = "+57"
+
+    # Autenticar cliente
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear solicitud de cliente
+    request_data = {
+        "fare_offered": 25000,
+        "pickup_description": "Suba Bogotá",
+        "destination_description": "Santa Rosita Engativa",
+        "pickup_lat": 4.718136,
+        "pickup_lng": -74.073170,
+        "destination_lat": 4.702468,
+        "destination_lng": -74.109776,
+        "type_service_id": 1,  # Car
+        "payment_method_id": 1  # Cash
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201
+    client_request_id = create_resp.json()["id"]
+
+    # Simular asignación de conductor y cambio a ARRIVED
+    driver_phone = "3005555555"
+    driver_country_code = "+57"
+
+    # Autenticar conductor
+    driver_send_resp = client.post(
+        f"/auth/verify/{driver_country_code}/{driver_phone}/send")
+    assert driver_send_resp.status_code == 201
+    driver_code = driver_send_resp.json()["message"].split()[-1]
+
+    driver_verify_resp = client.post(
+        f"/auth/verify/{driver_country_code}/{driver_phone}/code",
+        json={"code": driver_code}
+    )
+    assert driver_verify_resp.status_code == 200
+    driver_token = driver_verify_resp.json()["access_token"]
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+
+    # Cambiar estado manualmente a ARRIVED
+    from app.models.client_request import ClientRequest, StatusEnum
+    from app.core.db import get_session
+    from sqlalchemy.orm import Session
+
+    session = next(get_session())
+    try:
+        client_request = session.query(ClientRequest).filter(
+            ClientRequest.id == client_request_id
+        ).first()
+
+        if client_request:
+            from app.models.user import User
+            driver_user = session.query(User).filter(
+                User.phone_number == driver_phone
+            ).first()
+
+            if driver_user:
+                client_request.id_driver_assigned = driver_user.id
+                client_request.status = StatusEnum.ARRIVED
+                session.commit()
+                print(f"Estado cambiado a ARRIVED")
+            else:
+                print("❌ No se encontró el conductor")
+        else:
+            print("❌ No se encontró la solicitud")
+    except Exception as e:
+        print(f"❌ Error cambiando estado: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+    # Función para hacer request de cancelación
+    def cancel_request():
+        cancel_data = {
+            "id_client_request": client_request_id
+        }
+        return client.patch(
+            "/client-request/clientCanceled",
+            json=cancel_data,
+            headers=headers
+        )
+
+    # Simular múltiples requests simultáneos
+    print(f"\n=== SIMULANDO RACE CONDITION ===")
+    print(f"Enviando 5 requests de cancelación simultáneos...")
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        # Enviar 5 requests simultáneos
+        futures = [executor.submit(cancel_request) for _ in range(5)]
+        responses = [future.result() for future in futures]
+
+    # Analizar resultados
+    success_count = 0
+    error_count = 0
+
+    for i, response in enumerate(responses):
+        print(f"Request {i+1}: Status {response.status_code}")
+        if response.status_code == 200:
+            success_count += 1
+            print(f"  ✅ Éxito: {response.json()}")
+        else:
+            error_count += 1
+            print(f"  ❌ Error: {response.json()}")
+
+    print(f"\n=== RESULTADOS ===")
+    print(f"Éxitos: {success_count}")
+    print(f"Errores: {error_count}")
+
+    # Verificar que solo 1 request fue exitoso
+    assert success_count == 1, f"Debería haber solo 1 éxito, pero hubo {success_count}"
+    assert error_count == 4, f"Debería haber 4 errores, pero hubo {error_count}"
+
+    # Verificar que el estado final es CANCELLED
+    detail_resp = client.get(
+        f"/client-request/{client_request_id}", headers=headers)
+    assert detail_resp.status_code == 200
+    final_status = detail_resp.json()["status"]
+    print(f"Estado final: {final_status}")
+
+    assert final_status == str(
+        StatusEnum.CANCELLED), f"Estado final debería ser CANCELLED, pero es {final_status}"
+
+    print("✅ Test exitoso: Race condition en cancelación está resuelto")
+    print("==========================================\n")

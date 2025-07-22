@@ -1220,9 +1220,9 @@ def client_canceled_service(session: Session, id_client_request: UUID, user_id: 
         raise HTTPException(
             status_code=403, detail="Solo clientes aprobados pueden cancelar su solicitud.")
 
-    # Obtener la solicitud actual
+    # Obtener la solicitud actual con lock de fila para evitar race condition
     client_request = session.query(ClientRequest).filter(
-        ClientRequest.id == id_client_request).first()
+        ClientRequest.id == id_client_request).with_for_update().first()
     if not client_request:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada.")
 
@@ -1455,10 +1455,10 @@ def driver_canceled_service(session: Session, id_client_request: UUID, user_id: 
         HTTPException(403): Si el usuario no es el conductor asignado
         HTTPException(400): Si la solicitud no está en estado permitido
     """
-    # Obtener la solicitud y validar que existe
+    # Obtener la solicitud y validar que existe con lock de fila para evitar race condition
     client_request = session.query(ClientRequest).filter(
         ClientRequest.id == id_client_request
-    ).first()
+    ).with_for_update().first()
 
     if not client_request:
         raise HTTPException(
