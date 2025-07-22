@@ -540,17 +540,24 @@ class NotificationService:
 
     def notificar_solicitud_pendiente_cancelada(self, request_id: UUID, driver_id: UUID, reason: Optional[str] = None) -> Dict[str, Any]:
         """
-        Notifica al conductor cuando se cancela su solicitud pendiente.
+        Notifica al conductor cuando se cancela una solicitud pendiente.
 
         Args:
-            request_id: ID de la solicitud pendiente
+            request_id: ID de la solicitud
             driver_id: ID del conductor
-            reason: Razón de la cancelación
+            reason: Razón de la cancelación (opcional)
 
         Returns:
             Resultado del envío
         """
         try:
+            # Obtener información del conductor
+            driver_info = self._get_driver_info(driver_id)
+            if not driver_info:
+                logger.error(
+                    f"Información del conductor {driver_id} no encontrada")
+                return {"success": 0, "failed": 0, "error": "Driver info not found"}
+
             # Crear notificación
             notification = NotificationTemplates.pending_request_cancelled(
                 request_id=request_id,
@@ -563,4 +570,120 @@ class NotificationService:
         except Exception as e:
             logger.error(
                 f"Error notificando cancelación de solicitud pendiente: {e}")
+            return {"success": 0, "failed": 0, "error": str(e)}
+
+    # ===== NOTIFICACIONES DE VERIFICACIÓN DE DOCUMENTOS =====
+
+    def notify_verification_approved(self, user_id: UUID) -> Dict[str, Any]:
+        """
+        Notifica cuando la verificación de documentos es aprobada automáticamente.
+
+        Args:
+            user_id: ID del usuario conductor
+
+        Returns:
+            Resultado del envío
+        """
+        try:
+            # Crear notificación
+            notification = NotificationTemplates.verification_approved()
+
+            # Enviar notificación al conductor
+            return self._send_notification(user_id, notification)
+
+        except Exception as e:
+            logger.error(
+                f"Error notificando aprobación de verificación para usuario {user_id}: {e}")
+            return {"success": 0, "failed": 0, "error": str(e)}
+
+    def notify_verification_rejected(self, user_id: UUID, recommendations: List[str]) -> Dict[str, Any]:
+        """
+        Notifica cuando la verificación de documentos es rechazada automáticamente.
+
+        Args:
+            user_id: ID del usuario conductor
+            recommendations: Lista de recomendaciones para corregir los problemas
+
+        Returns:
+            Resultado del envío
+        """
+        try:
+            # Crear notificación
+            notification = NotificationTemplates.verification_rejected(
+                recommendations)
+
+            # Enviar notificación al conductor
+            return self._send_notification(user_id, notification)
+
+        except Exception as e:
+            logger.error(
+                f"Error notificando rechazo de verificación para usuario {user_id}: {e}")
+            return {"success": 0, "failed": 0, "error": str(e)}
+
+    def notify_verification_manual_review(self, user_id: UUID) -> Dict[str, Any]:
+        """
+        Notifica cuando la verificación requiere revisión manual.
+
+        Args:
+            user_id: ID del usuario conductor
+
+        Returns:
+            Resultado del envío
+        """
+        try:
+            # Crear notificación
+            notification = NotificationTemplates.verification_manual_review()
+
+            # Enviar notificación al conductor
+            return self._send_notification(user_id, notification)
+
+        except Exception as e:
+            logger.error(
+                f"Error notificando revisión manual para usuario {user_id}: {e}")
+            return {"success": 0, "failed": 0, "error": str(e)}
+
+    def notify_verification_manual_approved(self, user_id: UUID) -> Dict[str, Any]:
+        """
+        Notifica cuando la verificación es aprobada manualmente por admin.
+
+        Args:
+            user_id: ID del usuario conductor
+
+        Returns:
+            Resultado del envío
+        """
+        try:
+            # Crear notificación
+            notification = NotificationTemplates.verification_manual_approved()
+
+            # Enviar notificación al conductor
+            return self._send_notification(user_id, notification)
+
+        except Exception as e:
+            logger.error(
+                f"Error notificando aprobación manual para usuario {user_id}: {e}")
+            return {"success": 0, "failed": 0, "error": str(e)}
+
+    def notify_verification_manual_rejected(self, user_id: UUID, reason: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Notifica cuando la verificación es rechazada manualmente por admin.
+
+        Args:
+            user_id: ID del usuario conductor
+            reason: Razón del rechazo (opcional)
+
+        Returns:
+            Resultado del envío
+        """
+        try:
+            # Crear notificación
+            notification = NotificationTemplates.verification_manual_rejected(
+                reason)
+
+            # Enviar notificación al conductor
+            return self._send_notification(user_id, notification)
+
+        except Exception as e:
+            logger.error(
+                f"Error notificando rechazo manual para usuario {user_id}: {e}")
             return {"success": 0, "failed": 0, "error": str(e)}

@@ -140,6 +140,7 @@ async def create_driver(
                     result.user, 'selfie_url') else None
             ),
             driver_info=DriverInfoResponse(
+                id=result.driver_info.id,
                 first_name=result.driver_info.first_name,
                 last_name=result.driver_info.last_name,
                 birth_date=str(result.driver_info.birth_date),

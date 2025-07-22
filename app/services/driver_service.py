@@ -27,6 +27,8 @@ from app.models.user_has_roles import UserHasRole, RoleStatus
 from datetime import datetime
 import pytz
 from uuid import UUID
+# Importar el servicio de verificación de documentos
+from app.services.document_verification_service import DocumentVerificationService
 
 COLOMBIA_TZ = pytz.timezone("America/Bogota")
 
@@ -332,6 +334,134 @@ class DriverService:
                     session.add(doc)
                 session.commit()
 
+                # ✅ NUEVA SECCIÓN: VERIFICACIÓN AUTOMÁTICA DURANTE REGISTRO
+                print("10. Iniciando verificación automática...")
+                try:
+                    # Instanciar el servicio de verificación
+                    verification_service = DocumentVerificationService()
+
+                    # Obtener la selfie guardada para verificación
+                    selfie_path_for_verification = os.path.join(
+                        "static", "uploads", "users", selfie_filename)
+
+                    # Realizar verificación completa: documento + selfie + comparación facial
+                    verification_result = await verification_service.verify_driver_complete(
+                        selfie_path=selfie_path_for_verification,
+                        documents_paths=[],  # Los documentos ya están guardados, no necesitamos paths
+                        driver_info_id=driver_info.id
+                    )
+
+                    print(
+                        f"Resultado verificación automática: {verification_result['decision']}")
+                    print(f"Score final: {verification_result['final_score']}")
+                    print(
+                        f"Recomendaciones: {verification_result['recommendations']}")
+
+                    # ============================================================================
+                    # ACTUALIZAR DRIVER_INFO CON RESULTADOS DE VERIFICACIÓN
+                    # ============================================================================
+                    driver_info.document_verification_status = verification_result['decision']
+                    driver_info.document_verification_score = verification_result['final_score']
+
+                    # Convertir UUIDs a string en verification_result
+                    from uuid import UUID
+
+                    def convert_uuids_to_strings(obj):
+                        if isinstance(obj, dict):
+                            return {k: convert_uuids_to_strings(v) for k, v in obj.items()}
+                        elif isinstance(obj, list):
+                            return [convert_uuids_to_strings(i) for i in obj]
+                        elif isinstance(obj, UUID):
+                            return str(obj)
+                        else:
+                            return obj
+                    driver_info.document_verification_details = convert_uuids_to_strings(
+                        verification_result)
+
+                    driver_info.document_verification_date = datetime.now()
+                    driver_info.document_verification_id = verification_result['verification_id']
+                    driver_info.verification_attempts += 1
+                    driver_info.last_verification_attempt = datetime.now()
+
+                    # Actualizar el estado del rol DRIVER basado en la verificación automática
+                    driver_role_record = session.exec(
+                        select(UserHasRole).where(
+                            UserHasRole.id_user == user.id,
+                            UserHasRole.id_rol == "DRIVER"
+                        )
+                    ).first()
+
+                    # Importar el servicio de notificaciones
+                    from app.services.notification_service import NotificationService
+                    notification_service = NotificationService(session)
+
+                    if driver_role_record:
+                        if verification_result['decision'] == 'APPROVED':
+                            # Aprobación automática
+                            driver_role_record.is_verified = True
+                            driver_role_record.status = RoleStatus.APPROVED
+                            driver_role_record.verified_at = datetime.now()
+                            session.add(driver_role_record)
+                            session.commit()
+                            session.refresh(driver_role_record)
+
+                            # Enviar notificación de aprobación
+                            notification_result = notification_service.notify_verification_approved(
+                                user.id)
+                            print(
+                                f"✅ Conductor aprobado automáticamente. Notificación: {notification_result}")
+
+                        elif verification_result['decision'] == 'MANUAL_REVIEW':
+                            # Requiere revisión manual
+                            driver_role_record.is_verified = False
+                            driver_role_record.status = RoleStatus.PENDING
+                            session.add(driver_role_record)
+                            session.commit()
+                            session.refresh(driver_role_record)
+
+                            # Enviar notificación de revisión manual
+                            notification_result = notification_service.notify_verification_manual_review(
+                                user.id)
+                            print(
+                                f"⚠️ Conductor requiere revisión manual. Notificación: {notification_result}")
+
+                        else:  # REJECTED
+                            # Rechazado automáticamente
+                            driver_role_record.is_verified = False
+                            driver_role_record.status = RoleStatus.PENDING
+                            session.add(driver_role_record)
+                            session.commit()
+                            session.refresh(driver_role_record)
+
+                            # Enviar notificación de rechazo
+                            recommendations = verification_result.get(
+                                'recommendations', [])
+                            notification_result = notification_service.notify_verification_rejected(
+                                user.id, recommendations)
+                            print(
+                                f"❌ Conductor rechazado automáticamente. Notificación: {notification_result}")
+
+                    # Guardar los cambios en DriverInfo
+                    session.add(driver_info)
+                    session.commit()
+                    session.refresh(driver_info)
+
+                except Exception as e:
+                    print(f"⚠️ Error en verificación automática: {str(e)}")
+                    # En caso de error, mantener estado PENDING para revisión manual
+                    print("Manteniendo estado PENDING para revisión manual")
+
+                    # Actualizar DriverInfo con estado de error
+                    driver_info.document_verification_status = "MANUAL_REVIEW"
+                    driver_info.document_verification_score = 0.0
+                    driver_info.document_verification_details = {
+                        "error": str(e)}
+                    driver_info.document_verification_date = datetime.now()
+                    driver_info.verification_attempts += 1
+                    driver_info.last_verification_attempt = datetime.now()
+                    session.add(driver_info)
+                    session.commit()
+
                 # Consultar documentos actualizados desde la base de datos
                 property_card_doc = session.exec(
                     select(DriverDocuments).where(
@@ -373,6 +503,7 @@ class DriverService:
                         selfie_url=user.selfie_url
                     ),
                     driver_info=DriverInfoResponse(
+                        id=driver_info.id,
                         first_name=driver_info.first_name,
                         last_name=driver_info.last_name,
                         birth_date=str(driver_info.birth_date),

@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
 
+
 class DriverDocumentsResponse(BaseModel):
     property_card_front_url: Optional[str]
     property_card_back_url: Optional[str]
@@ -24,6 +25,7 @@ class VehicleInfoResponse(BaseModel):
 
 
 class DriverInfoResponse(BaseModel):
+    id: UUID
     first_name: str
     last_name: str
     birth_date: Optional[str] = None

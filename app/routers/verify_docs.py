@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, status, Request, HTTPException, Security
+from fastapi import APIRouter, Depends, status, Request, HTTPException, Security, UploadFile, File, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Dict, Any
+from datetime import datetime
 
 from app.core.dependencies.admin_auth import get_current_admin
 from app.models.user import UserRead
@@ -14,6 +15,9 @@ from app.services.verify_docs_service import (
 from app.models.driver_documents import DocumentsUpdate, DriverDocumentsCreateRequest
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
+from app.services.document_verification_service import DocumentVerificationService
+from app.services.notification_service import NotificationService
+from app.core.dependencies.admin_auth import get_current_admin_user
 
 
 bearer_scheme = HTTPBearer()
@@ -26,6 +30,91 @@ router = APIRouter(prefix="/verify-docs",
 def get_verify_docs_service(session: SessionDep) -> VerifyDocsService:
     """Dependency para obtener el servicio de verificación de documentos"""
     return VerifyDocsService(session)
+
+
+def get_document_verification_service() -> DocumentVerificationService:
+    """Dependency para obtener el servicio de verificación de identidad"""
+    return DocumentVerificationService()
+
+
+@router.post("/verify-identity", response_model=Dict[str, Any])
+async def verify_identity_endpoint(
+    document_image: UploadFile = File(...,
+                                      description="Imagen del documento de identidad"),
+    selfie_image: UploadFile = File(..., description="Selfie del usuario"),
+    document_type: str = None,
+    service: DocumentVerificationService = Depends(
+        get_document_verification_service)
+):
+    """
+    Verificación completa de identidad: documento, selfie y comparación facial
+
+    **Parámetros:**
+    - document_image: Imagen del documento de identidad (JPG, PNG)
+    - selfie_image: Selfie del usuario (JPG, PNG)
+    - document_type: Tipo de documento esperado (opcional)
+
+    **Respuesta:**
+    Devuelve el resultado completo de la verificación incluyendo:
+    - Puntuación final
+    - Decisión (APPROVED, MANUAL_REVIEW, REJECTED)
+    - Puntuaciones detalladas por componente
+    - Recomendaciones
+    - Próximos pasos
+    """
+    try:
+        # Validar tipos de archivo
+        allowed_extensions = {'.jpg', '.jpeg', '.png'}
+        doc_ext = '.' + \
+            document_image.filename.split(
+                '.')[-1].lower() if '.' in document_image.filename else ''
+        selfie_ext = '.' + \
+            selfie_image.filename.split(
+                '.')[-1].lower() if '.' in selfie_image.filename else ''
+
+        if doc_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Formato de documento no soportado. Use: {', '.join(allowed_extensions)}"
+            )
+
+        if selfie_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Formato de selfie no soportado. Use: {', '.join(allowed_extensions)}"
+            )
+
+        # Leer contenido de los archivos
+        document_data = await document_image.read()
+        selfie_data = await selfie_image.read()
+
+        # Validar tamaño de archivos (máximo 10MB cada uno)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(document_data) > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo del documento es demasiado grande. Máximo 10MB"
+            )
+
+        if len(selfie_data) > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo de la selfie es demasiado grande. Máximo 10MB"
+            )
+
+        # Ejecutar verificación completa
+        result = service.verify_identity(
+            document_data, selfie_data, document_type)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/pending", response_model=List[UserWithDocs])
@@ -41,7 +130,6 @@ def get_users_with_pending_docs(
     """
     service = VerifyDocsService(session)
     return service.get_users_with_pending_docs()
-
 
 
 # @router.get("/approved", response_model=List[UserRead])
@@ -76,7 +164,6 @@ def get_users_with_rejected_docs(
     return service.get_users_with_rejected_docs()
 
 
-
 # @router.get("/expired", response_model=List[UserWithDocs])
 
 def get_users_with_expired_docs(
@@ -86,7 +173,6 @@ def get_users_with_expired_docs(
     """Obtiene usuarios con documentos expirados y sus documentos asociados"""
     service = VerifyDocsService(session)
     return service.get_users_with_expired_docs()
-
 
 
 # @router.post("/check-expired", status_code=status.HTTP_200_OK)
@@ -100,7 +186,6 @@ def update_expired_documents(
     service = VerifyDocsService(session)
     updated_count = service.update_expired_documents()
     return {"message": f"Updated {updated_count} expired documents"}
-
 
 
 # @router.get("/check-expiring-soon", response_model=List[UserWithExpiringDocsResponse])
@@ -278,4 +363,151 @@ def force_approve_driver(
             "is_verified": user_role.is_verified,
             "status": user_role.status
         }
+    }
+
+
+@router.post("/manual-approve-driver/{user_id}")
+def manual_approve_driver(
+    user_id: str,
+    session: SessionDep,
+    current_admin=Depends(get_current_admin_user)
+):
+    """
+    Aprobar manualmente un conductor después de revisión administrativa.
+    Envía notificación de aprobación al conductor.
+    """
+    from uuid import UUID
+    from sqlmodel import select
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+    from app.models.driver_info import DriverInfo
+    from app.services.notification_service import NotificationService
+
+    try:
+        user_uuid = UUID(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Buscar el UserHasRole del conductor
+    user_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user_uuid,
+            UserHasRole.id_rol == "DRIVER"
+        )
+    ).first()
+
+    if not user_role:
+        raise HTTPException(status_code=404, detail="Driver role not found")
+
+    # Buscar DriverInfo
+    driver_info = session.exec(
+        select(DriverInfo).where(DriverInfo.user_id == user_uuid)
+    ).first()
+
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
+
+    # Aprobar conductor
+    user_role.is_verified = True
+    user_role.status = RoleStatus.APPROVED
+    user_role.verified_at = datetime.now()
+
+    # Actualizar estado de verificación en DriverInfo
+    driver_info.document_verification_status = "APPROVED"
+    driver_info.document_verification_date = datetime.now()
+
+    session.add(user_role)
+    session.add(driver_info)
+    session.commit()
+    session.refresh(user_role)
+    session.refresh(driver_info)
+
+    # Enviar notificación de aprobación manual
+    notification_service = NotificationService(session)
+    notification_result = notification_service.notify_verification_manual_approved(
+        user_uuid)
+
+    return {
+        "message": "Driver manually approved",
+        "user_id": str(user_uuid),
+        "new_status": {
+            "is_verified": user_role.is_verified,
+            "status": user_role.status,
+            "verified_at": user_role.verified_at.isoformat() if user_role.verified_at else None
+        },
+        "verification_status": driver_info.document_verification_status,
+        "notification_result": notification_result
+    }
+
+
+@router.post("/manual-reject-driver/{user_id}")
+def manual_reject_driver(
+    user_id: str,
+    session: SessionDep,
+    reason: str = Query(None, description="Razón del rechazo manual"),
+    current_admin=Depends(get_current_admin_user)
+):
+    """
+    Rechazar manualmente un conductor después de revisión administrativa.
+    Envía notificación de rechazo al conductor.
+    """
+    from uuid import UUID
+    from sqlmodel import select
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+    from app.models.driver_info import DriverInfo
+    from app.services.notification_service import NotificationService
+
+    try:
+        user_uuid = UUID(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Buscar el UserHasRole del conductor
+    user_role = session.exec(
+        select(UserHasRole).where(
+            UserHasRole.id_user == user_uuid,
+            UserHasRole.id_rol == "DRIVER"
+        )
+    ).first()
+
+    if not user_role:
+        raise HTTPException(status_code=404, detail="Driver role not found")
+
+    # Buscar DriverInfo
+    driver_info = session.exec(
+        select(DriverInfo).where(DriverInfo.user_id == user_uuid)
+    ).first()
+
+    if not driver_info:
+        raise HTTPException(status_code=404, detail="DriverInfo not found")
+
+    # Rechazar conductor
+    user_role.is_verified = False
+    # Mantener en PENDING para que pueda corregir
+    user_role.status = RoleStatus.PENDING
+
+    # Actualizar estado de verificación en DriverInfo
+    driver_info.document_verification_status = "REJECTED"
+    driver_info.document_verification_date = datetime.now()
+
+    session.add(user_role)
+    session.add(driver_info)
+    session.commit()
+    session.refresh(user_role)
+    session.refresh(driver_info)
+
+    # Enviar notificación de rechazo manual
+    notification_service = NotificationService(session)
+    notification_result = notification_service.notify_verification_manual_rejected(
+        user_uuid, reason)
+
+    return {
+        "message": "Driver manually rejected",
+        "user_id": str(user_uuid),
+        "new_status": {
+            "is_verified": user_role.is_verified,
+            "status": user_role.status
+        },
+        "verification_status": driver_info.document_verification_status,
+        "rejection_reason": reason,
+        "notification_result": notification_result
     }
