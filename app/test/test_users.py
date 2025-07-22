@@ -480,6 +480,8 @@ def test_driver_bonus_eligibility():
     """
     Test para verificar que un conductor eliminado no puede recibir bono al re-registrarse
     """
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+
     # Datos del conductor
     phone_number = "3004444471"  # Cambiado para evitar conflicto
     country_code = "+57"
@@ -519,11 +521,192 @@ def test_driver_bonus_eligibility():
     })
     assert create_resp.status_code == 201  # Permite re-registro
 
-    # 5. Verificar que no puede recibir bono (esto se verificaría en el endpoint de bono)
-    # new_user_id = create_resp.json()["id"]
-    # bonus_resp = client.post(f"/drivers/{new_user_id}/apply-bonus")
-    # assert bonus_resp.status_code == 400
-    # assert "eliminado" in bonus_resp.json()["detail"].lower()
+    # 4.1. Agregar rol DRIVER al usuario re-registrado (simulación de registro como conductor)
+    new_user_id = create_resp.json()["id"]
+    with Session(engine) as session:
+        # Agregar rol DRIVER al usuario re-registrado
+        driver_role = UserHasRole(
+            id_user=UUID(new_user_id),
+            id_rol="DRIVER",
+            status=RoleStatus.APPROVED,
+            is_verified=True
+        )
+        session.add(driver_role)
+        session.commit()
+
+    # 5. Verificar que no puede recibir bono usando el servicio directamente
+    import traceback
+    from app.services.driver_bonus_service import check_driver_bonus_eligibility
+    with Session(engine) as session:
+        print(f"🔍 DEBUG: === INICIO DEBUG BONO ===")
+        print(f"🔍 DEBUG: phone_number: {phone_number}")
+        print(f"🔍 DEBUG: new_user_id: {new_user_id}")
+
+        # Debug: verificar si existe en DeletedUser
+        from app.models.deleted_user import DeletedUser
+        deleted_user = session.query(DeletedUser).filter(
+            DeletedUser.phone_number == phone_number
+        ).first()
+        print(f"🔍 DEBUG: DeletedUser encontrado: {deleted_user}")
+        if deleted_user:
+            print(
+                f"🔍 DEBUG: DeletedUser phone: {deleted_user.phone_number}, user_type: {deleted_user.user_type}")
+            print(
+                f"🔍 DEBUG: DeletedUser deleted_at: {deleted_user.deleted_at}")
+            print(
+                f"🔍 DEBUG: DeletedUser original_balance: {deleted_user.original_balance}")
+
+        # Debug: verificar el usuario actual
+        from app.models.user import User
+        current_user = session.query(User).filter(
+            User.id == UUID(new_user_id)).first()
+        print(f"🔍 DEBUG: Current user: {current_user}")
+        if current_user:
+            print(f"🔍 DEBUG: Current user phone: {current_user.phone_number}")
+            print(f"🔍 DEBUG: Current user full_name: {current_user.full_name}")
+
+        # Debug: verificar rol DRIVER
+        from app.models.user_has_roles import UserHasRole
+        driver_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == UUID(new_user_id),
+            UserHasRole.id_rol == "DRIVER"
+        ).first()
+        print(f"🔍 DEBUG: Driver role encontrado: {driver_role}")
+
+        try:
+            eligibility = check_driver_bonus_eligibility(
+                session, UUID(new_user_id))
+            print(f"🔍 DEBUG: Eligibilidad: {eligibility}")
+        except Exception as e:
+            print(f"❌ ERROR en check_driver_bonus_eligibility: {str(e)}")
+            print(f"❌ TRACEBACK: {traceback.format_exc()}")
+            raise
+
+        print(f"🔍 DEBUG: === FIN DEBUG BONO ===")
+        assert eligibility["eligible"] == False
+        assert "eliminado" in eligibility["reason"].lower()
+
+
+def test_driver_bonus_eligibility_original_driver():
+    """
+    Test para verificar que un conductor que se creó originalmente como DRIVER 
+    y fue eliminado no puede recibir bono al re-registrarse
+    """
+    from app.models.user_has_roles import UserHasRole, RoleStatus
+
+    # Datos del conductor
+    phone_number = "3004444473"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Conductor Original Test"
+
+    # 1. Crear conductor con rol DRIVER desde el inicio
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    user_data = create_resp.json()
+    user_id = user_data["id"]
+
+    # 1.1. Agregar rol DRIVER al usuario (simula registro como conductor)
+    with Session(engine) as session:
+        driver_role = UserHasRole(
+            id_user=UUID(user_id),
+            id_rol="DRIVER",
+            status=RoleStatus.APPROVED,
+            is_verified=True
+        )
+        session.add(driver_role)
+        session.commit()
+
+    # 2. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Eliminar conductor (ahora debería guardarse como DRIVER en DeletedUser)
+    delete_resp = client.delete("/users/me/delete-completely", headers=headers)
+    assert delete_resp.status_code == 200
+
+    # 4. Re-registrar conductor
+    create_resp = client.post("/users/", json={
+        "full_name": "Conductor Original Reregistro",
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201  # Permite re-registro
+
+    # 4.1. Agregar rol DRIVER al usuario re-registrado
+    new_user_id = create_resp.json()["id"]
+    with Session(engine) as session:
+        driver_role = UserHasRole(
+            id_user=UUID(new_user_id),
+            id_rol="DRIVER",
+            status=RoleStatus.APPROVED,
+            is_verified=True
+        )
+        session.add(driver_role)
+        session.commit()
+
+    # 5. Verificar que no puede recibir bono usando el servicio directamente
+    import traceback
+    from app.services.driver_bonus_service import check_driver_bonus_eligibility
+    with Session(engine) as session:
+        print(f"🔍 DEBUG: === INICIO DEBUG BONO ORIGINAL DRIVER ===")
+        print(f"🔍 DEBUG: phone_number: {phone_number}")
+        print(f"🔍 DEBUG: new_user_id: {new_user_id}")
+
+        # Debug: verificar si existe en DeletedUser
+        from app.models.deleted_user import DeletedUser
+        deleted_user = session.query(DeletedUser).filter(
+            DeletedUser.phone_number == phone_number
+        ).first()
+        print(f"🔍 DEBUG: DeletedUser encontrado: {deleted_user}")
+        if deleted_user:
+            print(
+                f"🔍 DEBUG: DeletedUser phone: {deleted_user.phone_number}, user_type: {deleted_user.user_type}")
+            print(
+                f"🔍 DEBUG: DeletedUser deleted_at: {deleted_user.deleted_at}")
+            print(
+                f"🔍 DEBUG: DeletedUser original_balance: {deleted_user.original_balance}")
+
+        # Debug: verificar el usuario actual
+        from app.models.user import User
+        current_user = session.query(User).filter(
+            User.id == UUID(new_user_id)).first()
+        print(f"🔍 DEBUG: Current user: {current_user}")
+        if current_user:
+            print(f"🔍 DEBUG: Current user phone: {current_user.phone_number}")
+            print(f"🔍 DEBUG: Current user full_name: {current_user.full_name}")
+
+        # Debug: verificar rol DRIVER
+        from app.models.user_has_roles import UserHasRole
+        driver_role = session.query(UserHasRole).filter(
+            UserHasRole.id_user == UUID(new_user_id),
+            UserHasRole.id_rol == "DRIVER"
+        ).first()
+        print(f"🔍 DEBUG: Driver role encontrado: {driver_role}")
+
+        try:
+            eligibility = check_driver_bonus_eligibility(
+                session, UUID(new_user_id))
+            print(f"🔍 DEBUG: Eligibilidad: {eligibility}")
+        except Exception as e:
+            print(f"❌ ERROR en check_driver_bonus_eligibility: {str(e)}")
+            print(f"❌ TRACEBACK: {traceback.format_exc()}")
+            raise
+
+        print(f"🔍 DEBUG: === FIN DEBUG BONO ORIGINAL DRIVER ===")
+        assert eligibility["eligible"] == False
+        assert "eliminado" in eligibility["reason"].lower()
 
 
 def test_deleted_user_verification_allowed():

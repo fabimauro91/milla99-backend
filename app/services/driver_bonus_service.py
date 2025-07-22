@@ -48,7 +48,8 @@ def check_driver_bonus_eligibility(session: Session, user_id: UUID) -> dict:
             DeletedUser.phone_number == user.phone_number
         ).first()
 
-        if deleted_user and deleted_user.user_type == "DRIVER":
+        # Si existe un usuario eliminado con este teléfono Y el usuario actual es conductor
+        if deleted_user and driver_role:
             logger.warning(
                 f"🚫 Conductor {user_id} ({user.phone_number}) intentó recibir bono pero fue eliminado previamente")
             return {
@@ -60,15 +61,15 @@ def check_driver_bonus_eligibility(session: Session, user_id: UUID) -> dict:
 
         # Verificar si ya tiene balance (ya recibió bono)
         existing_balance = session.query(VerifyMount).filter(
-            VerifyMount.id_user == user_id
+            VerifyMount.user_id == user_id
         ).first()
 
-        if existing_balance and float(existing_balance.balance) > 0:
+        if existing_balance and float(existing_balance.mount) > 0:
             return {
                 "eligible": False,
                 "reason": "Conductor ya tiene balance activo",
                 "bonus_amount": 0,
-                "current_balance": float(existing_balance.balance)
+                "current_balance": float(existing_balance.mount)
             }
 
         # Es elegible para bono
