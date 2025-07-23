@@ -945,7 +945,7 @@ def get_nearby_drivers_service(
                 ST_Distance(DriverPosition.position,
                             client_point).label("distance")
             )
-            .join(UserHasRole, UserHasRole.id_user == User.id)
+            .join(UserHasRole, User.id == UserHasRole.id_user)
             .join(DriverInfo, DriverInfo.user_id == User.id)
             .join(VehicleInfo, VehicleInfo.driver_info_id == DriverInfo.id)
             .join(DriverPosition, DriverPosition.id_driver == User.id)
@@ -1249,7 +1249,7 @@ def client_canceled_service(session: Session, id_client_request: UUID, user_id: 
 
     # Aplicar penalización según el estado
     if original_status == StatusEnum.ON_THE_WAY:
-        # Crear registro de penalización
+        # Crear registro de penalización (se cobrará en próximo viaje)
         penality = PenalityUser(
             id_user=client_request.id_client,
             id_client_request=client_request.id,
@@ -1259,18 +1259,8 @@ def client_canceled_service(session: Session, id_client_request: UUID, user_id: 
         )
         session.add(penality)
 
-        # Crear transacción de penalización
-        transaction_service = TransactionService(session)
-        transaction_service.create_transaction(
-            user_id=client_request.id_client,
-            expense=int(config.fine_one),
-            type=TransactionType.PENALITY_DEDUCTION,
-            client_request_id=client_request.id,
-            description=f"Penalización por cancelación en ON_THE_WAY"
-        )
-
     elif original_status == StatusEnum.ARRIVED:
-        # Crear registro de penalización
+        # Crear registro de penalización (se cobrará en próximo viaje)
         penality = PenalityUser(
             id_user=client_request.id_client,
             id_client_request=client_request.id,
@@ -1279,16 +1269,6 @@ def client_canceled_service(session: Session, id_client_request: UUID, user_id: 
             status=statusEnum.PENDING,
         )
         session.add(penality)
-
-        # Crear transacción de penalización
-        transaction_service = TransactionService(session)
-        transaction_service.create_transaction(
-            user_id=client_request.id_client,
-            expense=int(config.fine_two),
-            type=TransactionType.PENALITY_DEDUCTION,
-            client_request_id=client_request.id,
-            description=f"Penalización por cancelación en ARRIVED"
-        )
 
     # ✅ REVERTIR COMISIÓN AL CONDUCTOR SI HAY UNO ASIGNADO
     if client_request.id_driver_assigned:
@@ -1326,7 +1306,7 @@ def client_canceled_service(session: Session, id_client_request: UUID, user_id: 
             config.fine_two)
         return {
             "success": True,
-            "message": f"Solicitud cancelada. Se aplicará una penalización de {amount} pesos en su próximo servicio."
+            "message": f"Solicitud cancelada. Se aplicará una penalización de {amount} pesos que se cobrará en su próximo viaje."
         }
     return {
         "success": True,

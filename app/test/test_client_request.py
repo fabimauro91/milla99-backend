@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
 from app.main import app
 from app.test.test_drivers import create_and_approve_driver
-from app.models.client_request import StatusEnum
+from app.models.client_request import StatusEnum, ClientRequest
+from app.models.user import User
 from datetime import datetime, timezone, timedelta
 from app.models.project_settings import ProjectSettings
 from sqlmodel import Session
@@ -16,6 +17,8 @@ from app.core.db import get_session
 from app.utils.withdrawal_utils import WITHDRAWAL_COMMISSION
 from decimal import Decimal
 from app.models.transaction import Transaction, TransactionType
+from app.models.penality_user import PenalityUser
+from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
 import time
 
@@ -4115,3 +4118,236 @@ def test_cancel_race_condition_fix():
 
     print("✅ Test exitoso: Race condition en cancelación está resuelto")
     print("==========================================\n")
+
+
+def test_penalty_flow_complete():
+    """
+    Test completo del flujo de penalizaciones:
+    1. Cliente cancela → NO se cobra inmediatamente
+    2. Cliente hace nuevo viaje → Se cobra penalización
+    3. Conductor afectado recibe compensación
+    4. Conductor actual solo procesa, no paga
+    """
+
+    # 1. Crear cliente con balance inicial
+    client_data = {
+        "full_name": "Cliente Penalizado",
+        "country_code": "+57",
+        "phone_number": "3004444499"  # Cambiado para ser único
+    }
+
+    # Crear usuario cliente
+    create_resp = client.post("/users/", json=client_data)
+    print(f"🔍 DEBUG: Status code: {create_resp.status_code}")
+    print(f"🔍 DEBUG: Response: {create_resp.json()}")
+    if create_resp.status_code != 201:
+        import traceback
+        print(f"🔍 DEBUG: Traceback:")
+        traceback.print_exc()
+    assert create_resp.status_code == 201
+    client_user_data = create_resp.json()
+    client_id = client_user_data["id"]
+
+    # Agregar balance al cliente
+    with Session(engine) as session:
+        balance = VerifyMount(
+            user_id=UUID(client_id),
+            mount=Decimal("20000")  # $20,000 COP
+        )
+        session.add(balance)
+        session.commit()
+        print(
+            f"🔍 DEBUG: Balance agregado para cliente {client_id}: {balance.mount}")
+
+    # 2. Usar conductor afectado existente (el que perdió el viaje)
+    # Usar el conductor "3009999999" que ya tiene bono de $20,000
+    with Session(engine) as session:
+        driver_affected = session.query(User).filter(
+            User.phone_number == "3009999999"
+        ).first()
+        assert driver_affected is not None
+        driver_affected_id = str(driver_affected.id)
+        print(
+            f"🔍 DEBUG: Usando conductor afectado existente: {driver_affected_id}")
+
+    # 3. Usar conductor actual existente (el que hace el viaje)
+    # Usar el conductor "3148780278" que ya tiene bono de $20,000
+    with Session(engine) as session:
+        driver_current = session.query(User).filter(
+            User.phone_number == "3148780278"
+        ).first()
+        assert driver_current is not None
+        driver_current_id = str(driver_current.id)
+        print(
+            f"🔍 DEBUG: Usando conductor actual existente: {driver_current_id}")
+
+    # 4. Crear primera solicitud (será cancelada)
+    first_request_data = {
+        "pickup_lat": 4.710989,
+        "pickup_lng": -74.072092,
+        "destination_lat": 4.711989,
+        "destination_lng": -74.073092,
+        "pickup_description": "Test pickup",
+        "destination_description": "Test destination",
+        "type_service_id": 1,
+        "payment_method_id": 1,
+        "fare_offered": 15000  # Precio base del viaje
+    }
+
+    # Autenticar como cliente
+    send_code_resp = client.post(
+        f"/auth/verify/{client_data['country_code']}/{client_data['phone_number']}/send")
+    print(f"🔍 DEBUG: Send code status: {send_code_resp.status_code}")
+    print(f"🔍 DEBUG: Send code response: {send_code_resp.json()}")
+    assert send_code_resp.status_code == 201
+
+    # Extraer el código de la respuesta
+    code = send_code_resp.json()["message"].split()[-1]
+    print(f"🔍 DEBUG: Extracted code: {code}")
+
+    verify_resp = client.post(f"/auth/verify/{client_data['country_code']}/{client_data['phone_number']}/code", json={
+        "code": code
+    })
+    print(f"🔍 DEBUG: Verify status: {verify_resp.status_code}")
+    print(f"🔍 DEBUG: Verify response: {verify_resp.json()}")
+    assert verify_resp.status_code == 200
+    auth_data = verify_resp.json()
+    headers = {"Authorization": f"Bearer {auth_data['access_token']}"}
+
+    # Crear solicitud
+    create_req_resp = client.post(
+        "/client-request/", json=first_request_data, headers=headers)
+    assert create_req_resp.status_code == 201
+    first_request_data = create_req_resp.json()
+    first_request_id = first_request_data["id"]
+
+    # 5. Simular que conductor acepta y va en camino
+    with Session(engine) as session:
+        request = session.query(ClientRequest).filter(
+            ClientRequest.id == UUID(first_request_id)).first()
+        request.id_driver_assigned = UUID(driver_affected_id)
+        request.status = StatusEnum.ON_THE_WAY
+        session.commit()
+
+        # 6. Cliente cancela (NO debe cobrar inmediatamente)
+        cancel_data = {
+            "id_client_request": first_request_id
+        }
+        cancel_resp = client.patch(
+            "/client-request/clientCanceled", json=cancel_data, headers=headers)
+        print(f"🔍 DEBUG: Cancel status: {cancel_resp.status_code}")
+        print(f"🔍 DEBUG: Cancel response: {cancel_resp.json()}")
+        assert cancel_resp.status_code == 200
+
+    # Verificar que se creó penalización pendiente
+    with Session(engine) as session:
+        penalty = session.query(PenalityUser).filter(
+            PenalityUser.id_user == UUID(client_id),
+            PenalityUser.status == "PENDING"
+        ).first()
+        assert penalty is not None
+        # Penalización por ON_THE_WAY (fine_one)
+        assert penalty.amount == 1000.0
+        assert penalty.id_driver_assigned == UUID(driver_affected_id)
+
+        # Verificar que NO se cobró inmediatamente (balance debe seguir igual)
+        with Session(engine) as session:
+            balance = session.query(VerifyMount).filter(
+                VerifyMount.user_id == UUID(client_id)
+            ).first()
+            print(
+                f"🔍 DEBUG: Balance consultado para cliente {client_id}: {balance.mount if balance else 'None'}")
+            assert balance.mount == Decimal("20000")  # Balance no cambió
+
+    # 7. Crear segunda solicitud (conductor actual)
+    second_request_data = {
+        "pickup_lat": 4.710989,
+        "pickup_lng": -74.072092,
+        "destination_lat": 4.711989,
+        "destination_lng": -74.073092,
+        "pickup_description": "Test pickup 2",
+        "destination_description": "Test destination 2",
+        "type_service_id": 1,
+        "payment_method_id": 1,
+        "fare_offered": 10000  # Precio base del segundo viaje
+    }
+
+    create_req2_resp = client.post(
+        "/client-request/", json=second_request_data, headers=headers)
+    assert create_req2_resp.status_code == 201
+    second_request_data = create_req2_resp.json()
+    second_request_id = second_request_data["id"]
+
+    # 8. Simular que conductor actual acepta y finaliza viaje
+    with Session(engine) as session:
+        request = session.query(ClientRequest).filter(
+            ClientRequest.id == UUID(second_request_id)).first()
+        request.id_driver_assigned = UUID(driver_current_id)
+        # Cambiar a PAID para que funcione distribute_earnings
+        request.status = StatusEnum.PAID
+        request.fare_assigned = 10000.0  # $10,000
+        session.commit()
+
+    # 9. Ejecutar distribución de ganancias (esto debe pagar penalización)
+    with Session(engine) as session:
+        request = session.query(ClientRequest).filter(
+            ClientRequest.id == UUID(second_request_id)).first()
+        from app.services.earnings_service import pay_penality_user, distribute_earnings
+        # Primero distribuir ganancias del viaje
+        distribute_earnings(session, request)
+        # Luego pagar penalización
+        pay_penality_user(session, request)
+
+    # 10. Verificar que se pagó penalización al conductor afectado
+    with Session(engine) as session:
+        # Verificar transacción de compensación al conductor afectado
+        compensation_transaction = session.query(Transaction).filter(
+            Transaction.user_id == UUID(driver_affected_id),
+            Transaction.type == "PENALITY_COMPENSATION",
+            Transaction.income == 1000  # Recibe el mismo monto de la penalización
+        ).first()
+        assert compensation_transaction is not None
+
+        # Verificar transacción de pago en efectivo del cliente
+        cash_payment_transaction = session.query(Transaction).filter(
+            Transaction.user_id == UUID(client_id),
+            Transaction.type == "CASH_PAYMENT",
+            Transaction.expense == 10000  # fare_assigned del viaje
+        ).first()
+        assert cash_payment_transaction is not None
+
+        # Verificar transacción de penalización del cliente
+        penalty_transaction = session.query(Transaction).filter(
+            Transaction.user_id == UUID(client_id),
+            Transaction.type == "PENALITY_DEDUCTION",
+            Transaction.expense == 1000  # fine_one
+        ).first()
+        assert penalty_transaction is not None
+
+        # Verificar que NO hay transacción de cobro al conductor actual
+        driver_current_payment = session.query(Transaction).filter(
+            Transaction.user_id == UUID(driver_current_id),
+            Transaction.type == "PENALITY_DEDUCTION"
+        ).first()
+        assert driver_current_payment is None  # Conductor actual NO paga
+
+        # Verificar que penalización se marcó como PAID
+        penalty = session.query(PenalityUser).filter(
+            PenalityUser.id_user == UUID(client_id),
+            PenalityUser.status == "PAID"
+        ).first()
+        assert penalty is not None
+
+        # Verificar balance final del cliente
+        balance = session.query(VerifyMount).filter(
+            VerifyMount.user_id == UUID(client_id)
+        ).first()
+        # Cliente paga en efectivo, solo se cobra penalización del balance
+        # $20,000 - $1,000 = $19,000
+        assert balance.mount == Decimal("19000")
+
+    print("✅ Test completado exitosamente:")
+    print("   - Cliente canceló sin cobro inmediato")
+    print("   - Conductor afectado recibió compensación")
+    print("   - Conductor actual solo procesó, no pagó")
+    print("   - Penalización se cobró en próximo viaje")

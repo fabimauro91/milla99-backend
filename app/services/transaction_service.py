@@ -106,6 +106,16 @@ class TransactionService:
                     detail="Las transacciones de tipo COMMISSION solo pueden ser ingresos (income > 0, expense == 0) o egresos (income == 0, expense > 0)."
                 )
 
+        # Validación para CASH_PAYMENT (solo egresos para registrar pago en efectivo)
+        elif type == TransactionType.CASH_PAYMENT:
+            if income != 0 or expense <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Las transacciones de tipo CASH_PAYMENT solo pueden ser egresos (income == 0, expense > 0)."
+                )
+            # Para pagos en efectivo NO se descuenta del balance, solo se registra
+            # No se modifica verify_mount porque el cliente paga directamente al conductor
+
         # Otros tipos (por defecto solo ingresos)
         elif type != TransactionType.BONUS:
             if income <= 0 or expense != 0:
@@ -134,9 +144,11 @@ class TransactionService:
         self.session.add(transaction)
         # No commit aquí
         if type != TransactionType.BONUS:
+            # Para CASH_PAYMENT, verify_mount puede ser None
+            amount = verify_mount.mount if verify_mount else 0
             return {
                 "message": "Transacción exitosa",
-                "amount": verify_mount.mount,
+                "amount": amount,
                 "transaction_type": type
             }
         else:

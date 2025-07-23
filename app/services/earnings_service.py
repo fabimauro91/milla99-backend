@@ -87,6 +87,17 @@ def distribute_earnings(session: SQLAlchemySession, request: ClientRequest) -> N
 
         transaction_service = TransactionService(session)
 
+        # Crear transacción de pago del cliente (efectivo)
+        print(
+            f"[DEBUG] Creando transacción de pago en efectivo: user_id={request.id_client}, expense={int(fare)}")
+        transaction_service.create_transaction(
+            user_id=request.id_client,
+            expense=int(fare),
+            type="CASH_PAYMENT",
+            client_request_id=request.id,
+            description=f"Pago en efectivo por viaje {request.id}"
+        )
+
         # Calcular el ingreso del conductor (85% del valor del viaje)
         driver_income_pct = Decimal("0.85")  # 85%
         driver_income = (
@@ -266,7 +277,7 @@ def pay_penality_user(session: SQLAlchemySession, request: ClientRequest) -> Non
     """
     try:
         penalties = session.query(PenalityUser).filter(
-            PenalityUser.user_id == request.id_client,
+            PenalityUser.id_user == request.id_client,
             PenalityUser.status == statusEnum.PENDING
         ).all()
 
@@ -280,7 +291,6 @@ def pay_penality_user(session: SQLAlchemySession, request: ClientRequest) -> Non
                 continue
 
             # Crear transacción de pago de penalidad
-
             transaction_service.create_transaction(
                 user_id=penality.id_driver_assigned,
                 income=int(penality.amount),
@@ -292,9 +302,11 @@ def pay_penality_user(session: SQLAlchemySession, request: ClientRequest) -> Non
             penality.id_driver_get_money = request.id_driver_assigned
             penality.updated_at = datetime.utcnow()
 
+        # El conductor actual NO paga penalización, solo procesa el pago
+        # La penalización la paga el cliente desde su balance
         transaction_service.create_transaction(
-            user_id=request.id_driver_assigned,
-            expense=request.penality,
+            user_id=request.id_client,
+            expense=int(penality.amount),
             type="PENALITY_DEDUCTION",
             client_request_id=request.id,
             description=f"Pago de penalidades por solicitud {request.id}"
