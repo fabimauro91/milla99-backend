@@ -85,3 +85,94 @@ async def calculate_fare_unique(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Error en el servidor: {str(e)}"}
         )
+
+
+@router.post("/multiple-stops", response_model=FareCalculationResponse, description="""
+Calcula la tarifa recomendada para un viaje con múltiples paradas intermedias usando Google Directions API.
+
+**Ventajas:**
+- ✅ Calcula ruta optimizada (no solo suma segmentos)
+- ✅ Considera tráfico real
+- ✅ Calcula distancia y tiempo total precisos
+- ✅ Una sola llamada a la API
+
+**Parámetros:**
+- `type_service_id`: ID del tipo de vehículo
+- `origin_lat`: Latitud de origen
+- `origin_lng`: Longitud de origen  
+- `destination_lat`: Latitud de destino
+- `destination_lng`: Longitud de destino
+- `intermediate_stops`: Lista de paradas intermedias (opcional)
+
+**Ejemplo:**
+```json
+{
+  "type_service_id": 1,
+  "origin_lat": 4.650788,
+  "origin_lng": -74.089519,
+  "destination_lat": 4.5981,
+  "destination_lng": -74.0758,
+  "intermediate_stops": [
+    {
+      "latitude": 4.670000,
+      "longitude": -74.090000,
+      "description": "Banco"
+    },
+    {
+      "latitude": 4.680000,
+      "longitude": -74.085000,
+      "description": "Paquetería"
+    }
+  ]
+}
+```
+
+**Respuesta:**
+Devuelve la tarifa recomendada basada en la ruta completa optimizada.
+""")
+async def calculate_fare_multiple_stops_optimized(
+    request: Request,
+    session: SessionDep,
+    data: dict,
+    current_user=Depends(get_current_user)
+):
+    try:
+        user_id = request.state.user_id
+        service = ConfigServiceValueService(session)
+
+        # Validar parámetros requeridos
+        required_fields = ["type_service_id", "origin_lat",
+                           "origin_lng", "destination_lat", "destination_lng"]
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Campo requerido faltante: {field}"
+                )
+
+        # Extraer datos del body
+        type_service_id = data["type_service_id"]
+        origin_lat = data["origin_lat"]
+        origin_lng = data["origin_lng"]
+        destination_lat = data["destination_lat"]
+        destination_lng = data["destination_lng"]
+        intermediate_stops = data.get("intermediate_stops", [])
+
+        # Usar el servicio para calcular la tarifa
+        result = await service.calculate_fare_multiple_stops(
+            type_service_id=type_service_id,
+            origin_lat=origin_lat,
+            origin_lng=origin_lng,
+            destination_lat=destination_lat,
+            destination_lng=destination_lng,
+            intermediate_stops=intermediate_stops,
+            api_key=settings.GOOGLE_API_KEY
+        )
+
+        return result
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Error en el servidor: {str(e)}"}
+        )

@@ -161,3 +161,129 @@ class ConfigServiceValueService:
             return 15.0  # Valor por defecto
 
         return settings.max_wait_time_for_busy_driver or 15.0
+
+    async def calculate_fare_multiple_stops(
+        self,
+        type_service_id: int,
+        origin_lat: float,
+        origin_lng: float,
+        destination_lat: float,
+        destination_lng: float,
+        intermediate_stops: List[dict] = None,
+        api_key: str = None
+    ) -> FareCalculationResponse:
+        """
+        Calcula la tarifa recomendada para un viaje con múltiples paradas intermedias usando Google Directions API.
+
+        Args:
+            type_service_id: ID del tipo de servicio
+            origin_lat: Latitud de origen
+            origin_lng: Longitud de origen
+            destination_lat: Latitud de destino
+            destination_lng: Longitud de destino
+            intermediate_stops: Lista de paradas intermedias (opcional)
+            api_key: Clave de API de Google (opcional, usa la configurada si no se proporciona)
+
+        Returns:
+            FareCalculationResponse con la tarifa calculada
+        """
+        try:
+            # Construir waypoints para Google Directions API
+            waypoints = []
+            if intermediate_stops:
+                for stop in intermediate_stops:
+                    lat = stop.get("latitude")
+                    lng = stop.get("longitude")
+                    if lat is not None and lng is not None:
+                        waypoints.append(f"{lat},{lng}")
+
+            # Calcular ruta optimizada usando Google Directions API
+            total_distance = 0
+            total_duration = 0
+            origin_address = ""
+            destination_address = ""
+
+            try:
+                # Usar Google Directions API para obtener ruta optimizada
+                directions_url = "https://maps.googleapis.com/maps/api/directions/json"
+                params = {
+                    "origin": f"{origin_lat},{origin_lng}",
+                    "destination": f"{destination_lat},{destination_lng}",
+                    "waypoints": "|".join(waypoints) if waypoints else None,
+                    "units": "metric",
+                    # Usar la clave proporcionada o la configurada
+                    "key": api_key or "your_google_api_key_here",
+                    "optimize": "true"  # Optimizar el orden de las paradas
+                }
+
+                response = requests.get(directions_url, params=params)
+
+                if response.status_code == 200:
+                    directions_data = response.json()
+
+                    if directions_data.get("status") == "OK" and directions_data["routes"]:
+                        route = directions_data["routes"][0]
+                        legs = route["legs"]
+
+                        # Sumar distancias y duraciones de todos los legs
+                        total_distance = sum(
+                            leg["distance"]["value"] for leg in legs)
+                        total_duration = sum(
+                            leg["duration"]["value"] for leg in legs)
+
+                        # Obtener direcciones
+                        origin_address = legs[0]["start_address"]
+                        destination_address = legs[-1]["end_address"]
+
+                        print(
+                            f"✅ Ruta optimizada calculada: {total_distance}m, {total_duration}s")
+                    else:
+                        raise Exception(
+                            f"Error en Google Directions API: {directions_data.get('status')}")
+                else:
+                    raise Exception(
+                        f"Error HTTP en Google Directions API: {response.status_code}")
+
+            except Exception as e:
+                print(f"⚠️ Error calculando ruta optimizada: {e}")
+                # Fallback: calcular solo origen-destino
+                google_data = self.get_google_distance_data(
+                    origin_lat, origin_lng, destination_lat, destination_lng, api_key or "your_google_api_key_here"
+                )
+                element = google_data["rows"][0]["elements"][0]
+                total_distance = element["distance"]["value"]
+                total_duration = element["duration"]["value"]
+                origin_address = google_data["origin_addresses"][0]
+                destination_address = google_data["destination_addresses"][0]
+                print(f"⚠️ Usando fallback origen-destino directo")
+
+            # Calcular tarifa basada en distancia y tiempo total
+            distance_km = total_distance / 1000.0
+            time_minutes = total_duration / 60.0
+
+            # Obtener configuración de tarifas
+            config_service_value = self.get_config_service_value_by_id(
+                type_service_id)
+            if not config_service_value:
+                raise Exception("Configuración de tarifas no encontrada")
+
+            # Calcular costo
+            distance_cost = distance_km * config_service_value.km_value
+            time_cost = time_minutes * config_service_value.min_value
+            total_cost = distance_cost + time_cost
+
+            # Aplicar tarifa mínima si existe
+            if config_service_value.tarifa_value is not None:
+                total_cost = max(total_cost, config_service_value.tarifa_value)
+
+            return FareCalculationResponse(
+                recommended_value=round(total_cost, 2),
+                destination_addresses=destination_address,
+                origin_addresses=origin_address,
+                distance=f"{distance_km:.1f} km",
+                duration=f"{int(time_minutes)} mins"
+            )
+
+        except Exception as e:
+            print(f"Error al calcular tarifa con múltiples paradas: {str(e)}")
+            raise e
