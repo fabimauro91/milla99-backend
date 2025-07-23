@@ -166,6 +166,59 @@ async def new_driver_assigned(sid, data):
 
 
 @sio.event
+async def busy_driver_assigned(sid, data):
+    """
+    Notifica a un conductor ocupado que ha sido asignado automáticamente a una solicitud.
+    - Evento: busy_driver_assigned
+    - El conductor ocupado debe escuchar: busy_driver_assigned/{id_driver} (reemplaza {id_driver} por el ID real del conductor)
+    - JSON de ejemplo para enviar:
+        {
+            "id_driver": "uuid-del-conductor-ocupado",
+            "id_client_request": "uuid-de-la-solicitud",
+            "estimated_pickup_time": "2025-01-15T10:30:00",
+            "remaining_time": 8.5,
+            "transit_time": 3.2,
+            "pickup_location": "Calle 123 # 45-67",
+            "destination_location": "Carrera 78 # 90-12",
+            "fare_offered": 25000
+        }
+    - El conductor ocupado recibe:
+        {
+            "id_socket": "g4FrvjlHyMEWc71EAAAB",
+            "id_client_request": "uuid-de-la-solicitud",
+            "estimated_pickup_time": "2025-01-15T10:30:00",
+            "remaining_time": 8.5,
+            "transit_time": 3.2,
+            "pickup_location": "Calle 123 # 45-67",
+            "destination_location": "Carrera 78 # 90-12",
+            "fare_offered": 25000,
+            "timestamp": "2025-01-15T10:25:00"
+        }
+    """
+    # Si data es string, conviértelo a dict
+    if isinstance(data, str):
+        data = json.loads(data)
+    print(f'Conductor ocupado asignado automáticamente: {sid}: {data}')
+    
+
+    # Emitir notificación al conductor ocupado específico
+    await sio.emit(
+        f'busy_driver_assigned/{data["id_driver"]}',
+        {
+            'id_socket': sid,
+            'id_client_request': data['id_client_request'],
+            'estimated_pickup_time': data.get('estimated_pickup_time'),
+            'remaining_time': data.get('remaining_time'),
+            'transit_time': data.get('transit_time'),
+            'pickup_location': data.get('pickup_location'),
+            'destination_location': data.get('destination_location'),
+            'fare_offered': data.get('fare_offered'),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+    )
+
+
+@sio.event
 async def update_status_trip(sid, data):
     # Si data es string, conviértelo a dict
     if isinstance(data, str):

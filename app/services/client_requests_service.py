@@ -2049,8 +2049,8 @@ def find_busy_drivers(
             DriverInfo.pending_request_id.is_(None),  # Sin solicitud pendiente
             VehicleInfo.vehicle_type_id == type_service_id,
             ClientRequest.status.in_(
-                # En viaje activo y puede aceptar solicitudes PENDING
-                ["ARRIVED", "TRAVELLING"])
+                # En viaje activo, terminando viaje, y puede aceptar solicitudes PENDING
+                ["ARRIVED", "TRAVELLING", "FINISHED"])
         )
     )
 
@@ -2265,7 +2265,8 @@ def assign_busy_driver(session, client_request_id, driver_id, estimated_pickup_t
     # 3. Obtener viaje activo del conductor
     active_request = session.query(ClientRequest).filter(
         ClientRequest.id_driver_assigned == driver_id,
-        ClientRequest.status.in_(["ON_THE_WAY", "ARRIVED", "TRAVELLING"])
+        ClientRequest.status.in_(
+            ["ON_THE_WAY", "ARRIVED", "TRAVELLING", "FINISHED"])
     ).first()
 
     if not active_request:
@@ -2361,6 +2362,44 @@ def assign_busy_driver(session, client_request_id, driver_id, estimated_pickup_t
         f"DEBUG: After assignment - driver_info.id={driver_info.id}, driver_info.user_id={driver_info.user_id}, driver_info.pending_request_id={driver_info.pending_request_id}")
     print(
         f"DEBUG: After assignment - client_request.id={client_request.id}, client_request.assigned_busy_driver_id={client_request.assigned_busy_driver_id}")
+
+    # ✅ AGREGADO: Notificar al conductor ocupado por WebSocket
+    try:
+        from app.core.sio_events import sio
+        import asyncio
+        from app.utils.geo_utils import wkb_to_coords
+
+        async def emit_busy_driver_assigned():
+            # Obtener información adicional para la notificación
+            pickup_coords = wkb_to_coords(client_request.pickup_position)
+            destination_coords = wkb_to_coords(
+                client_request.destination_position)
+
+            notification_data = {
+                "id_driver": str(driver_id),
+                "id_client_request": str(client_request_id),
+                "estimated_pickup_time": estimated_pickup_time.isoformat() if estimated_pickup_time else None,
+                "remaining_time": remaining_time,
+                "transit_time": transit_time,
+                "pickup_location": client_request.pickup_description or f"{pickup_coords['lat']:.6f}, {pickup_coords['lng']:.6f}",
+                "destination_location": client_request.destination_description or f"{destination_coords['lat']:.6f}, {destination_coords['lng']:.6f}",
+                "fare_offered": client_request.fare_offered
+            }
+
+            await sio.emit('busy_driver_assigned', notification_data)
+            print(f"✅ WebSocket notification sent to busy driver {driver_id}")
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(emit_busy_driver_assigned())
+            else:
+                loop.run_until_complete(emit_busy_driver_assigned())
+        except RuntimeError:
+            asyncio.run(emit_busy_driver_assigned())
+    except Exception as e:
+        print(f"⚠️ Error sending WebSocket notification to busy driver: {e}")
+        # No fallar la asignación si falla la notificación
 
     return True
 
@@ -2553,7 +2592,7 @@ def assign_busy_driver_with_validation(session: Session, client_request_id: UUID
         active_request = session.query(ClientRequest).filter(
             ClientRequest.id_driver_assigned == driver_id,
             ClientRequest.status.in_([
-                "ARRIVED", "TRAVELLING"
+                "ARRIVED", "TRAVELLING", "FINISHED"
             ])
         ).first()
 

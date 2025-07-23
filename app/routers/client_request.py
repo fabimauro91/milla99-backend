@@ -606,7 +606,7 @@ def create_request(
             )
         db_obj = create_client_request(
             session, request_data, id_client=user_id)
-        # Lógica de asignación de conductores ocupados/disponibles usando el nuevo DriverSearchService
+        # Lógica de asignación de conductores ocupados usando el nuevo DriverSearchService
         print(f"\n🔍 DEBUGGING: Buscando conductores óptimos...")
         print(f"   - Client Lat: {request_data.pickup_lat}")
         print(f"   - Client Lng: {request_data.pickup_lng}")
@@ -624,35 +624,34 @@ def create_request(
             print(
                 f"   - Driver {i+1}: {driver.get('type', 'unknown')} - {driver.get('user_id', 'unknown')}")
 
+        # ✅ CORREGIDO: Solo asignar automáticamente conductores ocupados
+        # Los conductores disponibles se manejan únicamente a través del sistema de ofertas
         assigned = False
         for driver in optimal_drivers:
-            if driver["type"] == "available":
+            if driver["type"] == "busy":
                 print(
-                    f"   ✅ Asignando conductor disponible: {driver.get('user_id')}")
-                assigned = True
-                break
-        if not assigned:
-            print(f"   ⚠️ No hay conductores disponibles, buscando ocupados...")
-            for driver in optimal_drivers:
-                if driver["type"] == "busy":
-                    print(
-                        f"   🔄 Asignando conductor ocupado: {driver.get('user_id')}")
-                    estimated_pickup_time = datetime.now(
-                    ) + timedelta(seconds=driver["estimated_time"])
-                    success = assign_busy_driver(
-                        session,
-                        db_obj.id,
-                        driver["user_id"],
-                        estimated_pickup_time,
-                        driver["current_trip_remaining_time"],
-                        driver["transit_time"]
-                    )
-                    print(
-                        f"   - Resultado asignación: {'✅ Éxito' if success else '❌ Falló'}")
+                    f"   🔄 Asignando conductor ocupado: {driver.get('user_id')}")
+                estimated_pickup_time = datetime.now(
+                ) + timedelta(seconds=driver["estimated_time"])
+                success = assign_busy_driver(
+                    session,
+                    db_obj.id,
+                    driver["user_id"],
+                    estimated_pickup_time,
+                    driver["current_trip_remaining_time"],
+                    driver["transit_time"]
+                )
+                print(
+                    f"   - Resultado asignación: {'✅ Éxito' if success else '❌ Falló'}")
+                if success:
                     assigned = True
                     break
-            if not assigned:
-                print(f"   ❌ No se encontraron conductores disponibles ni ocupados")
+
+        if not assigned:
+            print(
+                f"   ℹ️ No se encontraron conductores ocupados válidos para asignación automática")
+            print(
+                f"   ℹ️ La solicitud quedará en estado CREATED para recibir ofertas de conductores disponibles")
         # Obtener el nombre del tipo de servicio
         from app.models.type_service import TypeService
         type_service = session.query(TypeService).filter(
