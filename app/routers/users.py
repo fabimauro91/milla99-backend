@@ -10,7 +10,7 @@ from app.core.dependencies.auth import user_is_owner, get_current_user
 from app.models.user import User, UserCreate, UserUpdate, UserRead
 from app.core.db import SessionDep
 from app.services.user_service import UserService
-from app.services.user_deletion_service import delete_user_completely_service
+from app.services.user_deletion_service import delete_user_completely_service, restore_deleted_user_balance
 
 bearer_scheme = HTTPBearer()
 
@@ -190,5 +190,54 @@ def delete_user_completely(
         raise e
     except Exception as e:
         logging.exception("Error eliminando usuario completamente")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/me/restore-balance", status_code=status.HTTP_200_OK, description="""
+Restaura el balance original de un usuario eliminado que se ha re-registrado.
+
+**Efectos:**
+- Restaura el balance original en VerifyMount
+- Elimina el registro de deleted_users
+- Solo funciona para usuarios que fueron eliminados previamente
+
+**Respuesta:**
+Confirma la restauración del balance con el monto restaurado.
+""")
+def restore_balance(
+    request: Request,
+    session: SessionDep,
+    current_user=Depends(get_current_user)
+):
+    """
+    Restaura el balance original de un usuario eliminado que se ha re-registrado.
+    """
+    user_id = request.state.user_id
+    phone_number = request.state.user.phone_number
+
+    try:
+        result = restore_deleted_user_balance(
+            session=session,
+            user_id=user_id,
+            phone_number=phone_number
+        )
+
+        if result["restored"]:
+            return {
+                "message": "Balance restaurado exitosamente",
+                "balance_restored": result["balance_restored"],
+                "user_type": result["user_type"],
+                "deletion_reason": result["deletion_reason"]
+            }
+        else:
+            return {
+                "message": result["message"],
+                "balance_restored": 0
+            }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logging.exception("Error restaurando balance de usuario")
         raise HTTPException(
             status_code=500, detail="Error interno del servidor")

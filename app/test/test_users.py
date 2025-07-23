@@ -9,6 +9,7 @@ from app.models.deleted_user import DeletedUser
 from app.core.db import engine
 from uuid import UUID
 import time
+from decimal import Decimal
 
 client = TestClient(app)
 
@@ -478,7 +479,7 @@ def test_user_deletion_flow():
 
 def test_driver_bonus_eligibility():
     """
-    Test para verificar que un conductor que se creó como DRIVER y fue eliminado 
+    Test para verificar que un conductor que se creó como DRIVER y fue eliminado
     no puede recibir bono al re-registrarse
     """
     from app.models.user_has_roles import UserHasRole, RoleStatus
@@ -713,7 +714,7 @@ def test_driver_bonus_eligibility_client_to_driver():
 
 def test_driver_bonus_eligibility_original_driver():
     """
-    Test para verificar que un conductor que se creó originalmente como DRIVER 
+    Test para verificar que un conductor que se creó originalmente como DRIVER
     y fue eliminado no puede recibir bono al re-registrarse
     """
     from app.models.user_has_roles import UserHasRole, RoleStatus
@@ -947,3 +948,190 @@ def test_deleted_user_cannot_access_endpoints():
     # 3. Intentar acceder a endpoint protegido (debe fallar)
     me_resp = client.get("/users/me", headers=headers)
     assert me_resp.status_code == 401  # Token inválido porque usuario fue eliminado
+
+
+def test_restore_deleted_user_balance():
+    """
+    Test para verificar que un usuario eliminado puede restaurar su balance al re-registrarse
+    """
+    from app.services.user_deletion_service import restore_deleted_user_balance
+
+    # Datos del usuario
+    phone_number = "3004444475"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Usuario Balance Test"
+
+    # 1. Crear usuario
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    user_data = create_resp.json()
+    user_id = user_data["id"]
+
+    # 2. Agregar balance inicial (simular que tiene dinero)
+    with Session(engine) as session:
+        from app.models.verify_mount import VerifyMount
+
+        # Verificar si ya existe un balance para este usuario
+        existing_balance = session.query(VerifyMount).filter(
+            VerifyMount.user_id == UUID(user_id)
+        ).first()
+
+        if existing_balance:
+            # Actualizar balance existente
+            existing_balance.mount = 50000
+            session.add(existing_balance)
+        else:
+            # Crear nuevo balance
+            balance = VerifyMount(
+                user_id=UUID(user_id),
+                mount=Decimal("50000")  # $50,000 COP
+            )
+            session.add(balance)
+
+        session.commit()
+
+    # 3. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 4. Eliminar usuario (se guardará en DeletedUser con balance original)
+    delete_resp = client.delete(
+        "/users/me/delete-completely", headers=headers)
+    assert delete_resp.status_code == 200
+    delete_data = delete_resp.json()
+    assert delete_data["original_balance"] == 50000
+
+    # 5. Re-registrar usuario
+    create_resp = client.post("/users/", json={
+        "full_name": "Usuario Reregistrado",
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    new_user_data = create_resp.json()
+    new_user_id = new_user_data["id"]
+
+    # 6. Verificar que el balance se restaura automáticamente durante la verificación
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    verify_data = verify_resp.json()
+
+    # Verificar que se restauró el balance
+    assert "user" in verify_data
+    user_data = verify_data["user"]
+    assert user_data["balance_restored"] == 50000.0
+    assert user_data["balance_restored_message"] == "Balance restaurado: $50000.0"
+
+    # 7. Verificar que el registro de DeletedUser se eliminó
+    with Session(engine) as session:
+        from app.models.deleted_user import DeletedUser
+        deleted_user = session.query(DeletedUser).filter(
+            DeletedUser.phone_number == phone_number
+        ).first()
+        assert deleted_user is None, "El registro de DeletedUser debería haberse eliminado"
+
+    print("✅ Test de restauración de balance completado exitosamente")
+
+
+def test_bonus_blocked_for_restored_user():
+    """
+    Test para verificar que un usuario re-registrado NO puede recibir bono
+    """
+    from app.services.driver_bonus_service import check_driver_bonus_eligibility
+
+    # Datos del usuario
+    phone_number = "3004444476"  # Cambiado para evitar conflicto
+    country_code = "+57"
+    full_name = "Usuario Bono Bloqueado Test"
+
+    # 1. Crear usuario como DRIVER
+    create_resp = client.post("/users/", json={
+        "full_name": full_name,
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    user_data = create_resp.json()
+    user_id = user_data["id"]
+
+    # 2. Agregar rol DRIVER
+    with Session(engine) as session:
+        from app.models.user_has_roles import UserHasRole, RoleStatus
+        driver_role = UserHasRole(
+            id_user=UUID(user_id),
+            id_rol="DRIVER",
+            status=RoleStatus.APPROVED,
+            is_verified=True
+        )
+        session.add(driver_role)
+        session.commit()
+
+    # 3. Verificar usuario para obtener token
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    assert send_resp.status_code == 201
+    code = send_resp.json()["message"].split()[-1]
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code",
+        json={"code": code}
+    )
+    assert verify_resp.status_code == 200
+    token = verify_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 4. Eliminar usuario
+    delete_resp = client.delete("/users/me/delete-completely", headers=headers)
+    assert delete_resp.status_code == 200
+
+    # 5. Re-registrar usuario
+    create_resp = client.post("/users/", json={
+        "full_name": "Usuario Reregistrado",
+        "country_code": country_code,
+        "phone_number": phone_number
+    })
+    assert create_resp.status_code == 201
+    new_user_data = create_resp.json()
+    new_user_id = new_user_data["id"]
+
+    # 6. Agregar rol DRIVER al usuario re-registrado
+    with Session(engine) as session:
+        driver_role = UserHasRole(
+            id_user=UUID(new_user_id),
+            id_rol="DRIVER",
+            status=RoleStatus.APPROVED,
+            is_verified=True
+        )
+        session.add(driver_role)
+        session.commit()
+
+    # 7. Verificar que NO puede recibir bono
+    with Session(engine) as session:
+        eligibility = check_driver_bonus_eligibility(
+            session, UUID(new_user_id))
+
+        print(
+            f"🔍 DEBUG: Eligibilidad para usuario re-registrado: {eligibility}")
+
+        # Debe estar bloqueado porque fue eliminado como DRIVER
+        assert eligibility["eligible"] == False
+        assert "eliminado" in eligibility["reason"].lower()
+        assert eligibility["bonus_amount"] == 0
+
+    print("✅ Test de bloqueo de bono para usuario re-registrado completado")

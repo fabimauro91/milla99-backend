@@ -51,11 +51,30 @@ def delete_user_completely_service(session: Session, user_id: UUID, reason: str 
             f"🔄 Iniciando eliminación completa del usuario {user_id} ({user.phone_number})")
 
         # 2. Obtener balance actual
-        driver_balance = session.query(VerifyMount).filter(
-            VerifyMount.user_id == user_id
-        ).first()
+        try:
+            driver_balance = session.query(VerifyMount).filter(
+                VerifyMount.user_id == user_id
+            ).first()
 
-        balance_amount = float(driver_balance.mount) if driver_balance else 0
+            balance_amount = float(
+                driver_balance.mount) if driver_balance else 0
+            logger.info(f"🔍 DEBUG: Balance encontrado: {driver_balance}")
+            logger.info(f"🔍 DEBUG: Balance amount: {balance_amount}")
+
+            # Debug adicional para verificar el balance antes de la eliminación
+            if driver_balance:
+                logger.info(f"🔍 DEBUG: Balance ID: {driver_balance.id}")
+                logger.info(
+                    f"🔍 DEBUG: Balance user_id: {driver_balance.user_id}")
+                logger.info(f"🔍 DEBUG: Balance mount: {driver_balance.mount}")
+            else:
+                logger.info(
+                    f"🔍 DEBUG: No se encontró balance para usuario {user_id}")
+        except Exception as e:
+            import traceback
+            logger.error(f"❌ ERROR obteniendo balance: {str(e)}")
+            logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
+            balance_amount = 0
 
         # 3. Determinar tipo de usuario
         user_roles = session.query(UserHasRole).filter(
@@ -197,6 +216,13 @@ def delete_user_completely_service(session: Session, user_id: UUID, reason: str 
         ).delete()
         logger.info(f"🗑️ Eliminados {roles_deleted} roles")
 
+        # Verificar balance antes de eliminar usuario
+        balance_after_deletions = session.query(VerifyMount).filter(
+            VerifyMount.user_id == user_id
+        ).first()
+        logger.info(
+            f"🔍 DEBUG: Balance después de eliminaciones: {balance_after_deletions}")
+
         # Eliminar usuario principal (último para evitar FK constraints)
         user_deleted = session.query(User).filter(User.id == user_id).delete()
         logger.info(f"🗑️ Eliminado usuario principal")
@@ -248,7 +274,7 @@ def check_deleted_user_registration(session: Session, phone_number: str):
     ).first()
 
     if deleted_user:
-        return {
+        result = {
             "can_register": True,
             "no_bonus": True,
             "original_balance": float(deleted_user.original_balance),
@@ -256,5 +282,80 @@ def check_deleted_user_registration(session: Session, phone_number: str):
             "deletion_reason": deleted_user.deletion_reason,
             "deleted_at": deleted_user.deleted_at
         }
+        return result
 
-    return {"can_register": True, "no_bonus": False}
+    result = {"can_register": True, "no_bonus": False}
+    return result
+
+
+def restore_deleted_user_balance(session: Session, user_id: UUID, phone_number: str) -> dict:
+    """
+    Restaura el balance original de un usuario eliminado cuando se re-registra.
+    Elimina el registro de deleted_users y restaura el balance en VerifyMount.
+
+    Args:
+        session: Sesión de base de datos
+        user_id: ID del usuario re-registrado
+        phone_number: Número de teléfono del usuario
+
+    Returns:
+        dict: Resultado de la restauración
+    """
+    try:
+        # Buscar el registro de usuario eliminado
+        deleted_user = session.query(DeletedUser).filter(
+            DeletedUser.phone_number == phone_number
+        ).first()
+
+        if not deleted_user:
+            return {
+                "restored": False,
+                "message": "No se encontró registro de usuario eliminado",
+                "balance_restored": 0
+            }
+
+        # Obtener el balance original
+        original_balance = float(deleted_user.original_balance)
+
+        # Restaurar el balance en VerifyMount
+        existing_balance = session.query(VerifyMount).filter(
+            VerifyMount.user_id == user_id
+        ).first()
+
+        if existing_balance:
+            # Actualizar balance existente
+            existing_balance.mount = Decimal(str(original_balance))
+            session.add(existing_balance)
+        else:
+            # Crear nuevo registro de balance
+            new_balance = VerifyMount(
+                user_id=user_id,
+                mount=Decimal(str(original_balance))
+            )
+            session.add(new_balance)
+
+        # Eliminar el registro de deleted_users
+        session.delete(deleted_user)
+
+        # Commit de todos los cambios
+        session.commit()
+
+        logger.info(
+            f"✅ Balance restaurado para usuario {user_id} ({phone_number}): ${original_balance}")
+
+        return {
+            "restored": True,
+            "message": f"Balance restaurado exitosamente: ${original_balance}",
+            "balance_restored": original_balance,
+            "user_type": deleted_user.user_type,
+            "deletion_reason": deleted_user.deletion_reason
+        }
+
+    except Exception as e:
+        session.rollback()
+        logger.error(
+            f"❌ Error restaurando balance para usuario {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno al restaurar balance: {str(e)}"
+        )

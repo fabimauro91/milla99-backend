@@ -1,5 +1,6 @@
 import random
 import httpx
+import logging
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
@@ -16,8 +17,10 @@ from clicksend_client.rest import ApiException
 from sqlalchemy.orm import joinedload
 from uuid import UUID
 from .refresh_token_service import RefreshTokenService
-from .user_deletion_service import check_deleted_user_registration
+from .user_deletion_service import check_deleted_user_registration, restore_deleted_user_balance
 import pytz
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -69,8 +72,6 @@ class AuthService:
                 ]
             }
         }
-        print("saber que se envia:",
-              f"{settings.WHATSAPP_API_URL}/{settings.WHATSAPP_PHONE_ID}/messages")
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -78,9 +79,6 @@ class AuthService:
                     headers=headers,
                     json=payload
                 )
-                print("Payload enviado:", payload)
-                print("Respuesta de WhatsApp:",
-                      response.status_code, response.text)
                 response.raise_for_status()
                 return True
         except httpx.RequestError as e:
@@ -286,6 +284,22 @@ class AuthService:
         if not user.is_active:
             user.is_active = True
 
+        # Restaurar balance si es un usuario eliminado
+        balance_restored = False
+        balance_amount = 0
+        if deleted_user_info.get("no_bonus"):
+            try:
+                restore_result = restore_deleted_user_balance(
+                    self.session, user.id, phone_number)
+                if restore_result["restored"]:
+                    balance_restored = True
+                    balance_amount = restore_result["balance_restored"]
+            except Exception as e:
+                logger.error(f"Error restaurando balance: {str(e)}")
+                # No fallar la verificación si hay error restaurando balance
+        else:
+            logger.debug(f"Usuario no es eliminado, no se restaura balance")
+
         self.session.commit()
 
         # Generar tokens (access token + refresh token)
@@ -359,6 +373,11 @@ class AuthService:
             driver_info=driver_info_data,
             is_driver_approved=is_driver_approved
         )
+
+        # Agregar información sobre balance restaurado si aplica
+        if balance_restored:
+            user_data.balance_restored = balance_amount
+            user_data.balance_restored_message = f"Balance restaurado: ${balance_amount}"
 
         return True, access_token, refresh_token, user_data
 

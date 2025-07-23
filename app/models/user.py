@@ -186,6 +186,8 @@ class UserRead(BaseModel):
     roles: List[RoleRead]
     driver_info: Optional[DriverInfoRead] = None
     is_driver_approved: Optional[bool] = None
+    balance_restored: Optional[float] = None
+    balance_restored_message: Optional[str] = None
 
     class Config:
         from_attributes = True
