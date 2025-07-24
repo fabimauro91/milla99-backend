@@ -173,6 +173,9 @@ def init_project_settings():
             max_wait_time_for_busy_driver=15.0,  # 15 minutos máximo de espera
             max_distance_for_busy_driver=2.0,    # 2 km máximo de distancia
             max_transit_time_for_busy_driver=5.0,  # 5 minutos máximo de tránsito
+            # Configuración para distancias de búsqueda
+            nearby_requests_distance_meters=5000,  # 5km para búsqueda de solicitudes
+            nearby_drivers_distance_meters=5000,   # 5km para búsqueda de conductores
             created_at=datetime(2025, 5, 20, 15, 35, 26),
             updated_at=datetime(2025, 5, 20, 15, 35, 26)
         )

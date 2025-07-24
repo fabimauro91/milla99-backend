@@ -109,9 +109,10 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
     timeout_minutes = project_settings.request_timeout_minutes if project_settings else 5
 
     time_limit = datetime.now(COLOMBIA_TZ) - timedelta(minutes=timeout_minutes)
-    distance_limit = 4000
+    # Obtener distancia límite desde project_settings
+    distance_limit = project_settings.nearby_requests_distance_meters if project_settings else 4000
     print(
-        f"[DEBUG] Límite de distancia configurado: {distance_limit} metros (1.35km)")
+        f"[DEBUG] Límite de distancia configurado: {distance_limit} metros ({distance_limit/1000:.1f}km)")
 
     # --- INICIO DEL NUEVO FILTRO ---
     from app.models.driver_trip_offer import DriverTripOffer
@@ -1013,8 +1014,9 @@ def get_nearby_drivers_service(
             )
         )
 
-        # 4. Filtrar por distancia (5km)
-        distance_limit = 5000  # 5km en metros
+        # 4. Filtrar por distancia (usando configuración de project_settings)
+        project_settings = session.query(ProjectSettings).first()
+        distance_limit = project_settings.nearby_drivers_distance_meters if project_settings else 5000
         base_query = base_query.having(text(f"distance < {distance_limit}"))
 
         # 5. Ejecutar consulta

@@ -33,6 +33,11 @@ class ProjectSettingsBase(SQLModel):
         default=5.0)  # Tiempo máximo de tránsito en minutos
     min_recharge_amount: Optional[int] = Field(
         default=10000)  # Monto mínimo para recargas
+    # Configuración para distancias de búsqueda
+    # Distancia máxima en metros para búsqueda de solicitudes cercanas (endpoint /nearby)
+    nearby_requests_distance_meters: Optional[int] = Field(default=5000)
+    # Distancia máxima en metros para búsqueda de conductores cercanos (endpoint /nearby-drivers)
+    nearby_drivers_distance_meters: Optional[int] = Field(default=5000)
 
 
 class ProjectSettings(ProjectSettingsBase, table=True):
@@ -70,3 +75,6 @@ class ProjectSettingsUpdate(SQLModel):
     max_distance_for_busy_driver: Optional[float] = None
     max_transit_time_for_busy_driver: Optional[float] = None
     min_recharge_amount: Optional[int] = None
+    # Configuración para distancias de búsqueda
+    nearby_requests_distance_meters: Optional[int] = None
+    nearby_drivers_distance_meters: Optional[int] = None
