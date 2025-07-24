@@ -7,8 +7,133 @@ from sqlmodel import Session, select
 from app.models.user import User
 from app.models.user_has_roles import UserHasRole, RoleStatus
 import traceback
+from datetime import datetime
+from uuid import UUID
 
 client = TestClient(app)
+
+
+def create_and_approve_client(client, phone_number, country_code):
+    """
+    Función helper para crear y aprobar un cliente para tests
+    """
+    print(f"[DEBUG] 🔍 Verificando usuario: {phone_number}")
+
+    # Verificar si el usuario ya existe
+    with Session(engine) as session:
+        existing_user = session.exec(select(User).where(
+            User.phone_number == phone_number)).first()
+
+        if existing_user:
+            print(f"[DEBUG] ✅ Usuario encontrado: {existing_user.id}")
+            # Usuario ya existe, verificar si tiene rol CLIENT
+            client_role = session.exec(select(UserHasRole).where(
+                UserHasRole.id_user == existing_user.id,
+                UserHasRole.id_rol == "CLIENT")).first()
+
+            print(
+                f"[DEBUG] 🔍 Rol CLIENT encontrado: {client_role is not None}")
+            if client_role:
+                print(f"[DEBUG] 📋 Estado del rol: {client_role.status}")
+
+            if client_role is None:
+                print(f"[DEBUG] ➕ Asignando rol CLIENT a usuario existente")
+                # Usuario existe pero no tiene rol CLIENT, asignarlo
+                client_role = UserHasRole(
+                    id_user=existing_user.id,
+                    id_rol="CLIENT",
+                    status=RoleStatus.APPROVED
+                )
+                session.add(client_role)
+                try:
+                    session.commit()
+                    print(f"[DEBUG] ✅ Rol CLIENT asignado exitosamente")
+                except Exception as e:
+                    print(f"[DEBUG] ❌ Error al asignar rol: {e}")
+                    print(f"[DEBUG] 📋 Traceback:")
+                    import traceback
+                    traceback.print_exc()
+                    session.rollback()
+                    raise
+            elif client_role.status != RoleStatus.APPROVED:
+                print(f"[DEBUG] 🔄 Aprobando rol CLIENT existente")
+                # Usuario tiene rol pero no está aprobado, aprobarlo
+                client_role.status = RoleStatus.APPROVED
+                session.add(client_role)
+                try:
+                    session.commit()
+                    print(f"[DEBUG] ✅ Rol CLIENT aprobado exitosamente")
+                except Exception as e:
+                    print(f"[DEBUG] ❌ Error al aprobar rol: {e}")
+                    print(f"[DEBUG] 📋 Traceback:")
+                    import traceback
+                    traceback.print_exc()
+                    session.rollback()
+                    raise
+            else:
+                print(f"[DEBUG] ✅ Usuario ya tiene rol CLIENT aprobado")
+
+            client_id = existing_user.id
+        else:
+            print(f"[DEBUG] ➕ Creando usuario nuevo: {phone_number}")
+            # Crear usuario nuevo
+            user_data = {
+                "full_name": f"Client Test User",
+                "country_code": country_code,
+                "phone_number": phone_number
+            }
+            response = client.post("/users/", json=user_data)
+            print(f"[DEBUG] 📡 Respuesta crear usuario: {response.status_code}")
+            if response.status_code != 201:
+                print(f"[DEBUG] ❌ Error en respuesta: {response.text}")
+            assert response.status_code == 201, f"Error creando cliente ({phone_number}): {response.text}"
+            user_data = response.json()
+            client_id = UUID(user_data["id"])
+            print(f"[DEBUG] ✅ Usuario creado con ID: {client_id}")
+
+            # El endpoint /users/ ya crea automáticamente el rol CLIENT
+            # Solo necesitamos verificar que esté aprobado
+            client_role = session.exec(select(UserHasRole).where(
+                UserHasRole.id_user == client_id,
+                UserHasRole.id_rol == "CLIENT")).first()
+
+            if client_role and client_role.status != RoleStatus.APPROVED:
+                print(f"[DEBUG] 🔄 Aprobando rol CLIENT del usuario nuevo")
+                client_role.status = RoleStatus.APPROVED
+                session.add(client_role)
+                try:
+                    session.commit()
+                    print(f"[DEBUG] ✅ Rol CLIENT aprobado para usuario nuevo")
+                except Exception as e:
+                    print(f"[DEBUG] ❌ Error al aprobar rol: {e}")
+                    print(f"[DEBUG] 📋 Traceback:")
+                    import traceback
+                    traceback.print_exc()
+                    session.rollback()
+                    raise
+            else:
+                print(f"[DEBUG] ✅ Usuario nuevo ya tiene rol CLIENT aprobado")
+
+    print(f"[DEBUG] 🔐 Autenticando usuario: {phone_number}")
+    # Autenticar
+    send_resp = client.post(f"/auth/verify/{country_code}/{phone_number}/send")
+    print(f"[DEBUG] 📡 Respuesta enviar código: {send_resp.status_code}")
+    if send_resp.status_code != 201:
+        print(f"[DEBUG] ❌ Error enviando código: {send_resp.text}")
+    assert send_resp.status_code == 201, f"Falló al enviar código a {phone_number}: {send_resp.text}"
+
+    code = send_resp.json()["message"].split()[-1]
+    print(f"[DEBUG] 📱 Código obtenido: {code}")
+    verify_resp = client.post(
+        f"/auth/verify/{country_code}/{phone_number}/code", json={"code": code})
+    print(f"[DEBUG] 📡 Respuesta verificar código: {verify_resp.status_code}")
+    if verify_resp.status_code != 200:
+        print(f"[DEBUG] ❌ Error verificando código: {verify_resp.text}")
+    assert verify_resp.status_code == 200, f"Falló al verificar código para {phone_number}: {verify_resp.text}"
+
+    client_token = verify_resp.json()["access_token"]
+    print(f"[DEBUG] ✅ Usuario autenticado exitosamente")
+    return client_token, client_id
 
 
 def test_trip_with_multiple_stops():
@@ -189,3 +314,77 @@ def test_trip_with_multiple_stops():
         print("[TRACEBACK] Error en el test:")
         traceback.print_exc()
         raise
+
+
+def test_nearby_requests_include_trip_stops():
+    """
+    Test para verificar que las solicitudes cercanas incluyen información de paradas
+    """
+    # 1. Crear y autenticar cliente
+    client_phone = "3000000001"
+    client_country_code = "+57"
+    client_token, client_id = create_and_approve_client(
+        client, client_phone, client_country_code)
+    headers = {"Authorization": f"Bearer {client_token}"}
+
+    # 2. Crear solicitud de viaje con paradas intermedias
+    request_data = {
+        "fare_offered": 25000,
+        "pickup_description": "Casa del cliente",
+        "destination_description": "Centro comercial",
+        "pickup_lat": 4.700000,
+        "pickup_lng": -74.100000,
+        "destination_lat": 4.710000,
+        "destination_lng": -74.110000,
+        "type_service_id": 1,
+        "payment_method_id": 1,
+        "intermediate_stops": [
+            {"latitude": 4.705000, "longitude": -74.105000,
+                "description": "Banco"},
+            {"latitude": 4.707000, "longitude": -74.108000,
+                "description": "Farmacia"}
+        ]
+    }
+    create_resp = client.post(
+        "/client-request/", json=request_data, headers=headers)
+    assert create_resp.status_code == 201, f"Error al crear solicitud: {create_resp.text}"
+    client_request_id = create_resp.json()["id"]
+
+    # 3. Crear y aprobar conductor
+    driver_phone = "3010000001"
+    driver_country_code = "+57"
+    driver_token, driver_id = create_and_approve_driver(
+        client, driver_phone, driver_country_code)
+    driver_headers = {"Authorization": f"Bearer {driver_token}"}
+
+    # 4. Buscar solicitudes cercanas como conductor
+    nearby_resp = client.get(
+        f"/client-request/nearby?driver_lat=4.700000&driver_lng=-74.100000",
+        headers=driver_headers)
+    print("[DEBUG] Solicitudes cercanas:",
+          nearby_resp.status_code, nearby_resp.text)
+    assert nearby_resp.status_code == 200, f"Error al buscar solicitudes cercanas: {nearby_resp.text}"
+
+    nearby_data = nearby_resp.json()
+    assert len(nearby_data) > 0, "No se encontraron solicitudes cercanas"
+
+    # 5. Verificar que la solicitud incluye información de paradas
+    found_request = None
+    for request in nearby_data:
+        if request["id"] == client_request_id:
+            found_request = request
+            break
+
+    assert found_request is not None, "No se encontró la solicitud creada en las cercanas"
+    assert "trip_stops" in found_request, "La solicitud no incluye información de paradas"
+    assert len(found_request["trip_stops"]
+               ) == 4, f"Se esperaban 4 paradas, se encontraron {len(found_request['trip_stops'])}"
+
+    # Verificar que las paradas están en el orden correcto
+    stops = found_request["trip_stops"]
+    assert stops[0]["stop_type"] == "PICKUP", "Primera parada debe ser PICKUP"
+    assert stops[1]["stop_type"] == "INTERMEDIATE", "Segunda parada debe ser INTERMEDIATE"
+    assert stops[2]["stop_type"] == "INTERMEDIATE", "Tercera parada debe ser INTERMEDIATE"
+    assert stops[3]["stop_type"] == "DESTINATION", "Cuarta parada debe ser DESTINATION"
+
+    print("[DEBUG] ✅ Test passed: Las solicitudes cercanas incluyen información de paradas")

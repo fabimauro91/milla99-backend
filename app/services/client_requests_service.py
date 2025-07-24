@@ -8,7 +8,7 @@ from app.models.penality_user import PenalityUser, statusEnum
 from app.models.project_settings import ProjectSettings
 from app.models.user import User
 from app.models.verify_mount import VerifyMount
-from sqlalchemy import func, text
+from sqlalchemy import func, text, literal_column
 from geoalchemy2.functions import ST_Distance
 from datetime import datetime, timedelta, timezone
 import requests
@@ -33,6 +33,7 @@ from app.services.driver_search_service import DriverSearchService
 import logging
 import pytz
 from app.services.config_service_value_service import ConfigServiceValueService
+from app.services.trip_stops_service import get_trip_stops
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,7 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
         subquery = []
     # --- FIN DEL NUEVO FILTRO ---
 
+    print("[DEBUG] Construyendo query base...")
     base_query = (
         session.query(
             ClientRequest,
@@ -132,9 +134,18 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
             # ✅ CORREGIDO: Usar ST_Distance para PostgreSQL en lugar de ST_Distance_Sphere de MySQL
             ST_Distance(ClientRequest.pickup_position,
                         driver_point).label("distance"),
-            # ✅ CORREGIDO: Usar EXTRACT para PostgreSQL en lugar de timestampdiff de MySQL
-            (func.extract('epoch', func.now() - ClientRequest.created_at) /
-             60.0).label("time_difference")
+            # ❌ INCORRECTO: Usar EXTRACT para PostgreSQL en lugar de timestampdiff de MySQL
+            # (func.extract('epoch', func.now() - ClientRequest.created_at) /
+            #  60.0).label("time_difference")
+            # ✅ CORREGIDO: Usar TIMESTAMPDIFF para MySQL en lugar de EXTRACT de PostgreSQL
+            # (func.timestampdiff(func.second, ClientRequest.created_at, func.now()) /
+            #  60.0).label("time_difference")
+            # ✅ CORREGIDO: Usar TIMESTAMPDIFF nativo para MySQL
+            # (text("TIMESTAMPDIFF(SECOND, client_request.created_at, NOW()) / 60.0")
+            #  ).label("time_difference")
+            # ✅ CORREGIDO: Usar TIMESTAMPDIFF nativo para MySQL con literal_column
+            literal_column("TIMESTAMPDIFF(SECOND, client_request.created_at, NOW())").label(
+                "time_difference")
         )
         .join(User, User.id == ClientRequest.id_client)
         .join(TypeService, TypeService.id == ClientRequest.type_service_id)
@@ -143,19 +154,41 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
             ClientRequest.created_at > time_limit
         )
     )
+    print("[DEBUG] Query base construida, aplicando filtros adicionales...")
+
     if type_service_ids:
+        print(
+            f"[DEBUG] Aplicando filtro de tipos de servicio: {type_service_ids}")
         base_query = base_query.filter(
             ClientRequest.type_service_id.in_(type_service_ids))
     # --- APLICAR FILTRO DE OFERTAS ---
     if current_driver_id is not None:
+        print(
+            f"[DEBUG] Aplicando filtro de ofertas para conductor: {current_driver_id}")
         base_query = base_query.filter(~ClientRequest.id.in_(subquery))
     # --- FIN FILTRO DE OFERTAS ---
 
-    print(f"[DEBUG] Query SQL: {str(base_query)}")
+    print(f"[DEBUG] Query SQL antes del having: {str(base_query)}")
 
+    print("[DEBUG] Aplicando filtro de distancia...")
     base_query = base_query.having(text(f"distance < {distance_limit}"))
+
+    print("[DEBUG] Query SQL final:")
+    print(str(base_query))
+
     results = []
-    query_results = base_query.all()
+    print("[DEBUG] Ejecutando query.all()...")
+    try:
+        query_results = base_query.all()
+        print(
+            f"[DEBUG] Query ejecutada exitosamente. Resultados encontrados: {len(query_results)}")
+    except Exception as e:
+        print(f"[ERROR] Error ejecutando query.all(): {str(e)}")
+        print(f"[ERROR] Tipo de error: {type(e)}")
+        import traceback
+        print(f"[ERROR] Traceback completo:")
+        traceback.print_exc()
+        raise
 
     print(f"\n[DEBUG] Resultados encontrados: {len(query_results)}")
     for row in query_results:
@@ -257,7 +290,27 @@ async def get_nearby_client_requests_service(driver_lat, driver_lng, session: Se
             "distance_trip_text": distance_trip_text,
             "duration_trip_text": duration_trip_text
         }
+
+        # Obtener las paradas del viaje
+        trip_stops = get_trip_stops(session, cr.id)
+
+        # Convertir paradas a formato JSON
+        stops_data = []
+        for stop in trip_stops:
+            stops_data.append({
+                "id": str(stop.id),
+                "stop_order": stop.stop_order,
+                "stop_type": stop.stop_type,
+                "status": stop.status,
+                "latitude": stop.latitude,
+                "longitude": stop.longitude,
+                "description": stop.description,
+                "position": wkb_to_coords(stop.position) if stop.position else None
+            })
+
+        result["trip_stops"] = stops_data
         results.append(result)
+
     return results
 
 
